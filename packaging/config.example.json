@@ -1,0 +1,5 @@
+{
+  "controllerSocket": "/run/pimprobe-controller.sock",
+  "listenAddress": "127.0.0.1:8137",
+  "travelLimits": [210, 235, 125]
+}

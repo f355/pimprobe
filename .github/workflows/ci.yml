@@ -1,0 +1,124 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  linux-arm64:
+    name: Tests and installer / ARM64
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Qt and test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build qt6-base-dev qt6-declarative-dev \
+            qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts \
+            qml6-module-qtquick-templates qml6-module-qtquick-window \
+            qml6-module-qtqml-workerscript qml6-module-qttest \
+            fonts-dejavu-core netcat-openbsd
+      - name: Check Rust
+        run: |
+          cargo fmt --all --check
+          cargo clippy --locked --workspace --all-targets -- -D warnings
+          cargo test --locked --workspace
+      - name: Check assets
+        run: node --test dev/test-assets.mjs
+      - name: Run UI tests
+        env:
+          QT_DECLARATIVE_PREFIX: /usr/lib/qt6
+          QMLTESTRUNNER: /usr/lib/qt6/bin/qmltestrunner
+        run: ./dev/test-ui.sh
+      - name: Build Linux service
+        run: |
+          docker build -t pimprobe-rust-builder packaging
+          docker run --rm -v "$PWD:/src" pimprobe-rust-builder
+      - name: Build and test plugins
+        run: |
+          docker build -t pimprobe-qt-builder plugins
+          docker run --rm -v "$PWD/plugins:/src" pimprobe-qt-builder \
+            cmake -S /src -B /src/build-arm64 -G Ninja -DCMAKE_BUILD_TYPE=Release
+          docker run --rm -v "$PWD/plugins:/src" pimprobe-qt-builder \
+            cmake --build /src/build-arm64 --parallel 4
+          docker run --rm -v "$PWD/plugins:/src" pimprobe-qt-builder \
+            ctest --test-dir /src/build-arm64 --output-on-failure
+      - name: Package and test installer
+        run: |
+          node --test dev/test-installer.mjs
+          node dev/package.mjs --output dist/pimprobe-linux-arm64.run
+          sh dist/pimprobe-linux-arm64.run --check
+          docker run --rm \
+            -v "$PWD/dist/pimprobe-linux-arm64.run:/package.run:ro" \
+            -v "$PWD/dev/test-install-container.sh:/test.sh:ro" \
+            -v "$PWD/packaging/config.example.json:/expected-config.json:ro" \
+            pimprobe-rust-builder sh /test.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pimprobe-linux-arm64
+          path: dist/pimprobe-linux-arm64.run
+          if-no-files-found: error
+
+  release-dev:
+    name: Publish development release
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: linux-arm64
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+    concurrency:
+      group: dev-release
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with:
+          name: pimprobe-linux-arm64
+          path: release-assets
+      - name: Publish rolling development release
+        run: |
+          REMOTE_MAIN="$(git ls-remote origin refs/heads/main | cut -f1)"
+          if [[ "$REMOTE_MAIN" != "$GITHUB_SHA" ]]; then
+            echo "Skipping stale run for $GITHUB_SHA; main is now $REMOTE_MAIN"
+            exit 0
+          fi
+
+          REMOTE_DEV="$(git ls-remote origin refs/tags/dev | cut -f1)"
+          git tag --force dev "$GITHUB_SHA"
+          git push --force-with-lease="refs/tags/dev:$REMOTE_DEV" origin refs/tags/dev
+
+          NOTES="Automatic development build from commit $GITHUB_SHA. This prerelease is replaced after every successful push to main."
+          if gh release view dev >/dev/null 2>&1; then
+            gh release edit dev --title "Development Build" --notes "$NOTES" \
+              --prerelease --target "$GITHUB_SHA"
+          else
+            gh release create dev --title "Development Build" --notes "$NOTES" \
+              --prerelease --latest=false --verify-tag
+          fi
+          gh release upload dev release-assets/pimprobe-linux-arm64.run --clobber
+          while IFS= read -r asset; do
+            if [[ -n "$asset" && "$asset" != pimprobe-linux-arm64.run ]]; then
+              gh release delete-asset dev "$asset" --yes
+            fi
+          done < <(gh release view dev --json assets --jq '.assets[].name')

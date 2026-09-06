@@ -1,0 +1,14 @@
+{
+  "result": {
+    "point": [
+      null,
+      null,
+      -3.0259999999999962
+    ],
+    "wcs": 54,
+    "zeroed": false,
+    "axes": [
+      "Z"
+    ]
+  }
+}

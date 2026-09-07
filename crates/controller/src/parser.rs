@@ -26,6 +26,8 @@ pub struct MachineStatus {
     #[serde(rename = "workPosition")]
     pub w_pos: Position,
     pub complete: bool,
+    #[serde(skip)]
+    pub(crate) fields: u8,
     pub wcs: i32,
     pub tool: i32,
     pub spindle_mode: i32,
@@ -35,6 +37,23 @@ pub struct MachineStatus {
     pub probe_triggered: bool,
     pub door_open: bool,
     pub motion_blocked: bool,
+}
+
+impl MachineStatus {
+    pub(crate) fn inherit_modal_fields(&mut self, previous: &Self) {
+        for bit in [2, 4, 8] {
+            if self.fields & bit == 0 && previous.fields & bit != 0 {
+                match bit {
+                    2 => self.tool = previous.tool,
+                    4 => self.spindle_mode = previous.spindle_mode,
+                    8 => self.wcs = previous.wcs,
+                    _ => unreachable!(),
+                }
+                self.fields |= bit;
+            }
+        }
+        self.complete = self.fields == 15 && (54..=59).contains(&self.wcs) && self.tool >= 0;
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -193,6 +212,7 @@ pub fn parse_line(line: &str) -> Result<Option<Record>, String> {
                 status.probe_actuator_known = true;
             }
         }
+        status.fields = fields;
         status.complete = fields == 15 && (54..=59).contains(&status.wcs) && status.tool >= 0;
         if status.mode.starts_with("Alarm:") && !status.door_open {
             status.motion_blocked = true;
@@ -210,6 +230,34 @@ pub fn parse_line(line: &str) -> Result<Option<Record>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn alternating_reports_keep_modal_fields_and_update_positions() {
+        let Some(Record::Status(full)) =
+            parse_line("<Ready|MPos:0,0,0,0|WPos:1,2,3,0|T:2|M:5|G:54>").unwrap()
+        else {
+            panic!()
+        };
+        let Some(Record::Status(mut short)) =
+            parse_line("<Moving|MPos:-1,0,0,0|WPos:0,2,3,0|PM:0>").unwrap()
+        else {
+            panic!()
+        };
+        short.inherit_modal_fields(&full);
+        assert!(short.complete);
+        assert_eq!((short.tool, short.spindle_mode, short.wcs), (2, 5, 54));
+        assert_eq!(short.m_pos, [-1.0, 0.0, 0.0, 0.0]);
+        let Some(Record::Status(mut changed)) =
+            parse_line("<Ready|MPos:0,0,0,0|WPos:0,0,0,0|T:0|M:3|G:55>").unwrap()
+        else {
+            panic!()
+        };
+        changed.inherit_modal_fields(&short);
+        assert_eq!(
+            (changed.tool, changed.spindle_mode, changed.wcs),
+            (0, 3, 55)
+        );
+    }
+
     #[test]
     fn numbered_reports_with_compact_actuator_state() {
         for actuator in 0..=3 {

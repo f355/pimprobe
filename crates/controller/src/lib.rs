@@ -453,7 +453,15 @@ fn apply(inner: &Inner, record: Record) {
             stored.snapshot.last_probe = Some(probe.clone());
             event.probe = Some(probe);
         }
-        Record::Status(status) => {
+        Record::Status(mut status) => {
+            if stored
+                .status_at
+                .is_some_and(|at| at.elapsed() < Duration::from_secs(2))
+            {
+                if let Some(previous) = &stored.snapshot.status {
+                    status.inherit_modal_fields(previous);
+                }
+            }
             if stored.snapshot.actuator_pending && status.probe_actuator_known {
                 if matches!(status.probe_actuator, 2 | 3) {
                     stored.actuator_transition = true;

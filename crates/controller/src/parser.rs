@@ -65,6 +65,13 @@ fn position(s: &str) -> Result<Position, String> {
 
 pub fn parse_line(line: &str) -> Result<Option<Record>, String> {
     let line = line.trim();
+    let line = if let Some(report) = line.strip_prefix("[SerialReport:") {
+        let (sequence, record) = report.split_once("] ").ok_or("invalid report prefix")?;
+        number::<u64>(sequence)?;
+        record
+    } else {
+        line
+    };
     if line == "ok" {
         return Ok(Some(Record::Ack));
     }
@@ -115,11 +122,18 @@ pub fn parse_line(line: &str) -> Result<Option<Record>, String> {
         };
         let mut have_pos = false;
         let mut fields = 0u8;
+        let mut compact_actuator = None;
         for field in parts {
             let Some((key, value)) = field.split_once(':') else {
                 continue;
             };
             match key {
+                "MS" => {
+                    // The thirtieth compact field is the probe actuator state.
+                    compact_actuator = value.as_bytes().get(29).and_then(|byte| {
+                        (b'0'..=b'3').contains(byte).then(|| i32::from(byte - b'0'))
+                    });
+                }
                 "MPos" => {
                     status.m_pos = position(value)?;
                     have_pos = true;
@@ -173,6 +187,12 @@ pub fn parse_line(line: &str) -> Result<Option<Record>, String> {
         if !have_pos {
             return Err("missing MPos".into());
         }
+        if !status.probe_actuator_known {
+            if let Some(actuator) = compact_actuator {
+                status.probe_actuator = actuator;
+                status.probe_actuator_known = true;
+            }
+        }
         status.complete = fields == 15 && (54..=59).contains(&status.wcs) && status.tool >= 0;
         if status.mode.starts_with("Alarm:") && !status.door_open {
             status.motion_blocked = true;
@@ -190,6 +210,23 @@ pub fn parse_line(line: &str) -> Result<Option<Record>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn numbered_reports_with_compact_actuator_state() {
+        for actuator in 0..=3 {
+            let mut compact = b"000000010010110011010000001010001001000001".to_vec();
+            compact[29] = b'0' + actuator;
+            let line = format!(
+                "[SerialReport:180] <Ready|MPos:0,0,0,0|WPos:232.410,204.066,121.781,0|T:0|M:5|G:54|MS:{}|Abnormal:[]>",
+                String::from_utf8(compact).unwrap()
+            );
+            let Some(Record::Status(status)) = parse_line(&line).unwrap() else {
+                panic!("expected status");
+            };
+            assert!(status.complete && status.probe_actuator_known);
+            assert_eq!(status.probe_actuator, i32::from(actuator));
+        }
+    }
+
     #[test]
     fn original_cnc_lab_protocol_fixtures() {
         let Some(Record::Status(s)) = parse_line("<Ready|MPos:-156.755,-100.852,0.000,0.000|WPos:3.480,-7.588,38.500,0.000|T:2|M:5|G:55|PM:1|Pn:P|MS:1100100100100100110100000010100000010000|Abnormal:[106]>").unwrap() else { panic!() };

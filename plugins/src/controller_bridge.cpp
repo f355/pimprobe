@@ -35,16 +35,19 @@
 namespace pimprobe {
 
 bool connectControllerOutput(QObject *source, QObject *receiver) {
-    const auto raw = QObject::connect(
-        source, SIGNAL(rawDataReceived(QByteArray)), receiver,
-        SLOT(publishRawData(QByteArray)));
+    if (source->metaObject()->indexOfSignal("rawDataReceived(QByteArray)") >= 0) {
+        if (!QObject::connect(source, SIGNAL(rawDataReceived(QByteArray)), receiver,
+                              SLOT(publishRawData(QByteArray)))) {
+            return false;
+        }
+    }
     const auto robot = QObject::connect(
         source, SIGNAL(robotinfoSignal(QByteArray)), receiver,
         SLOT(publishControllerData(QByteArray)));
     const auto other = QObject::connect(
         source, SIGNAL(otherinfoSignal(QByteArray)), receiver,
         SLOT(publishControllerData(QByteArray)));
-    return raw && robot && other;
+    return robot && other;
 }
 
 ControllerBridge::ControllerBridge(QObject *parent) : QObject(parent) {

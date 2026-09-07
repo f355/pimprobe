@@ -29,13 +29,19 @@
 
 namespace {
 
-class ControllerSignalSource : public QObject {
+class ParsedControllerSignalSource : public QObject {
+    Q_OBJECT
+
+signals:
+    void robotinfoSignal(const QByteArray &data);
+    void otherinfoSignal(const QByteArray &data);
+};
+
+class ControllerSignalSource : public ParsedControllerSignalSource {
     Q_OBJECT
 
 signals:
     void rawDataReceived(const QByteArray &data);
-    void robotinfoSignal(const QByteArray &data);
-    void otherinfoSignal(const QByteArray &data);
 };
 
 QByteArray frame(char kind, const QByteArray &payload) {
@@ -55,6 +61,7 @@ private slots:
     void exchangesCommandsAndControllerData();
     void rejectsUnknownFrameType();
     void forwardsOnlyParsedControllerRecords();
+    void forwardsParsedSignalInterface();
     void replacesStaleSocketPath();
     void rejectsOversizedQueuedCommand();
     void disconnectsClientThatStopsReading();
@@ -134,6 +141,25 @@ void ControllerBridgeTest::forwardsOnlyParsedControllerRecords() {
                             "<Ready|MPos:1.000,2.000,3.000,0.000|WPos:4.000,5.000,6.000,0.000>")) +
                  frame('D', QByteArrayLiteral("<Ready>\r\n")) +
                  frame('D', QByteArrayLiteral("$33=-55.872\r\n")));
+}
+
+void ControllerBridgeTest::forwardsParsedSignalInterface() {
+    QTemporaryDir directory;
+    pimprobe::ControllerBridge bridge;
+    QVERIFY(bridge.listen(directory.filePath(QStringLiteral("controller.sock"))));
+    ParsedControllerSignalSource source;
+    QVERIFY(pimprobe::connectControllerOutput(&source, &bridge));
+    QLocalSocket socket;
+    socket.connectToServer(bridge.serverName());
+    QVERIFY(socket.waitForConnected());
+    QCoreApplication::processEvents();
+    const QByteArray status("<Ready|MPos:1,2,3,0|PM:0>");
+    const QByteArray settings("$33=-55.872\r\n");
+    emit source.robotinfoSignal(status);
+    emit source.otherinfoSignal(settings);
+    const auto expected = frame('D', status) + frame('D', settings);
+    QTRY_COMPARE(socket.bytesAvailable(), expected.size());
+    QCOMPARE(socket.readAll(), expected);
 }
 
 void ControllerBridgeTest::replacesStaleSocketPath() {

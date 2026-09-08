@@ -405,6 +405,22 @@ async fn paced_mock_cancellation_has_no_pending_movement() {
 }
 
 #[test]
+fn deadlines_allow_for_the_firmware_feed_cap() {
+    let mut stage = plan_contact(config()).unwrap().stages.remove(0);
+    stage.distance = 250.0;
+    stage.feed = 3000.0;
+    assert_eq!(
+        TimingPolicy::default().deadline(&stage).unwrap(),
+        Duration::from_secs(20)
+    );
+    stage.feed = 300.0;
+    assert_eq!(
+        TimingPolicy::default().deadline(&stage).unwrap(),
+        Duration::from_secs(55)
+    );
+}
+
+#[test]
 fn feed_and_deadline_validation_has_no_rapid_fallback() {
     let mut c = config();
     c.retract_feed = 0.0;

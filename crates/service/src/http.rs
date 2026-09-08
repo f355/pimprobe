@@ -27,7 +27,10 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
 };
-use pimprobe_core::{CancellationToken, Controller, Error, RoutineConfig, TimingPolicy};
+use pimprobe_core::{
+    CancellationToken, Controller, Error, RepeatabilityEvent, RepeatabilityOptions,
+    RepeatabilityReport, RepeatabilitySettings, RoutineConfig, TimingPolicy,
+};
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use std::{
@@ -135,6 +138,7 @@ pub fn router(app: Arc<App>) -> Router {
         .route("/api/v1/routine/run", post(run))
         .route("/api/v1/routine/zero", post(zero))
         .route("/api/v1/routine/return", post(return_start))
+        .route("/api/v1/repeatability/run", post(repeatability))
         .route("/api/v1/mock/ready", get(ready))
         .layer(DefaultBodyLimit::max(8192))
         .with_state(app)
@@ -303,6 +307,61 @@ fn queue_progress(
     if sender.capacity() <= 1 || sender.try_send(encoded(event)).is_err() {
         cancel.cancel();
     }
+}
+
+async fn repeatability(
+    State(app): State<Arc<App>>,
+    Json(options): Json<RepeatabilityOptions>,
+) -> Result<Response, ApiError> {
+    let guard = app.acquire()?;
+    let values = app.settings.lock().await.snapshot();
+    let settings = RepeatabilitySettings {
+        diameter: values["probeDiameter"].as_f64().unwrap(),
+        retract: values["retractDistance"].as_f64().unwrap(),
+        positioning_feed: values["positioningFeed"].as_f64().unwrap(),
+        coarse_feed: values["coarseFeed"].as_f64().unwrap(),
+        fine_feed: values["fineFeed"].as_f64().unwrap(),
+    };
+    options.validate()?;
+    settings.validate()?;
+    app.device.refresh_probe_reference().await?;
+    pimprobe_core::check_repeatability(&app.device, &options, settings)?;
+    app.device.configure_repeatability(settings.diameter)?;
+    let cancel = app.shutdown.child_token();
+    let run_cancel = cancel.clone();
+    let (sender, receiver) = mpsc::channel(256);
+    app.active.store(true, Ordering::SeqCst);
+    tokio::spawn(async move {
+        let _guard = guard;
+        let mut report = RepeatabilityReport::default();
+        let result = pimprobe_core::run_repeatability(
+            &app.device, &options, settings, &mut report, run_cancel.clone(), |event| {
+                let event = match event {
+                    RepeatabilityEvent::Progress(progress) => json!({"type":"progress", "progress":progress}),
+                    RepeatabilityEvent::Measurement { repetition, axis, value, statistics } =>
+                        json!({"type":"measurement", "repetition":repetition, "axis":axis, "value":value, "statistics":statistics}),
+                };
+                queue_progress(&sender, &run_cancel, event);
+            },
+        ).await;
+        let event = match result {
+            Ok(()) => json!({"type":"result", "result":report}),
+            Err(error) => {
+                app.recover(&error).await;
+                json!({"type":"error", "code":error_code(&error), "message":error.to_string(), "result":report})
+            }
+        };
+        app.active.store(false, Ordering::SeqCst);
+        let _ = sender.try_send(encoded(event));
+    });
+    Ok((
+        [
+            (header::CONTENT_TYPE, "application/x-ndjson"),
+            (header::CACHE_CONTROL, "no-store"),
+        ],
+        Body::from_stream(RunStream { receiver, cancel }),
+    )
+        .into_response())
 }
 
 async fn run(State(app): State<Arc<App>>, Json(token): Json<Token>) -> Result<Response, ApiError> {

@@ -20,6 +20,7 @@ use serde::Serialize;
 #[derive(Clone, Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MachineStatus {
+    pub homed: bool,
     pub mode: String,
     #[serde(rename = "machinePosition")]
     pub m_pos: Position,
@@ -148,6 +149,8 @@ pub fn parse_line(line: &str) -> Result<Option<Record>, String> {
             };
             match key {
                 "MS" => {
+                    // H is the eighth field in the firmware's compact machine-status string.
+                    status.homed = value.as_bytes().get(7) == Some(&b'1');
                     // The thirtieth compact field is the probe actuator state.
                     compact_actuator = value.as_bytes().get(29).and_then(|byte| {
                         (b'0'..=b'3').contains(byte).then(|| i32::from(byte - b'0'))
@@ -270,7 +273,7 @@ mod tests {
             let Some(Record::Status(status)) = parse_line(&line).unwrap() else {
                 panic!("expected status");
             };
-            assert!(status.complete && status.probe_actuator_known);
+            assert!(status.complete && status.homed && status.probe_actuator_known);
             assert_eq!(status.probe_actuator, i32::from(actuator));
         }
     }
@@ -279,6 +282,7 @@ mod tests {
     fn original_cnc_lab_protocol_fixtures() {
         let Some(Record::Status(s)) = parse_line("<Ready|MPos:-156.755,-100.852,0.000,0.000|WPos:3.480,-7.588,38.500,0.000|T:2|M:5|G:55|PM:1|Pn:P|MS:1100100100100100110100000010100000010000|Abnormal:[106]>").unwrap() else { panic!() };
         assert!(s.complete && s.door_open && !s.motion_blocked && s.probe_triggered);
+        assert!(s.homed);
         assert_eq!(s.m_pos, [-156.755, -100.852, 0.0, 0.0]);
         assert_eq!(s.w_pos, [3.480, -7.588, 38.500, 0.0]);
         assert_eq!((s.tool, s.spindle_mode, s.wcs), (2, 5, 55));

@@ -151,6 +151,7 @@ impl SocketController {
             return state;
         }
         if let Some(status) = s.status {
+            state.homed = status.homed;
             state.ready = status.complete && status.mode == "Ready";
             state.spindle_stopped = status.spindle_mode == 5;
             state.motion_blocked = status.motion_blocked;
@@ -281,7 +282,7 @@ impl SocketController {
             stored.actuator_target = target;
             stored.actuator_transition = matches!(status.probe_actuator, 2 | 3);
         }
-        let result = self.send(if extended { "$SP0" } else { "$SP1" }).await;
+        let result = self.send(if extended { "M122" } else { "M121" }).await;
         if result.is_err() {
             self.inner.stored.write().unwrap().snapshot.actuator_pending = false;
         }
@@ -412,7 +413,21 @@ async fn session(inner: &Inner, socket: UnixStream) -> Result<(), Error> {
         *slot = Some(writer);
     }
     loop {
-        let (kind, data) = timeout(IO_TIMEOUT, frame::read_frame(&mut reader))
+        // The firmware goes quiet while homing; keep the session until reports resume.
+        let read_timeout = if inner
+            .stored
+            .read()
+            .unwrap()
+            .snapshot
+            .status
+            .as_ref()
+            .is_some_and(|s| s.mode == "Homing")
+        {
+            Duration::from_secs(600)
+        } else {
+            IO_TIMEOUT
+        };
+        let (kind, data) = timeout(read_timeout, frame::read_frame(&mut reader))
             .await
             .map_err(failure)?
             .map_err(failure)?;
@@ -448,6 +463,7 @@ fn apply(inner: &Inner, record: Record) {
         }
         Record::Setting(key, value) => {
             stored.snapshot.settings.insert(key, value);
+            event.setting = Some((key, value));
         }
         Record::Probe(probe) => {
             stored.snapshot.last_probe = Some(probe.clone());
@@ -551,7 +567,7 @@ mod tests {
         c.set_probe_extended(true).await.unwrap();
         assert_eq!(
             frame::read_frame(&mut socket).await.unwrap(),
-            (b'Q', b"$SP0\n".to_vec())
+            (b'Q', b"M122\n".to_vec())
         );
         data(&mut socket, "ok\n").await;
         assert!(a.recv().await.unwrap().acknowledged);
@@ -593,6 +609,27 @@ mod tests {
         frame::read_frame(&mut socket).await.unwrap();
         data(&mut socket, "error:9\n").await;
         assert!(task.await.unwrap().is_err());
+        c.shutdown().await;
+    }
+    #[tokio::test]
+    async fn homing_silence_keeps_the_controller_session() {
+        let (_path, _listener, c, mut socket) = ready().await;
+        let session = c.snapshot().session_id;
+        data(&mut socket, "<Homing|MPos:-5,-5,-5,0|PM:1>\n").await;
+        wait_for(&c, |s| {
+            s.status.as_ref().is_some_and(|s| s.mode == "Homing")
+        })
+        .await;
+        sleep(Duration::from_secs(4)).await;
+        assert!(c.snapshot().connected);
+        assert!(!c.snapshot().status_fresh);
+        data(
+            &mut socket,
+            "<Ready|MPos:0,0,0,0|WPos:5,5,5,0|PM:0|T:0|M:5|G:54>\n",
+        )
+        .await;
+        wait_for(&c, |s| s.status_fresh).await;
+        assert_eq!(c.snapshot().session_id, session);
         c.shutdown().await;
     }
     #[tokio::test]

@@ -55,7 +55,7 @@ pub async fn query_modes<C: Controller + ?Sized>(c: &C) -> Result<Modes, Error> 
     .await
     .map_err(|_| Error::Timeout)?
 }
-async fn set_modes<C: Controller + ?Sized>(c: &C, m: Modes) -> Result<(), Error> {
+pub(crate) async fn set_modes<C: Controller + ?Sized>(c: &C, m: Modes) -> Result<(), Error> {
     if !m.valid() {
         return Err(Error::Preflight("invalid modes".into()));
     }
@@ -96,15 +96,15 @@ pub fn surface_machine_coordinate(
         Ok(contact.position[i] + offset[i] + f64::from(direction) * diameter / 2.0)
     }
 }
-struct Observed<'a, C: ?Sized, F> {
-    inner: &'a C,
-    observe: &'a F,
-    scripted: &'a AtomicBool,
+pub(crate) struct Observed<'a, C: ?Sized, F> {
+    pub(crate) inner: &'a C,
+    pub(crate) observe: &'a F,
+    pub(crate) scripted: &'a AtomicBool,
 }
 
-struct Cancellable<'a, C: ?Sized> {
-    inner: &'a C,
-    cancel: &'a CancellationToken,
+pub(crate) struct Cancellable<'a, C: ?Sized> {
+    pub(crate) inner: &'a C,
+    pub(crate) cancel: &'a CancellationToken,
 }
 #[async_trait]
 impl<C: Controller + ?Sized> Controller for Cancellable<'_, C> {

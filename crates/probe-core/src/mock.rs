@@ -145,6 +145,7 @@ impl Default for MockController {
 impl MockController {
     pub fn new() -> Self {
         Self::with_state(State {
+            homed: true,
             modes: Modes {
                 units: 21,
                 distance: 90,
@@ -198,6 +199,9 @@ impl MockController {
     }
     pub fn set_tool_value(&self, value: Option<f64>) {
         self.inner.lock().unwrap().tool_value = value;
+    }
+    pub fn probe_reference_z(&self) -> Option<f64> {
+        self.inner.lock().unwrap().tool_value
     }
     pub fn set_geometry(&self, geometry: MockGeometry) {
         self.inner.lock().unwrap().geometry = geometry;
@@ -338,6 +342,25 @@ impl Controller for MockController {
         if inner.state.motion_blocked {
             return Err(Error::MotionBlocked);
         }
+        if matches!(command, "M122" | "M121") {
+            inner.state.probe_extended = command == "M122";
+            self.publish(&inner.state);
+            return Ok(());
+        }
+        if command == "$H" {
+            inner.state.ready = false;
+            inner.state.homed = false;
+            self.publish(&inner.state);
+            let origin: Position =
+                std::array::from_fn(|i| inner.state.position[i] - inner.state.work_position[i]);
+            inner.state.position = [-1.0, -1.0, 0.0, 0.0];
+            inner.state.work_position =
+                std::array::from_fn(|i| inner.state.position[i] - origin[i]);
+            inner.state.homed = true;
+            inner.state.ready = true;
+            self.publish(&inner.state);
+            return Ok(());
+        }
         let mut axes = Vec::new();
         for w in &words {
             let axis = match w.as_bytes().first() {
@@ -352,6 +375,19 @@ impl Controller for MockController {
                 .filter(|v| v.is_finite())
                 .ok_or_else(|| Error::Controller("invalid numeric word".into()))?;
             axes.push((axis, value));
+        }
+        if words.starts_with(&["G90", "G53", "G0"]) && !axes.is_empty() {
+            inner.state.modes.distance = 90;
+            inner.state.ready = false;
+            self.publish(&inner.state);
+            for (axis, value) in axes {
+                let i = axis.index();
+                inner.state.work_position[i] += value - inner.state.position[i];
+                inner.state.position[i] = value;
+            }
+            inner.state.ready = true;
+            self.publish(&inner.state);
+            return Ok(());
         }
         if words.first() == Some(&"G10") {
             if words.get(1) != Some(&"L20")

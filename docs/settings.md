@@ -35,3 +35,5 @@ Speed of the first search for each surface. It finds an approximate contact posi
 Speed of the second touch. This touch supplies the measurement. A slower feed reduces the effect of deflection and stopping delay. If the fine touch fails, the firmware can raise an alarm that must be cleared on the main screen.
 
 [Clearance and failed probing](safety.md)
+
+[Probe repeatability](repeatability.md)

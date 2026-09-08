@@ -113,4 +113,31 @@ TestCase {
         tryVerify(function() { return zero.visible && zero.enabled }, 10000)
         save("dimensions")
     }
+    function test_repeatability() {
+        var routine = window.contentData.filter(function(item) { return item instanceof ProbeFlow })[0]
+        routine.close()
+        tryVerify(function() { return !window.controlsLocked() }, 3000)
+        var reply = null
+        Api.request("POST", window.serviceUrl + "/probe-actuator", {extended:false}, function(r) { reply = r })
+        tryVerify(function() { return reply !== null }, 3000)
+        verify(reply.ok)
+        var tabs = descendants(window.contentItem, TabBar)[0]
+        mouseClick(tabs.itemAt(3))
+        var button = descendants(window.contentItem, Button).filter(function(b) {
+            return b.visible && b.text === "Probe repeatability"
+        })[0]
+        verify(button !== undefined)
+        mouseClick(button)
+        var flow = window.contentData.filter(function(item) { return item instanceof RepeatabilityFlow })[0]
+        tryCompare(flow, "opened", true)
+        flow.confirmPreparation()
+        save("repeatability-options")
+        flow.home = true
+        flow.start()
+        tryVerify(function() { return flow.phase !== "running" }, 20000)
+        compare(flow.failure, "")
+        compare(flow.phase, "result")
+        save("repeatability-results")
+        flow.close()
+    }
 }

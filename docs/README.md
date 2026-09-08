@@ -21,7 +21,7 @@ Use the probe to find an edge, corner, surface or center, then set work zero fro
 | [Outside](outside.md) | A side or corner of stock, or its top surface |
 | [Inside](inside.md) | A wall or corner inside an opening, or its bottom |
 | [Center](center.md) | The center of a boss, block, hole, pocket, ridge or valley |
-| [Settings](settings.md) | Ball diameter, backoff and feeds |
+| [Settings](settings.md) | Ball diameter, backoff, feeds and repeatability check |
 
 In the button pictures, the crosshair is the starting position of the probe ball, the arrows point towards the surfaces to touch, and the green dot is the point being measured. Z measures straight down. Distances are in mm and feeds in mm/min.
 
@@ -31,7 +31,7 @@ The large coordinates are relative to the selected work zero. The smaller number
 
 Tap the **G54** (or other G-number) to choose a work coordinate system. Each one has its own zero. Check this before probing: it is the coordinate system the results page will set.
 
-The probe switch extends or retracts the probe independently of a routine. Tabs remain switchable while retracted; their contents become available when the probe is extended. The **?** button opens help for the current tab.
+The probe switch extends or retracts the probe independently of a routine. Tabs remain switchable while retracted; probing controls become available when the probe is extended. Settings are available with the machine connected. The **?** button opens help for the current tab.
 
 The back arrow leaves probing. If the probe is extended, it asks whether to retract it or leave it extended.
 
@@ -54,3 +54,5 @@ Each surface gets a coarse touch, a short backoff, a slow fine touch and another
 [Clearance and failed probing](safety.md)
 
 Screenshots use simulated stock in the local preview.
+
+[Probe repeatability](repeatability.md)

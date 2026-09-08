@@ -15,7 +15,10 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use pimprobe_controller::SocketController;
-use pimprobe_core::{Controller, Error, Event, MockController, RoutineConfig, State, async_trait};
+use pimprobe_core::{
+    Controller, Error, Event, MockController, MockGeometry, RepeatabilityController, RoutineConfig,
+    State, async_trait,
+};
 use serde_json::{Value, json};
 use tokio::sync::broadcast;
 
@@ -25,6 +28,27 @@ pub enum Device {
 }
 
 impl Device {
+    pub async fn refresh_probe_reference(&self) -> Result<(), Error> {
+        if let Self::Machine(controller) = self {
+            let mut events = controller.subscribe();
+            tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                controller.send("$$").await?;
+                loop {
+                    let event = events.recv().await.map_err(|_| Error::Disconnected)?;
+                    if let Some(code) = event.controller_error {
+                        return Err(Error::Controller(format!("error:{code}")));
+                    }
+                    if event.setting.is_some_and(|(key, _)| key == 202) {
+                        return Ok(());
+                    }
+                }
+            })
+            .await
+            .map_err(|_| Error::Timeout)?
+        } else {
+            Ok(())
+        }
+    }
     pub fn session_id(&self) -> u64 {
         match self {
             Self::Machine(c) => c.snapshot().session_id,
@@ -38,6 +62,28 @@ impl Device {
     pub fn configure(&self, config: &RoutineConfig) -> Result<(), Error> {
         if let Self::Mock(mock) = self {
             mock.configure(config)?;
+        }
+        Ok(())
+    }
+
+    pub fn configure_repeatability(&self, diameter: f64) -> Result<(), Error> {
+        if let Self::Mock(mock) = self {
+            let state = mock.state();
+            let mut corner = state.position;
+            for (i, coordinate) in corner.iter_mut().enumerate().take(2) {
+                *coordinate = state.position[i] - state.work_position[i] - state.probe_offset[i]
+                    + diameter / 2.0;
+            }
+            let floor = state.position[2] - state.work_position[2] - self.probe_reference_z()?
+                + state.probe_offset[2];
+            mock.set_geometry(MockGeometry::Corner {
+                origin: corner,
+                directions: [-1, -1],
+                travel: [0.0, 0.0],
+                top: floor + 20.0,
+                floor,
+                internal: true,
+            });
         }
         Ok(())
     }
@@ -100,6 +146,25 @@ impl Device {
         if let Self::Machine(controller) = self {
             controller.shutdown().await;
         }
+    }
+}
+
+#[async_trait]
+impl RepeatabilityController for Device {
+    async fn set_probe(&self, extended: bool) -> Result<(), Error> {
+        match self {
+            Self::Machine(c) => c.set_probe_extended(extended).await,
+            Self::Mock(c) => c.set_probe(extended).await,
+        }
+    }
+    fn probe_reference_z(&self) -> Result<f64, Error> {
+        let reference = match self {
+            Self::Machine(c) => c.snapshot().settings.get(&202).copied(),
+            Self::Mock(c) => c.probe_reference_z(),
+        };
+        reference
+            .filter(|v| v.is_finite())
+            .ok_or_else(|| Error::Preflight("firmware probe Z reference ($202) unavailable".into()))
     }
 }
 

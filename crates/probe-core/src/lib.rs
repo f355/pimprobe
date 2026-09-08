@@ -19,7 +19,9 @@ mod motion;
 mod parameters;
 mod plan;
 pub use parameters::*;
+mod repeatability;
 mod runtime;
+pub use repeatability::*;
 mod script;
 pub use mock::*;
 pub use tokio_util::sync::CancellationToken;
@@ -93,6 +95,8 @@ impl Modes {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct State {
+    #[serde(default)]
+    pub homed: bool,
     pub modes: Modes,
     pub connected: bool,
     pub ready: bool,
@@ -135,6 +139,7 @@ pub struct MotionStatus {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Event {
+    pub setting: Option<(i32, f64)>,
     pub modes: Option<Modes>,
     pub acknowledged: bool,
     pub controller_error: Option<i32>,
@@ -172,6 +177,13 @@ pub(crate) fn within(a: Position, b: Position, t: f64) -> bool {
     finite(a) && finite(b) && a.iter().zip(b).all(|(a, b)| (a - b).abs() <= t)
 }
 pub(crate) fn preflight(s: &State) -> Result<(), Error> {
+    preflight_machine(s)?;
+    if !s.probe_extended {
+        return Err(Error::Preflight("probe not extended".into()));
+    }
+    Ok(())
+}
+pub(crate) fn preflight_machine(s: &State) -> Result<(), Error> {
     if s.motion_blocked {
         return Err(Error::MotionBlocked);
     }
@@ -179,7 +191,6 @@ pub(crate) fn preflight(s: &State) -> Result<(), Error> {
         (s.connected, "disconnected"),
         (s.ready, "not ready"),
         (s.spindle_stopped, "spindle running"),
-        (s.probe_extended, "probe not extended"),
         (!s.probe_triggered, "probe already triggered"),
         (s.probe_offset_known, "unknown probe offset"),
         (s.travel_limits_known, "unknown travel limits"),
@@ -199,7 +210,7 @@ pub(crate) fn check_path(s: &State, a: Axis, lo: f64, hi: f64) -> Result<(), Err
         || !hi.is_finite()
         || lo > hi
         || lo < -limit + 0.5
-        || hi > -0.5
+        || hi > 0.0
     {
         return Err(Error::Preflight(format!(
             "{a} path {lo:.3}..{hi:.3} exceeds machine travel"

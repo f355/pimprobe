@@ -47,6 +47,193 @@ fn app() -> (tempfile::TempDir, std::sync::Arc<App>, Router) {
     (temp, app.clone(), router(app))
 }
 
+#[tokio::test]
+async fn repeatability_streams_each_reading_and_axis_statistics() {
+    let (_temp, app, router) = repeatability_app();
+    let before = app.device.state();
+    let (code, body) = request(
+        &router,
+        "POST",
+        "/api/v1/repeatability/run",
+        json!({"axes":[true,true,true],"repetitions":5,"home":false,"retract":true}),
+    )
+    .await;
+    assert_eq!(code, StatusCode::OK, "{body}");
+    let events: Vec<Value> = body
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    assert_eq!(
+        events.iter().filter(|e| e["type"] == "measurement").count(),
+        15
+    );
+    let last = events.last().unwrap();
+    let mut counts = [0_u64; 3];
+    for event in events.iter().filter(|e| e["type"] == "measurement") {
+        let axis = ["X", "Y", "Z"]
+            .iter()
+            .position(|a| event["axis"] == *a)
+            .unwrap();
+        counts[axis] += 1;
+        for (i, count) in counts.iter().enumerate() {
+            if *count == 0 {
+                assert!(event["statistics"][i].is_null());
+            } else {
+                assert_eq!(event["statistics"][i]["count"], *count);
+                assert!(event["statistics"][i]["mean"].as_f64().unwrap().abs() < 0.001);
+            }
+        }
+    }
+    assert_eq!(last["type"], "result", "{body}");
+    assert_eq!(last["result"]["measurements"].as_array().unwrap().len(), 5);
+    for axis in 0..3 {
+        assert_eq!(last["result"]["statistics"][axis]["count"], 5);
+        assert!(
+            last["result"]["statistics"][axis]["stddev"]
+                .as_f64()
+                .unwrap()
+                < 1e-9
+        );
+    }
+    let after = app.device.state();
+    assert!(after.probe_extended);
+    assert_eq!(after.modes, before.modes);
+    for axis in 0..3 {
+        assert!(
+            ((after.position[axis] - after.work_position[axis])
+                - (before.position[axis] - before.work_position[axis]))
+                .abs()
+                < 1e-8
+        );
+    }
+}
+
+#[tokio::test]
+async fn repeatability_rejects_empty_axes_and_fractional_repetitions() {
+    let (_temp, _app, router) = app();
+    for options in [
+        json!({"axes":[false,false,false],"repetitions":5,"home":false,"retract":true}),
+        json!({"axes":[true,true,true],"repetitions":1.5,"home":false,"retract":true}),
+    ] {
+        let (code, _) = request(&router, "POST", "/api/v1/repeatability/run", options).await;
+        assert!(matches!(
+            code,
+            StatusCode::BAD_REQUEST | StatusCode::CONFLICT | StatusCode::UNPROCESSABLE_ENTITY
+        ));
+    }
+}
+
+#[tokio::test]
+async fn repeatability_cycles_probe_between_readings_and_before_homing() {
+    for home in [false, true] {
+        for retract in [false, true] {
+            let (_temp, app, router) = repeatability_app();
+            let (code, body) = request(
+                &router,
+                "POST",
+                "/api/v1/repeatability/run",
+                json!({"axes":[true,false,false],"repetitions":2,"home":home,"retract":retract}),
+            )
+            .await;
+            assert_eq!(code, StatusCode::OK);
+            let last: Value = serde_json::from_str(body.lines().last().unwrap()).unwrap();
+            assert_eq!(last["type"], "result", "{body}");
+            assert!(last["result"]["statistics"][1].is_null());
+            let Device::Mock(mock) = &app.device else {
+                unreachable!()
+            };
+            let commands = mock.commands();
+            assert_eq!(
+                commands.iter().filter(|s| *s == "$H").count(),
+                if home { 2 } else { 0 }
+            );
+            assert_eq!(
+                commands.iter().filter(|s| *s == "M121").count(),
+                if home {
+                    2
+                } else if retract {
+                    1
+                } else {
+                    0
+                }
+            );
+            let first_motion = commands
+                .iter()
+                .position(|s| s.starts_with("G38") || s.starts_with("G1 "))
+                .unwrap();
+            if home || retract {
+                assert!(commands.iter().position(|s| s == "M121").unwrap() > first_motion);
+            }
+            let last_motion = commands
+                .iter()
+                .rfind(|s| s.starts_with("G38") || s.starts_with("G1 "))
+                .unwrap();
+            assert!(last_motion.starts_with("G38.3 X"), "{last_motion}");
+        }
+    }
+}
+
+fn repeatability_app() -> (tempfile::TempDir, std::sync::Arc<App>, Router) {
+    let temp = tempfile::tempdir().unwrap();
+    let mut state = MockController::new().state();
+    state.probe_extended = true;
+    // The tip starts inside the bracket and above the bed.
+    state.work_position = [70.0, 20.0, 15.0, 0.0];
+    let app = App::new(
+        Device::Mock(Box::new(MockController::with_state(state))),
+        Settings::open(temp.path().join("settings.json")).unwrap(),
+        None,
+    );
+    (temp, app.clone(), router(app))
+}
+
+#[tokio::test]
+async fn repeatability_refreshes_the_firmware_z_reference() {
+    use pimprobe_controller::{SocketController, frame};
+    use pimprobe_core::RepeatabilityController;
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("probe.sock");
+    let listener = tokio::net::UnixListener::bind(&path).unwrap();
+    let controller = SocketController::connect(&path, [240.0, 235.0, 125.0, 0.0])
+        .await
+        .unwrap();
+    let (mut socket, _) = listener.accept().await.unwrap();
+    assert_eq!(
+        frame::read_frame(&mut socket).await.unwrap(),
+        (b'Q', b"$P\n".to_vec())
+    );
+    frame::write_frame(&mut socket, b'D', b"$202=-12\n")
+        .await
+        .unwrap();
+    tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        while controller.snapshot().settings.get(&202) != Some(&-12.0) {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    let device = std::sync::Arc::new(Device::Machine(controller.clone()));
+    let task = tokio::spawn({
+        let device = device.clone();
+        async move { device.refresh_probe_reference().await }
+    });
+    assert_eq!(
+        frame::read_frame(&mut socket).await.unwrap(),
+        (b'Q', b"$$\n".to_vec())
+    );
+    frame::write_frame(&mut socket, b'D', b"ok\n$201=-40\n")
+        .await
+        .unwrap();
+    tokio::task::yield_now().await;
+    assert!(!task.is_finished());
+    frame::write_frame(&mut socket, b'D', b"$202=-42.5\n")
+        .await
+        .unwrap();
+    task.await.unwrap().unwrap();
+    assert_eq!(device.probe_reference_z().unwrap(), -42.5);
+    controller.shutdown().await;
+}
+
 async fn request(router: &Router, method: &str, path: &str, body: Value) -> (StatusCode, String) {
     let response = router
         .clone()

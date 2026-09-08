@@ -25,6 +25,7 @@ Item {
     required property var parameters
     property bool roomy: false
     property bool setup: false
+    property Component footer
     default property alias workContent: workArea.data
 
     property Item layout: RowLayout {
@@ -57,6 +58,11 @@ Item {
             }
             Item {
                 Layout.fillHeight: true
+            }
+            Loader {
+                Layout.fillWidth: true
+                sourceComponent: panel.footer
+                visible: item !== null
             }
         }
     }

@@ -167,7 +167,7 @@ pub struct TimingPolicy {
 impl Default for TimingPolicy {
     fn default() -> Self {
         Self {
-            response_margin: Duration::from_secs(2),
+            response_margin: Duration::from_secs(5),
         }
     }
 }
@@ -179,7 +179,8 @@ impl TimingPolicy {
                 "invalid timing feed or distance".into(),
             ));
         }
-        Duration::try_from_secs_f64(s.distance / feed * 60.0)
+        // Safety mode can cap a programmed feed at 1000 mm/min.
+        Duration::try_from_secs_f64(s.distance / feed.min(1000.0) * 60.0)
             .ok()
             .and_then(|d| d.checked_add(self.response_margin))
             .ok_or_else(|| Error::InvalidConfig("deadline overflow".into()))
@@ -243,6 +244,9 @@ pub(crate) async fn receive(rx: &mut broadcast::Receiver<Event>) -> Result<Event
         broadcast::error::RecvError::Lagged(_) => Error::EventLagged,
     })?;
     if let Some(n) = e.controller_error {
+        if n == -1 {
+            return Err(Error::Disconnected);
+        }
         return Err(Error::Controller(format!("error:{n}")));
     }
     if e.status.as_ref().is_some_and(|s| s.motion_blocked) {
@@ -277,7 +281,11 @@ pub(crate) async fn execute<C: Controller + ?Sized>(
     if release {
         state.probe_triggered = false;
     }
-    preflight(&state)?;
+    if s.kind == StageKind::PositionMove {
+        preflight_machine(&state)?;
+    } else {
+        preflight(&state)?;
+    }
     let i = s.delta.iter().position(|v| *v != 0.0).unwrap();
     let start = state.position;
     let end = std::array::from_fn(|j| start[j] + s.delta[j]);
@@ -394,6 +402,16 @@ pub async fn run_contact<C: Controller + ?Sized>(
     config: ContactConfig,
     t: TimingPolicy,
 ) -> Result<ContactResult, Error> {
+    run_contact_with_reading(c, config, t, |_| {}).await
+}
+
+/// Publish the confirmed fine touch before the final backoff.
+pub async fn run_contact_with_reading<C: Controller + ?Sized>(
+    c: &C,
+    config: ContactConfig,
+    t: TimingPolicy,
+    mut reading: impl FnMut(&Contact),
+) -> Result<ContactResult, Error> {
     preview_contact(&c.state(), config, t)?;
     let wcs = c.state().wcs;
     let mut hit = None;
@@ -411,6 +429,9 @@ pub async fn run_contact<C: Controller + ?Sized>(
         .await?;
         p = pos;
         if s.kind == StageKind::FineProbe {
+            if let Some(contact) = &contact {
+                reading(contact);
+            }
             hit = contact;
         }
     }

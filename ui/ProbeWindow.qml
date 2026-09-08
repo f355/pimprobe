@@ -87,7 +87,7 @@ ApplicationWindow {
     }
 
     function activePageAvailable() {
-        return probeAvailable();
+        return tabs.currentIndex === 3 ? machineState.connected === true : probeAvailable();
     }
 
     function probeLabelColor() {
@@ -141,7 +141,7 @@ ApplicationWindow {
     }
 
     function interactionLocked() {
-        return controlsLocked() || confirmDialog.phase === "running";
+        return controlsLocked() || confirmDialog.phase === "running" || repeatabilityDialog.phase === "running";
     }
 
     function requestFailed(message) {
@@ -453,6 +453,13 @@ ApplicationWindow {
         codeFont: window.monoFontFamily
     }
 
+    RepeatabilityFlow {
+        id: repeatabilityDialog
+        serviceUrl: window.serviceUrl
+        uiFont: window.uiFontFamily
+        codeFont: window.monoFontFamily
+    }
+
     Dialog {
         id: exitDialog
         parent: Overlay.overlay
@@ -642,6 +649,17 @@ ApplicationWindow {
                     editor: numericEditor
                     parameters: Pages.setup
                     setup: true
+                    footer: Component {
+                        Button {
+                            text: "Probe repeatability"
+                            implicitHeight: 48
+                            font.pixelSize: 19
+                            onClicked: {
+                                numericEditor.cancel();
+                                repeatabilityDialog.showCheck();
+                            }
+                        }
+                    }
                 }
             }
             NumericKeypad {

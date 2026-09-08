@@ -21,13 +21,13 @@ const docs = new URL("../docs/", import.meta.url);
 const pageNames = ["outside", "inside", "center", "settings"];
 
 // Standalone page links expand into their contents in contextual help.
-export function renderPage(name, parents = []) {
+export function renderPage(name, parents = [], source = docs) {
     if (parents.includes(name)) throw new Error("Circular help link: " + name);
-    return readFileSync(new URL(name, docs), "utf8")
+    return readFileSync(new URL(name, source), "utf8")
         .replace(/^# [^\n]+\n+/, "")
         .replace(/<!-- guide-only -->[\s\S]*?<!-- \/guide-only -->/g, "")
         .replace(/^\[([^\]]+)\]\(([a-z-]+\.md)\)$/gm,
-            (_, label, target) => renderPage(target, [...parents, name]).trim());
+            (_, label, target) => renderPage(target, [...parents, name], source).trim());
 }
 
 export function compileHelp() {
@@ -38,9 +38,9 @@ export function compileHelp() {
         JSON.stringify(pages, null, 4) + ";\n";
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+export function buildHelp(ui = new URL("../ui/", import.meta.url)) {
     const bundle = compileHelp();
-    const help = new URL("../ui/help/", import.meta.url);
+    const help = new URL("help/", ui);
     const assets = new Set(pageNames.flatMap(name =>
         [...renderPage(name + ".md").matchAll(/!\[[^\]]*\]\((images\/[^)]+)\)/g)].map(match => match[1])));
     for (const asset of assets) {
@@ -48,5 +48,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
         mkdirSync(new URL(".", target), { recursive: true });
         copyFileSync(new URL(asset, docs), target);
     }
-    writeFileSync(new URL("../ui/HelpPages.js", import.meta.url), bundle);
+    writeFileSync(new URL("HelpPages.js", ui), bundle);
 }
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) buildHelp();

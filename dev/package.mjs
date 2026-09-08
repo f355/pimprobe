@@ -20,7 +20,8 @@ import { execFileSync } from 'node:child_process';
 import { chmodSync, copyFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { buildHelp } from './build-help.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const options = { service: join(root, 'target/linux/release/pimprobe-service'), plugins: join(root, 'plugins/build-arm64') };
@@ -58,8 +59,9 @@ try {
         binary(join(options.plugins, name), 'app/lib/' + name);
     cpSync(join(root, 'ui'), join(payload, 'app/ui'), {
         recursive: true,
-        filter: source => !source.split('/').some(part => part === 'tests' || part === '.DS_Store'),
+        filter: source => !source.split('/').some(part => ['tests', '.DS_Store', 'help', 'HelpPages.js'].includes(part)),
     });
+    buildHelp(pathToFileURL(join(payload, 'app/ui') + '/'));
     copy(join(root, 'packaging/pimprobe-ui'), 'app/bin/pimprobe-ui');
     chmodSync(join(payload, 'app/bin/pimprobe-ui'), 0o755);
     copy(join(root, 'packaging/config.example.json'), 'app/config.json');

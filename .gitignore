@@ -1,5 +1,7 @@
 /target/
 /build/
 /dist/
+/ui/HelpPages.js
+/ui/help/
 *.user
 .DS_Store

@@ -32,6 +32,7 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 cd "$repo"
+node dev/build-help.mjs
 if nc -z 127.0.0.1 18137 >/dev/null 2>&1; then
     echo 'Refusing to use occupied UI-test port 18137' >&2
     exit 1

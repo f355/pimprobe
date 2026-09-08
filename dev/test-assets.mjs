@@ -19,11 +19,11 @@ import { readFileSync, readdirSync, existsSync, mkdtempSync, mkdirSync, writeFil
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 import test from "node:test";
-import { compileHelp, renderPage } from "./build-help.mjs";
+import { renderPage } from "./build-help.mjs";
 
 const root = new URL("../", import.meta.url);
-const read = path => readFileSync(new URL(path, root), "utf8");
 
 test("rustup discovery puts the actual compiler on PATH", () => {
     const scratch = mkdtempSync(join(tmpdir(), "pimprobe-toolchain-"));
@@ -46,12 +46,17 @@ test("rustup discovery puts the actual compiler on PATH", () => {
     }
 });
 
-test("help bundle matches Markdown sources", () => {
-    assert.equal(read("ui/HelpPages.js"), compileHelp());
-    for (const name of ["outside", "inside", "center"]) {
-        assert.ok(renderPage(name + ".md").includes(renderPage("results.md").trim()));
-        assert.ok(renderPage(name + ".md").includes(renderPage("safety.md").trim()));
-        assert.equal(read(`ui/help/images/${name}.svg`), read(`docs/images/${name}.svg`));
+test("contextual help expands page links and omits guide-only sections", () => {
+    const scratch = mkdtempSync(join(tmpdir(), "pimprobe-help-"));
+    try {
+        const source = pathToFileURL(scratch + "/");
+        writeFileSync(join(scratch, "page.md"), "# Title\n\nKeep **this**.\n<!-- guide-only -->Screenshot<!-- /guide-only -->\n[Details](details.md)\n");
+        writeFileSync(join(scratch, "details.md"), "# Details\n\nIncluded text.\n");
+        assert.equal(renderPage("page.md", [], source), "Keep **this**.\n\nIncluded text.\n");
+        writeFileSync(join(scratch, "details.md"), "[Back](page.md)\n");
+        assert.throws(() => renderPage("page.md", [], source), /Circular help link/);
+    } finally {
+        rmSync(scratch, { recursive: true, force: true });
     }
 });
 

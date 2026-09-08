@@ -44,8 +44,8 @@ function crosshair(context, x, y) {
     context.stroke();
 }
 
-function measuredPoint(context, x, y) {
-    context.fillStyle = "#017B44";
+function measuredPoint(context, x, y, color) {
+    context.fillStyle = color;
     context.beginPath();
     context.arc(x, y, 4, 0, Math.PI * 2);
     context.fill();

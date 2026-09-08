@@ -50,7 +50,7 @@ Popup {
     modal: true
     closePolicy: Popup.NoAutoClose
     font.family: uiFont
-    background: Rectangle { color: "#2B2B2B" }
+    background: Rectangle { color: Theme.page }
 
     function showCheck() {
         editor.cancel();
@@ -120,7 +120,7 @@ Popup {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 70
-            color: "#242424"
+            color: Theme.header
             RowLayout {
                 anchors.fill: parent
                 BackButton {
@@ -133,7 +133,7 @@ Popup {
                     Layout.fillWidth: true
                     text: "Probe repeatability"
                     font.pixelSize: 24
-                    color: "#E1E1E1"
+                    color: Theme.text
                 }
             }
         }
@@ -148,7 +148,7 @@ Popup {
                 Layout.fillHeight: true
                 Layout.margins: 16
                 text: "First, set G54 X and Y zero on the inside corner of the L bracket, and Z zero on the bed.\n\nSelect G54. Leave room for the probe to extend and clear the path to X15 Y15 inside the bracket."
-                color: "#E1E1E1"
+                color: Theme.text
                 font.pixelSize: 24
                 wrapMode: Text.WordWrap
                 horizontalAlignment: Text.AlignHCenter
@@ -167,7 +167,7 @@ Popup {
                         anchors.margins: 14
                         text: "The probe travels to X15 Y15, then Z5, and measures toward the walls and bed.\n\n" +
                             (flow.home ? "The machine homes before each repetition." : "X/Y travel starts at the current height. Make sure the path is clear.")
-                        color: "#D8D8D8"
+                        color: Theme.text
                         font.pixelSize: 20
                         wrapMode: Text.WordWrap
                         verticalAlignment: Text.AlignVCenter
@@ -185,10 +185,10 @@ Popup {
                     spacing: 10
                     RowLayout {
                         Layout.fillWidth: true
-                        Label { text: "Axes"; color: "#D8D8D8"; font.pixelSize: 19; Layout.fillWidth: true }
+                        Label { text: "Axes"; color: Theme.text; font.pixelSize: 19; Layout.fillWidth: true }
                         Repeater {
                             model: ["X", "Y", "Z"]
-                            Button {
+                            LabButton {
                                 required property string modelData
                                 required property int index
                                 Layout.preferredWidth: 56
@@ -197,6 +197,7 @@ Popup {
                                 font.pixelSize: 23
                                 checkable: true
                                 checked: flow.axes[index]
+                                selected: checked
                                 onClicked: {
                                     var selected = flow.axes.slice();
                                     selected[index] = checked;
@@ -207,7 +208,7 @@ Popup {
                     }
                     RowLayout {
                         Layout.fillWidth: true
-                        Label { text: "Repetitions"; color: "#D8D8D8"; font.pixelSize: 19; Layout.fillWidth: true }
+                        Label { text: "Repetitions"; color: Theme.text; font.pixelSize: 19; Layout.fillWidth: true }
                         NumberField {
                             objectName: "repetitions"
                             editor: editor
@@ -223,7 +224,7 @@ Popup {
                     }
                     RowLayout {
                         Layout.fillWidth: true
-                        Label { text: "Home each time"; color: "#D8D8D8"; font.pixelSize: 19; Layout.fillWidth: true }
+                        Label { text: "Home each time"; color: Theme.text; font.pixelSize: 19; Layout.fillWidth: true }
                         ProbeSwitch {
                             Layout.preferredWidth: 110
                             Layout.preferredHeight: 54
@@ -233,7 +234,7 @@ Popup {
                     }
                     RowLayout {
                         Layout.fillWidth: true
-                        Label { text: "Retract each time"; color: "#D8D8D8"; font.pixelSize: 19; Layout.fillWidth: true }
+                        Label { text: "Retract each time"; color: Theme.text; font.pixelSize: 19; Layout.fillWidth: true }
                         ProbeSwitch {
                             Layout.preferredWidth: 110
                             Layout.preferredHeight: 54
@@ -249,7 +250,7 @@ Popup {
                 visible: flow.failure.length > 0
                 Layout.fillWidth: true
                 text: flow.failure
-                color: "#FFB078"
+                color: Theme.warning
                 font.pixelSize: 18
                 wrapMode: Text.WordWrap
             }
@@ -270,8 +271,8 @@ Popup {
                         wrapMode: TextEdit.NoWrap
                         font.family: flow.codeFont
                         font.pixelSize: 15
-                        color: "#D8D8D8"
-                        background: Rectangle { color: "#202020" }
+                        color: Theme.text
+                        background: Rectangle { color: Theme.control; radius: 10 }
                     }
                 }
                 ColumnLayout {
@@ -280,12 +281,12 @@ Popup {
                     spacing: 4
                     Label {
                         text: flow.phase === "running" ? "G54 measurements (mm)" : "Deviation from mean (mm)"
-                        color: "#D8D8D8"
+                        color: Theme.text
                         font.pixelSize: 18
                     }
                     RowLayout {
                         Layout.fillWidth: true
-                        Label { text: "Run"; color: "#B5B5B5"; font.pixelSize: 17; Layout.preferredWidth: 78 }
+                        Label { text: "Run"; color: Theme.textMuted; font.pixelSize: 17; Layout.preferredWidth: 78 }
                         Repeater {
                             model: ["X", "Y", "Z"]
                             Label {
@@ -293,7 +294,7 @@ Popup {
                                 text: modelData
                                 Layout.fillWidth: true
                                 Layout.preferredWidth: 100
-                                color: "#D8D8D8"
+                                color: Theme.text
                                 font.pixelSize: 19
                                 horizontalAlignment: Text.AlignRight
                             }
@@ -312,7 +313,7 @@ Popup {
                             required property int index
                             width: readings.width
                             height: 32
-                            Label { text: reading.index + 1; color: "#B5B5B5"; font.pixelSize: 18; Layout.preferredWidth: 78 }
+                            Label { text: reading.index + 1; color: Theme.textMuted; font.pixelSize: 18; Layout.preferredWidth: 78 }
                             Repeater {
                                 model: reading.modelData
                                 Label {
@@ -321,7 +322,7 @@ Popup {
                                     text: flow.number(flow.readingValue(modelData, index))
                                     Layout.fillWidth: true
                                     Layout.preferredWidth: 100
-                                    color: "#FFFFFF"
+                                    color: Theme.text
                                     font.family: flow.codeFont
                                     font.pixelSize: 18
                                     horizontalAlignment: Text.AlignRight
@@ -329,14 +330,14 @@ Popup {
                             }
                         }
                     }
-                    Rectangle { Layout.fillWidth: true; height: 1; color: "#666666" }
+                    Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.divider }
                     Repeater {
                         model: [{label:"Mean G54",key:"mean"}, {label:"Median",key:"median"}, {label:"Std dev",key:"stddev"}, {label:"Range",key:"range"}]
                         RowLayout {
                             id: summary
                             required property var modelData
                             Layout.fillWidth: true
-                            Label { text: summary.modelData.label; color: "#B5B5B5"; font.pixelSize: 17; Layout.preferredWidth: 78 }
+                            Label { text: summary.modelData.label; color: Theme.textMuted; font.pixelSize: 17; Layout.preferredWidth: 78 }
                             Repeater {
                                 model: flow.statistics
                                 Label {
@@ -344,7 +345,7 @@ Popup {
                                     text: flow.number(modelData ? modelData[summary.modelData.key] : null)
                                     Layout.fillWidth: true
                                     Layout.preferredWidth: 100
-                                    color: "#FFFFFF"
+                                    color: Theme.text
                                     font.family: flow.codeFont
                                     font.pixelSize: 18
                                     horizontalAlignment: Text.AlignRight
@@ -359,10 +360,10 @@ Popup {
                 Label {
                     Layout.fillWidth: true
                     text: flow.showingResults ? (flow.home ? "Home: yes" : "Home: no") + "    " + (flow.retractEachTime ? "Retract: yes" : "Retract: no") : ""
-                    color: "#B5B5B5"
+                    color: Theme.textMuted
                     font.pixelSize: 16
                 }
-                Button {
+                LabButton {
                     visible: !flow.showingResults
                     text: "Cancel"
                     Layout.preferredWidth: 140
@@ -370,19 +371,20 @@ Popup {
                     font.pixelSize: 20
                     onClicked: flow.close()
                 }
-                Button {
+                LabButton {
                     visible: flow.phase !== "running"
                     text: flow.phase === "prepare" ? "G54 is ready" : flow.phase === "options" ? "Start check" : "Close"
                     enabled: flow.phase !== "options" || flow.canStart
                     Layout.preferredWidth: 180
                     Layout.preferredHeight: 50
                     font.pixelSize: 20
+                    primary: flow.phase === "options"
                     onClicked: flow.phase === "prepare" ? flow.confirmPreparation() : flow.phase === "options" ? flow.start() : flow.close()
                 }
                 Label {
                     visible: flow.phase === "running"
                     text: "Checking..."
-                    color: "#D8D8D8"
+                    color: Theme.text
                     font.pixelSize: 20
                     Layout.preferredHeight: 50
                     verticalAlignment: Text.AlignVCenter

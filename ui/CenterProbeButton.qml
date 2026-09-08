@@ -51,10 +51,10 @@ ProbeButton {
                     top = cy - 15;
                     bottom = cy + 15;
                 }
-                c.fillStyle = internal ? "#A9A9A9" : "#E1E1E1";
+                c.fillStyle = internal ? Theme.stock : Theme.panelRaised;
                 c.fillRect(0, 0, width, height);
-                c.fillStyle = internal ? "#E1E1E1" : "#A9A9A9";
-                c.strokeStyle = "#777777";
+                c.fillStyle = internal ? Theme.panelRaised : Theme.stock;
+                c.strokeStyle = Theme.stockEdge;
                 c.lineWidth = 1;
                 c.beginPath();
                 if (round)
@@ -79,7 +79,7 @@ ProbeButton {
                     }
                     c.stroke();
                 }
-                c.strokeStyle = "#343434";
+                c.strokeStyle = Theme.text;
                 c.lineWidth = 2.5;
                 if (!z && !onlyY) {
                     Draw.arrow(c, internal ? cx - 8 : 3, cy, left + (internal ? 2 : -2), cy);
@@ -89,16 +89,16 @@ ProbeButton {
                     Draw.arrow(c, cx, internal ? cy - 8 : 2, cx, top + (internal ? 2 : -2));
                     Draw.arrow(c, cx, internal ? cy + 8 : height - 2, cx, bottom + (internal ? -2 : 2));
                 }
-                c.strokeStyle = "#777777";
+                c.strokeStyle = Theme.text;
                 Draw.crosshair(c, cx, cy);
-                Draw.measuredPoint(c, cx, cy);
+                Draw.measuredPoint(c, cx, cy, Theme.accentBright);
             }
         }
         Label {
             anchors.bottom: parent.bottom
             anchors.horizontalCenter: parent.horizontalCenter
             text: control.label
-            color: "#202020"
+            color: Theme.text
             font.pixelSize: 13
         }
     }

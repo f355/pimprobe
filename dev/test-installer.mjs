@@ -44,6 +44,9 @@ test('self-extracting package preserves its payload and rejects corruption', () 
             ['LICENSE.md', 'app/LICENSE.md'],
             ['README.md', 'app/README.md'],
         ]) assert.deepEqual(readFileSync(join(extracted, target)), readFileSync(join(root, source)));
+        for (const name of ['Geist-Regular.otf', 'Geist-Medium.otf', 'Geist-Bold.otf'])
+            assert.ok(readFileSync(join(extracted, 'app/ui/fonts', name)).length > 10000, `${name} must be packaged`);
+        assert.match(readFileSync(join(extracted, 'app/ui/fonts/OFL.txt'), 'utf8'), /SIL OPEN FONT LICENSE Version 1\.1/);
         assert.ok(existsSync(join(extracted, 'install.sh')));
         assert.ok(existsSync(join(extracted, 'app/VERSION')));
         run('sh', [installer, '--extract', extracted], 1);

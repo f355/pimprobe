@@ -3,5 +3,6 @@
 /dist/
 /ui/HelpPages.js
 /ui/help/
+/ui/fonts/
 *.user
 .DS_Store

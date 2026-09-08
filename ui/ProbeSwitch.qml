@@ -14,8 +14,32 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import QtQuick
 import QtQuick.Controls
 
 Switch {
-    palette.dark: "#017B44"
+    id: control
+    spacing: 10
+
+    indicator: Item {
+        implicitWidth: 48
+        implicitHeight: 28
+        x: control.leftPadding
+        y: parent.height / 2 - height / 2
+
+        Rectangle {
+            anchors.fill: parent
+            radius: height / 2
+            color: control.checked ? Theme.accent : Theme.fieldBorder
+            opacity: control.enabled ? 1 : 0.55
+        }
+        Rectangle {
+            width: 22
+            height: 22
+            radius: 11
+            y: 3
+            x: control.checked ? parent.width - width - 3 : 3
+            color: Theme.text
+        }
+    }
 }

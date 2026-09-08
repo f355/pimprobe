@@ -40,7 +40,7 @@ Run `./dev/preview.sh` for an 800 x 480 preview with simulated stock.
 UI tests use an isolated mock service and temporary settings.
 
 Operator text lives in `docs/`; standalone links to shared pages are expanded
-into the contextual help by `node dev/build-help.mjs`. Screenshots sit inside
+into the contextual help during previews and packaging. Screenshots sit inside
 `guide-only` comment blocks. Refresh them with
 `./dev/test-ui.sh dev/screenshots`.
 
@@ -63,9 +63,8 @@ ctest --test-dir build/plugins --output-on-failure
 - `crates/service`: HTTP API, persistent settings, exclusive actions,
   review tokens and streamed execution.
 - `plugins`: C++ controller proxy and launcher.
-- `ui`: QML and generated help.
-- `docs`: operator guide and help sources. After editing text or diagrams,
-  run `node dev/build-help.mjs` and commit its generated files.
+- `ui`: QML interface.
+- `docs`: operator guide and contextual help sources.
 - `packaging`: installer, service unit and launch scripts.
 
 The controller proxy exposes `/run/pimprobe-controller.sock` through CNC_Lab's

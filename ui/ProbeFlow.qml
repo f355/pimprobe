@@ -86,7 +86,7 @@ Popup {
     modal: true
     closePolicy: Popup.NoAutoClose
     background: Rectangle {
-        color: "#2B2B2B"
+        color: Theme.page
     }
 
     function showRoutine(value) {
@@ -224,7 +224,7 @@ Popup {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 70
-            color: "#242424"
+            color: Theme.header
             RowLayout {
                 anchors.fill: parent
                 spacing: 8
@@ -237,7 +237,7 @@ Popup {
                 Label {
                     Layout.fillWidth: true
                     text: flow.description
-                    color: "#E1E1E1"
+                    color: Theme.text
                     font.family: flow.uiFont
                     font.pixelSize: 22
                     wrapMode: Text.WordWrap
@@ -245,7 +245,7 @@ Popup {
                 Label {
                     Layout.rightMargin: 18
                     text: flow.simulated ? "Simulation" : ""
-                    color: "#B5B5B5"
+                    color: Theme.textMuted
                     font.pixelSize: 15
                 }
             }
@@ -261,7 +261,7 @@ Popup {
                 Layout.fillWidth: true
                 visible: flow.failure.length > 0 || flow.reviewing
                 text: flow.reviewing ? "Preparing routine..." : flow.failure
-                color: "#FFB078"
+                color: Theme.warning
                 font.pixelSize: 18
                 wrapMode: Text.WordWrap
             }
@@ -288,8 +288,8 @@ Popup {
                             wrapMode: TextEdit.NoWrap
                             font.family: flow.codeFont
                             font.pixelSize: 16
-                            color: "#E1E1E1"
-                            background: Rectangle { color: "#202020" }
+                            color: Theme.text
+                            background: Rectangle { color: Theme.control; radius: 10 }
                         }
                     }
                     NumericKeypad {
@@ -318,12 +318,12 @@ Popup {
                                     text: modelData.label
                                     Layout.fillWidth: true
                                     font.pixelSize: 20
-                                    color: "#D8D8D8"
+                                    color: Theme.text
                                 }
                                 Label {
                                     text: modelData.value.toFixed(3) + " mm"
                                     font.pixelSize: 22
-                                    color: "#FFFFFF"
+                                    color: Theme.text
                                 }
                             }
                         }
@@ -334,14 +334,14 @@ Popup {
                             Layout.fillWidth: true
                             text: "Measured \u00b7 G53"
                             font.pixelSize: 20
-                            color: "#D8D8D8"
+                            color: Theme.text
                         }
                         Label {
                             Layout.preferredWidth: 132
                             text: "Offset (mm)"
                             font.pixelSize: 20
                             horizontalAlignment: Text.AlignRight
-                            color: "#D8D8D8"
+                            color: Theme.text
                         }
                     }
                     Repeater {
@@ -357,7 +357,7 @@ Popup {
                                     text: ["X", "Y", "Z"][modelData] + "  " + flow.measuredPosition(modelData).toFixed(3)
                                     font.family: flow.uiFont
                                     font.pixelSize: 26
-                                    color: "#FFFFFF"
+                                    color: Theme.text
                                 }
                                 NumberField {
                                     enabled: !flow.zeroing && !flow.zeroed && flow.completedID.length > 0
@@ -375,14 +375,14 @@ Popup {
                                 Layout.fillWidth: true
                                 text: "G" + flow.routine.wcs + " zero at G53 " + (flow.measuredPosition(modelData) + flow.offsets[modelData]).toFixed(3)
                                 font.pixelSize: 17
-                                color: "#B5B5B5"
+                                color: Theme.textMuted
                             }
                         }
                     }
                     Item { Layout.fillHeight: true }
                     Label {
                         text: flow.zeroed ? "Work zero set" : "Work zero was not changed"
-                        color: flow.zeroed ? "#70CF7B" : "#D8D8D8"
+                        color: flow.zeroed ? Theme.accentBright : Theme.text
                         font.pixelSize: 18
                     }
                 }
@@ -392,7 +392,7 @@ Popup {
                 Item {
                     Layout.fillWidth: true
                 }
-                Button {
+                LabButton {
                     visible: flow.phase === "review"
                     text: "Cancel"
                     Layout.preferredWidth: 140
@@ -400,16 +400,17 @@ Popup {
                     font.pixelSize: 20
                     onClicked: flow.close()
                 }
-                Button {
+                LabButton {
                     text: "Set Work Zero"
                     visible: flow.phase === "result"
                     enabled: !flow.zeroing && !flow.zeroed && flow.completedID.length > 0
                     Layout.preferredWidth: 190
                     Layout.preferredHeight: 50
                     font.pixelSize: 20
+                    primary: true
                     onClicked: flow.zeroResult()
                 }
-                Button {
+                LabButton {
                     text: "Go to starting position"
                     visible: flow.phase === "result"
                     enabled: !flow.zeroing && !flow.returned && flow.completedID.length > 0
@@ -418,19 +419,20 @@ Popup {
                     font.pixelSize: 20
                     onClicked: flow.returnToStart()
                 }
-                Button {
+                LabButton {
                     visible: flow.phase !== "running"
                     text: flow.phase === "review" ? "Proceed" : "Close"
                     enabled: !flow.zeroing && (flow.phase !== "review" || (flow.reviewID.length > 0 && !flow.reviewing))
                     Layout.preferredWidth: 140
                     Layout.preferredHeight: 50
                     font.pixelSize: 20
+                    primary: flow.phase === "review"
                     onClicked: flow.phase === "review" ? flow.proceed() : flow.close()
                 }
                 Label {
                     visible: flow.phase === "running"
                     text: flow.returning ? "Returning to starting position..." : "Probing..."
-                    color: "#D8D8D8"
+                    color: Theme.text
                     font.pixelSize: 20
                     Layout.preferredHeight: 50
                     verticalAlignment: Text.AlignVCenter

@@ -40,6 +40,7 @@ qml=${QML:-$qt_prefix/bin/qml}
 
 cd "$repo_dir"
 node dev/build-help.mjs
+node dev/fetch-fonts.mjs
 if nc -z 127.0.0.1 8137 >/dev/null 2>&1; then
 	echo "Probing preview refused: port 8137 is already in use" >&2
 	exit 1

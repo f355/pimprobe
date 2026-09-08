@@ -25,6 +25,10 @@ TextField {
     property real value: minimum
     signal committed(real value)
     text: String(value)
+    color: Theme.text
+    selectedTextColor: Theme.text
+    selectionColor: Theme.accent
+    padding: 10
     onValueChanged: text = String(value)
 
     function commit() {
@@ -42,6 +46,12 @@ TextField {
     }
     horizontalAlignment: TextInput.AlignRight
     inputMethodHints: Qt.ImhFormattedNumbersOnly
+    background: Rectangle {
+        color: Theme.field
+        border.color: field.activeFocus ? Theme.accentBright : Theme.fieldBorder
+        border.width: field.activeFocus ? 2 : 1
+        radius: 8
+    }
     onActiveFocusChanged: {
         if (activeFocus)
             editor.begin(field)

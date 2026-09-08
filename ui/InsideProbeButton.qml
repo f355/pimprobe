@@ -15,7 +15,6 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import QtQuick
-import QtQuick.Controls
 import "ProbeDrawing.js" as Draw
 
 ProbeButton {
@@ -43,9 +42,9 @@ ProbeButton {
             var probeX = control.zApproach ? centerX : centerX - control.xApproach * 8;
             var probeY = control.zApproach ? centerY : centerY + control.yApproach * 8;
 
-            context.fillStyle = "#E1E1E1";
+            context.fillStyle = Theme.panelRaised;
             context.fillRect(margin, margin, width - 2 * margin, height - 2 * margin);
-            context.fillStyle = "#A9A9A9";
+            context.fillStyle = Theme.stock;
             if (control.zApproach) {
                 context.fillRect(left, top, right - left, bottom - top);
             } else {
@@ -58,7 +57,7 @@ ProbeButton {
                 else if (control.yApproach < 0)
                     context.fillRect(margin, bottom, width - 2 * margin, height - bottom - margin);
             }
-            context.strokeStyle = "#777777";
+            context.strokeStyle = Theme.stockEdge;
             context.lineWidth = 1;
             context.beginPath();
             if (control.zApproach) {
@@ -84,7 +83,7 @@ ProbeButton {
             var targetX = control.xApproach < 0 ? left : control.xApproach > 0 ? right : centerX;
             var targetY = control.yApproach > 0 ? top : control.yApproach < 0 ? bottom : centerY;
 
-            context.strokeStyle = "#343434";
+            context.strokeStyle = Theme.text;
             context.lineWidth = 3;
             if (control.xApproach < 0)
                 Draw.arrow(context, probeX - 5, probeY, left + 3, probeY);
@@ -95,14 +94,14 @@ ProbeButton {
             else if (control.yApproach < 0)
                 Draw.arrow(context, probeX, probeY + 5, probeX, bottom - 3);
 
-            context.strokeStyle = "#777777";
+            context.strokeStyle = Theme.text;
             Draw.crosshair(context, probeX, probeY);
 
             if (control.zApproach) {
                 targetX = centerX;
                 targetY = centerY;
             }
-            Draw.measuredPoint(context, targetX, targetY);
+            Draw.measuredPoint(context, targetX, targetY, Theme.accentBright);
         }
     }
 }

@@ -14,14 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import QtQuick.Controls
-
-Button {
+LabButton {
     implicitWidth: 70
     implicitHeight: 70
-    flat: true
     text: "\u2190"
     font.pixelSize: 34
-    palette.buttonText: "#D8D8D8"
-    palette.windowText: "#D8D8D8"
+    background: null
+    textColor: Theme.text
 }

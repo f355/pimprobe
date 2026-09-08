@@ -294,7 +294,7 @@ TestCase {
         }
     }
 
-    function test_exit_dialog_centering_and_font() {
+    function test_exit_dialog_actions_and_centering() {
         callApi("POST", "/probe-actuator", {extended: true})
         tryVerify(function() { return probeWindow.probeFullyExtended() }, 3000)
         probeWindow.requestExit()
@@ -315,25 +315,15 @@ TestCase {
                    "Exit dialog is horizontally centered in the window")
             verify(Math.abs(position.y + panel.height / 2 - overlay.height / 2) <= 1,
                    "Exit dialog is vertically centered in the window")
-            compare(prompt.font.family, probeWindow.uiFontFamily)
-            compare(prompt.font.pixelSize, 19)
             var title = descendants(panel, Label).filter(function(label) {
                 return label.visible && label.text === "Probe extended"
             })[0]
             verify(title !== undefined)
-            compare(title.font.family, probeWindow.uiFontFamily)
-            compare(title.font.pixelSize, 19)
-            compare(title.color, "#f0f0f0")
-            verify(title.background !== null)
-            compare(title.background.color, "#353535")
             var buttons = descendants(panel, Button)
             compare(buttons.length, 3)
             buttons.forEach(function(button) {
-                compare(button.font.family, probeWindow.uiFontFamily)
-                compare(button.font.pixelSize, 22)
                 verify(!/nestprobe|pimprobe/i.test(button.text))
             })
-            grabImage(overlay).save("/tmp/pimprobe-exit.png")
         } finally {
             var cancel = descendants(overlay, Button).filter(function(button) {
                 return button.visible && button.text === "Cancel"

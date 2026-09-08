@@ -37,32 +37,47 @@ Item {
             id: workArea
             Layout.preferredWidth: 340
             Layout.fillHeight: true
+            Rectangle {
+                anchors.fill: parent
+                color: Theme.panel
+                radius: 12
+                z: -1
+            }
         }
-        ColumnLayout {
+        Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: panel.roomy ? 14 : panel.setup ? 8 : 6
-            Repeater {
-                model: panel.parameters
-                ParameterRow {
-                    required property var modelData
-                    Layout.fillWidth: true
-                    settings: panel.settings
-                    editor: panel.editor
-                    definition: modelData
-                    fieldHeight: panel.roomy ? 62 : panel.setup ? 48 : 50
-                    fieldWidth: panel.setup ? 100 : 130
-                    labelSize: panel.roomy || panel.setup ? 18 : 17
-                    numberSize: panel.roomy ? 24 : panel.setup ? 23 : 22
+            Rectangle {
+                anchors.fill: parent
+                color: Theme.panel
+                radius: 12
+            }
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 14
+                spacing: panel.roomy ? 14 : panel.setup ? 8 : 6
+                Repeater {
+                    model: panel.parameters
+                    ParameterRow {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        settings: panel.settings
+                        editor: panel.editor
+                        definition: modelData
+                        fieldHeight: panel.roomy ? 62 : panel.setup ? 48 : 50
+                        fieldWidth: panel.setup ? 100 : 130
+                        labelSize: panel.roomy || panel.setup ? 18 : 17
+                        numberSize: panel.roomy ? 24 : panel.setup ? 23 : 22
+                    }
                 }
-            }
-            Item {
-                Layout.fillHeight: true
-            }
-            Loader {
-                Layout.fillWidth: true
-                sourceComponent: panel.footer
-                visible: item !== null
+                Item {
+                    Layout.fillHeight: true
+                }
+                Loader {
+                    Layout.fillWidth: true
+                    sourceComponent: panel.footer
+                    visible: item !== null
+                }
             }
         }
     }

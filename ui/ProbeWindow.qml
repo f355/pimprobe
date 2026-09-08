@@ -41,9 +41,13 @@ ApplicationWindow {
         id: stateRequest
     }
     Component.onCompleted: settings.load()
+    FontLoader { id: geistRegular; source: "fonts/Geist-Regular.otf" }
+    FontLoader { source: "fonts/Geist-Medium.otf" }
+    FontLoader { source: "fonts/Geist-Bold.otf" }
     readonly property var availableFonts: Qt.fontFamilies()
-    property string uiFontFamily: availableFonts.indexOf("DejaVu Sans") !== -1
-        ? "DejaVu Sans" : Qt.platform.os === "osx" ? "Helvetica Neue" : "sans-serif"
+    property string uiFontFamily: geistRegular.name.length > 0 ? geistRegular.name
+        : availableFonts.indexOf("DejaVu Sans") !== -1 ? "DejaVu Sans"
+        : Qt.platform.os === "osx" ? "Helvetica Neue" : "sans-serif"
     property string monoFontFamily: availableFonts.indexOf("DejaVu Sans Mono") !== -1
         ? "DejaVu Sans Mono" : Qt.platform.os === "osx" ? "Menlo" : "monospace"
     property var machineState: ({
@@ -92,13 +96,13 @@ ApplicationWindow {
 
     function probeLabelColor() {
         if (actuatorRequestPending || machineState.actuatorPending)
-            return "#AFAFAF";
+            return Theme.textMuted;
         var status = machineState.status || {};
         if (status.probeActuatorKnown && status.probeActuator === 0)
-            return "#FF6B6B";
+            return Theme.danger;
         if (status.probeActuatorKnown && status.probeActuator === 1)
-            return "#70CF7B";
-        return "#AFAFAF";
+            return Theme.accentBright;
+        return Theme.textMuted;
     }
 
     function requestExit() {
@@ -187,14 +191,14 @@ ApplicationWindow {
     }
 
     visible: true
-    color: "#2B2B2B"
+    color: Theme.page
     title: "Probing"
     font.family: uiFontFamily
-    palette.windowText: "#D8D8D8"
+    palette.windowText: Theme.text
 
     header: Rectangle {
         implicitHeight: 70
-        color: "#242424"
+        color: Theme.header
 
         RowLayout {
             anchors.fill: parent
@@ -246,7 +250,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         text: headerCoordinate.modelData + " " + window.coordinate((window.machineState.status || {}).workPosition, headerCoordinate.index)
-                        color: "#F2F2F2"
+                        color: Theme.text
                         font.family: window.monoFontFamily
                         font.pixelSize: 22
                         horizontalAlignment: Text.AlignRight
@@ -256,7 +260,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         text: window.coordinate((window.machineState.status || {}).machinePosition, headerCoordinate.index)
-                        color: "#AFAFAF"
+                        color: Theme.textMuted
                         font.family: window.monoFontFamily
                         font.pixelSize: 13
                         horizontalAlignment: Text.AlignRight
@@ -265,19 +269,19 @@ ApplicationWindow {
                 }
             }
 
-            Button {
+            LabButton {
                 Layout.preferredWidth: 82
                 Layout.fillHeight: true
-                flat: true
+                background: null
                 text: "G" + window.currentWcs()
                 font.family: window.uiFontFamily
                 font.pixelSize: 22
                 font.bold: true
-                palette.buttonText: "#8FC6FF"
+                textColor: Theme.accentBright
                 onClicked: wcsPicker.open()
             }
 
-            Button {
+            LabButton {
                 id: helpButton
                 Layout.preferredWidth: 48
                 Layout.preferredHeight: 48
@@ -288,14 +292,14 @@ ApplicationWindow {
                 font.bold: true
                 contentItem: Label {
                     text: helpButton.text
-                    color: "#D8D8D8"
+                    color: Theme.text
                     font: helpButton.font
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
                 }
                 background: Rectangle {
-                    color: helpButton.down ? "#797979" : "#414141"
-                    border.color: "#8A8A8A"
+                    color: helpButton.down ? Theme.pressed : Theme.panel
+                    border.color: Theme.divider
                     border.width: 1
                     radius: width / 2
                 }
@@ -319,7 +323,7 @@ ApplicationWindow {
         closePolicy: Popup.NoAutoClose
 
         background: Rectangle {
-            color: "#2B2B2B"
+            color: Theme.page
         }
 
         ColumnLayout {
@@ -329,7 +333,7 @@ ApplicationWindow {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 70
-                color: "#242424"
+                color: Theme.header
 
                 BackButton {
                     anchors.left: parent.left
@@ -344,7 +348,7 @@ ApplicationWindow {
                 Layout.leftMargin: 24
                 visible: wcsPicker.errorText.length > 0
                 text: wcsPicker.errorText
-                color: "#F08080"
+                color: Theme.danger
                 font.pixelSize: 18
             }
 
@@ -358,7 +362,7 @@ ApplicationWindow {
 
                 Repeater {
                     model: [54, 55, 56, 57, 58, 59]
-                    Button {
+                    LabButton {
                         required property int modelData
                         Layout.fillWidth: true
                         Layout.fillHeight: true
@@ -366,7 +370,7 @@ ApplicationWindow {
                         font.family: window.uiFontFamily
                         font.pixelSize: 30
                         font.bold: modelData === window.currentWcs()
-                        highlighted: modelData === window.currentWcs()
+                        selected: modelData === window.currentWcs()
                         enabled: !wcsRequest.pending
                         onClicked: window.chooseWcs(modelData)
                     }
@@ -388,7 +392,7 @@ ApplicationWindow {
         closePolicy: Popup.NoAutoClose
 
         background: Rectangle {
-            color: "#2B2B2B"
+            color: Theme.page
         }
 
         ColumnLayout {
@@ -398,7 +402,7 @@ ApplicationWindow {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 70
-                color: "#242424"
+                color: Theme.header
 
                 BackButton {
                     anchors.left: parent.left
@@ -410,7 +414,7 @@ ApplicationWindow {
                 Label {
                     anchors.centerIn: parent
                     text: ["Outside", "Inside", "Center", "Settings"][tabs.currentIndex] + " help"
-                    color: "#D8D8D8"
+                    color: Theme.text
                     font.family: window.uiFontFamily
                     font.pixelSize: 24
                 }
@@ -427,7 +431,7 @@ ApplicationWindow {
                     textFormat: TextEdit.MarkdownText
                     baseUrl: Qt.resolvedUrl("help/")
                     text: HelpPages.pages[tabs.currentIndex]
-                    color: "#D8D8D8"
+                    color: Theme.text
                     font.family: window.uiFontFamily
                     font.pixelSize: 19
                     wrapMode: TextEdit.WordWrap
@@ -476,7 +480,7 @@ ApplicationWindow {
             text: exitDialog.title
             padding: 12
             elide: Text.ElideRight
-            color: "#F0F0F0"
+            color: Theme.text
             font.family: window.uiFontFamily
             font.pixelSize: 19
             font.bold: true
@@ -485,13 +489,14 @@ ApplicationWindow {
                 y: 1
                 width: parent.width - 2
                 height: parent.height - 1
-                color: "#353535"
+                color: Theme.panelRaised
             }
         }
 
         background: Rectangle {
-            color: "#353535"
-            border.color: "#656565"
+            color: Theme.panelRaised
+            border.color: Theme.divider
+            radius: 12
         }
 
         ColumnLayout {
@@ -504,7 +509,7 @@ ApplicationWindow {
                 Layout.fillHeight: true
                 text: window.exitAfterRetract ? "Retracting probe..." : "Retract the probe before leaving?"
                 horizontalAlignment: Text.AlignHCenter
-                color: "#F0F0F0"
+                color: Theme.text
                 font.family: window.uiFontFamily
                 font.pixelSize: 19
                 wrapMode: Text.WordWrap
@@ -514,31 +519,32 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 visible: window.actionError.length > 0
                 text: window.actionError
-                color: "#FF8A80"
+                color: Theme.danger
                 font.pixelSize: 16
             }
             RowLayout {
                 Layout.alignment: Qt.AlignHCenter
                 spacing: 10
-                Button {
+                LabButton {
                     text: "Cancel"
                     font.pixelSize: 22
                     Layout.preferredHeight: 56
                     enabled: !window.exitAfterRetract
                     onClicked: exitDialog.close()
                 }
-                Button {
+                LabButton {
                     text: "Leave extended"
                     font.pixelSize: 22
                     Layout.preferredHeight: 56
                     enabled: !window.exitAfterRetract
                     onClicked: Qt.quit()
                 }
-                Button {
+                LabButton {
                     text: "Retract and exit"
                     font.pixelSize: 22
                     Layout.preferredHeight: 56
                     enabled: !window.exitAfterRetract
+                    primary: true
                     onClicked: window.retractAndExit()
                 }
             }
@@ -561,11 +567,12 @@ ApplicationWindow {
             Label {
                 Layout.fillWidth: true
                 text: window.settings.error
-                color: "#FF6B6B"
+                color: Theme.danger
                 font.pixelSize: 18
             }
-            Button {
+            LabButton {
                 text: "Retry"
+                primary: true
                 onClicked: window.settings.loaded ? window.settings.save() : window.settings.load()
             }
         }
@@ -576,22 +583,16 @@ ApplicationWindow {
             Layout.fillWidth: true
             Layout.preferredHeight: 42
             enabled: !window.interactionLocked()
+            background: Rectangle { color: Theme.page }
 
             Repeater {
                 model: ["Outside", "Inside", "Center", "Settings"]
-                TabButton {
+                LabTabButton {
                     id: tabButton
                     required property string modelData
                     text: modelData
                     font.family: window.uiFontFamily
-                    font.pixelSize: 18
-                    contentItem: Label {
-                        text: tabButton.text
-                        color: tabButton.checked ? "#202020" : "#D8D8D8"
-                        font: tabButton.font
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                    }
+                    font.pixelSize: 20
                 }
             }
         }
@@ -599,7 +600,7 @@ ApplicationWindow {
         Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            enabled: settings.loaded && window.activePageAvailable() && !window.interactionLocked()
+            enabled: window.settings.loaded && window.activePageAvailable() && !window.interactionLocked()
             opacity: window.activePageAvailable() ? 1 : 0.35
 
             StackLayout {
@@ -650,10 +651,11 @@ ApplicationWindow {
                     parameters: Pages.setup
                     setup: true
                     footer: Component {
-                        Button {
+                        LabButton {
                             text: "Probe repeatability"
                             implicitHeight: 48
                             font.pixelSize: 19
+                            primary: true
                             onClicked: {
                                 numericEditor.cancel();
                                 repeatabilityDialog.showCheck();

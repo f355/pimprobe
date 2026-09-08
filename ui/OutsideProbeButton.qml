@@ -15,7 +15,6 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import QtQuick
-import QtQuick.Controls
 import "ProbeDrawing.js" as Draw
 
 ProbeButton {
@@ -41,9 +40,9 @@ ProbeButton {
             var top = control.yApproach < 0 ? edgeY : margin;
             var bottom = control.yApproach > 0 ? height - edgeY : height - margin;
 
-            context.fillStyle = "#A9A9A9";
+            context.fillStyle = Theme.stock;
             context.fillRect(left, top, right - left, bottom - top);
-            context.strokeStyle = "#777777";
+            context.strokeStyle = Theme.stockEdge;
             context.lineWidth = 1;
             context.strokeRect(left, top, right - left, bottom - top);
 
@@ -58,7 +57,7 @@ ProbeButton {
             var probeX = (left + right) / 2;
             var probeY = (top + bottom) / 2;
 
-            context.strokeStyle = "#343434";
+            context.strokeStyle = Theme.text;
             context.lineWidth = 3;
             if (control.xApproach > 0)
                 Draw.arrow(context, margin, probeY, left - 3, probeY);
@@ -69,10 +68,10 @@ ProbeButton {
             else if (control.yApproach > 0)
                 Draw.arrow(context, probeX, height - margin, probeX, bottom + 3);
 
-            context.strokeStyle = "#E8E8E8";
+            context.strokeStyle = Theme.text;
             Draw.crosshair(context, probeX, probeY);
 
-            Draw.measuredPoint(context, targetX, targetY);
+            Draw.measuredPoint(context, targetX, targetY, Theme.accentBright);
         }
     }
 }

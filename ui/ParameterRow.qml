@@ -33,7 +33,7 @@ RowLayout {
     Label {
         Layout.fillWidth: true
         text: row.definition.label
-        color: "#D0D0D0"
+        color: Theme.text
         font.pixelSize: row.labelSize
     }
     Item {
@@ -59,7 +59,7 @@ RowLayout {
             anchors.leftMargin: 12
             anchors.verticalCenter: parent.verticalCenter
             text: row.definition.unit || "mm"
-            color: "#B5B5B5"
+            color: Theme.textMuted
             font.pixelSize: 17
         }
     }

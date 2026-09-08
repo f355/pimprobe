@@ -16,16 +16,34 @@
 
 import QtQuick
 import QtQuick.Controls
-LabButton {
+
+TabButton {
     id: control
-    property string diagramLabel: ""
-    checkable: false
-    padding: 5
-    background: Rectangle {
-        color: control.down ? Theme.pressed : Theme.panelRaised
-        radius: 10
+    font.pixelSize: 20
+    padding: 6
+
+    contentItem: Label {
+        text: control.text
+        font: control.font
+        color: control.checked ? Theme.text : Theme.textMuted
+        horizontalAlignment: Text.AlignHCenter
+        verticalAlignment: Text.AlignVCenter
     }
-    ToolTip.visible: hovered && diagramLabel.length > 0
-    ToolTip.text: diagramLabel
-    Accessible.name: diagramLabel
+
+    background: Item {
+        Rectangle {
+            anchors.fill: parent
+            visible: control.checked
+            color: Theme.panelRaised
+            radius: 10
+        }
+        Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: 10
+            visible: control.checked
+            color: Theme.panelRaised
+        }
+    }
 }

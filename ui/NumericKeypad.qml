@@ -17,7 +17,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Controls
 
 Rectangle {
     id: keypad
@@ -25,9 +24,9 @@ Rectangle {
     signal keyPressed(string key)
     signal accepted()
 
-    color: "#2B2B2B"
+    color: Theme.page
 
-	component KeyButton: Button {
+	component KeyButton: LabButton {
 	    focusPolicy: Qt.NoFocus
 	    required property int gridColumn
 	    required property int gridRow
@@ -69,5 +68,5 @@ Rectangle {
 	KeyButton { gridColumn: 0; gridRow: 3; keyText: "\u00B1"; keyValue: "sign" }
 	KeyButton { gridColumn: 1; gridRow: 3; keyText: "0" }
 	KeyButton { gridColumn: 2; gridRow: 3; keyText: "." }
-	KeyButton { gridColumn: 3; gridRow: 3; keyText: "\u21B5"; enterKey: true; palette.button: "#C2D4C7" }
+	KeyButton { gridColumn: 3; gridRow: 3; keyText: "\u21B5"; enterKey: true; selected: true }
 }

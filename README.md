@@ -70,6 +70,8 @@ ctest --test-dir build/plugins --output-on-failure
 The controller proxy exposes `/run/pimprobe-controller.sock` through CNC_Lab's
 controller objects. The launcher adds a button that opens the QML UI.
 The service runs independently and reconnects when the proxy becomes available.
+The socket framing is documented in
+[`docs/developer/controller-bridge.md`](docs/developer/controller-bridge.md).
 
 Parameter ranges are defined in `crates/probe-core/src/parameters.rs` and
 exposed at `/api/v1/settings/schema`. Deploy the UI and service together

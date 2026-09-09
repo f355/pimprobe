@@ -28,10 +28,10 @@
 <text x="414" y="92" font-size="13">Pocket rim</text>
 <text x="482" y="205" font-size="13">Depth</text>
 <text x="482" y="223" font-size="13">(Z search)</text>
-<text x="565" y="90" font-size="13">Safe Z</text>
-<text x="565" y="108" font-size="13">offset</text>
-<text x="365" y="310" font-size="14">Touch walls at starting Z, then raise.</text>
-<text x="20" y="347" font-size="18">After X/Y probing: final Z = starting Z + Safe Z offset</text>
+<text x="565" y="90" font-size="13">Optional</text>
+<text x="565" y="108" font-size="13">Safe Z move</text>
+<text x="365" y="310" font-size="14">Touch walls and return to start at starting Z.</text>
+<text x="20" y="347" font-size="18">Go to measured point: raise by Safe Z offset, then move X/Y.</text>
 <text x="20" y="375" font-size="14">A single wall uses one axis. Z probes the bottom and returns to starting Z.</text>
 </g>
 </svg>

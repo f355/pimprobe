@@ -107,6 +107,78 @@ fn internal_search_limits_use_each_axis_distance() {
     }
 }
 
+#[test]
+fn center_internal_features_finish_at_probing_height() {
+    for feature in [
+        "center_hole",
+        "center_pocket",
+        "center_x-valley",
+        "center_y-valley",
+    ] {
+        let mut state = mock().state();
+        state.position[2] = -22.6;
+        let plan =
+            review(state, config(feature)).unwrap_or_else(|error| panic!("{feature}: {error}"));
+        assert!(
+            !plan.program().iter().any(|line| line == "G1 Z40 F1000"),
+            "{feature}"
+        );
+    }
+}
+
+#[test]
+fn travel_error_identifies_the_exhausted_direction() {
+    let mut state = mock().state();
+    state.position[1] = -18.6;
+    let error = review(state, config("center_hole"))
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("Y+"), "{error}");
+    assert!(error.contains("G53 Y"), "{error}");
+    assert!(error.contains("Move toward Y-"), "{error}");
+}
+
+#[test]
+fn preflight_errors_explain_what_needs_attention() {
+    let base = mock().state();
+    let cases: Vec<(State, &str)> = vec![
+        (
+            State {
+                connected: false,
+                ..base.clone()
+            },
+            "Controller is disconnected",
+        ),
+        (
+            State {
+                ready: false,
+                ..base.clone()
+            },
+            "Machine is not ready",
+        ),
+        (
+            State {
+                spindle_stopped: false,
+                ..base.clone()
+            },
+            "Stop the spindle before probing",
+        ),
+        (
+            State {
+                probe_triggered: true,
+                ..base.clone()
+            },
+            "The probe is already touching something",
+        ),
+    ];
+    for (state, expected) in cases {
+        let error = review(state, RoutineConfig::default())
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains(expected), "{error}");
+    }
+}
+
 #[tokio::test]
 async fn internal_side_probing_stays_at_the_starting_height() {
     let controller = mock();
@@ -198,7 +270,7 @@ async fn external_search_without_contact_stops_at_the_starting_axis_coordinate()
 }
 
 #[tokio::test]
-async fn inside_corner_lifts_then_positions_the_ball_over_both_measurements() {
+async fn inside_corner_finishes_at_its_starting_xy_without_lifting() {
     let controller = mock();
     let cfg = RoutineConfig {
         family: "inside".into(),
@@ -207,6 +279,31 @@ async fn inside_corner_lifts_then_positions_the_ball_over_both_measurements() {
         z: false,
         ..Default::default()
     };
+    controller.configure(&cfg).unwrap();
+    let plan = review(controller.state(), cfg).unwrap();
+    run(
+        &controller,
+        &plan,
+        TimingPolicy::default(),
+        CancellationToken::new(),
+        |_| {},
+    )
+    .await
+    .unwrap();
+    let end = controller.state().position;
+    near(end[0], plan.start.position[0]);
+    near(end[1], plan.start.position[1]);
+    near(end[2], plan.start.position[2]);
+    assert!(!controller
+        .commands()
+        .iter()
+        .any(|command| command == "G1 Z40.000 F1000.000"));
+}
+
+#[tokio::test]
+async fn inside_result_can_lift_then_move_to_the_measured_point() {
+    let controller = mock();
+    let cfg = config("inside_1_-1");
     controller.configure(&cfg).unwrap();
     let plan = review(controller.state(), cfg).unwrap();
     let result = run(
@@ -218,24 +315,64 @@ async fn inside_corner_lifts_then_positions_the_ball_over_both_measurements() {
     )
     .await
     .unwrap();
+    let updated = go_to_measured(
+        &controller,
+        &plan,
+        &result,
+        25.0,
+        TimingPolicy::default(),
+        CancellationToken::new(),
+        |_| {},
+    )
+    .await
+    .unwrap();
     let end = controller.state().position;
-    near(
-        end[2],
-        plan.start.position[2] - plan.config.side_depth() + 40.0,
-    );
+    near(end[2], plan.start.position[2] + 25.0);
     for (i, position) in end.iter().enumerate().take(2) {
         near(
             position + plan.start.probe_offset[i],
             result.machine_point[i].unwrap(),
         );
     }
-    let commands = controller.commands();
-    let lift = commands
-        .iter()
-        .position(|s| s == "G1 Z40.000 F1000.000")
-        .unwrap();
-    assert!(commands[lift + 1].starts_with("G38.3 X"));
-    assert!(commands[lift + 1].contains(" Y"));
+    assert!(updated.positioned);
+}
+
+#[tokio::test]
+async fn inside_result_reports_an_obstructed_move_in_operator_terms() {
+    let controller = mock();
+    let cfg = config("inside_1_-1");
+    controller.configure(&cfg).unwrap();
+    let plan = review(controller.state(), cfg).unwrap();
+    let result = run(
+        &controller,
+        &plan,
+        TimingPolicy::default(),
+        CancellationToken::new(),
+        |_| {},
+    )
+    .await
+    .unwrap();
+    let start = controller.state().position;
+    let target_x = result.machine_point[0].unwrap() - plan.start.probe_offset[0];
+    controller.set_geometry(MockGeometry::Plane {
+        axis: Axis::X,
+        coordinate: (start[0] + target_x) / 2.0,
+    });
+    let error = go_to_measured(
+        &controller,
+        &plan,
+        &result,
+        25.0,
+        TimingPolicy::default(),
+        CancellationToken::new(),
+        |_| {},
+    )
+    .await
+    .unwrap_err()
+    .to_string();
+    assert!(error.contains("Probe touched while moving X/Y"), "{error}");
+    assert!(error.contains("Clear the path"), "{error}");
+    assert_eq!(controller.state().modes, plan.start.modes);
 }
 
 #[tokio::test]
@@ -243,7 +380,7 @@ async fn result_can_return_before_or_after_zero_using_machine_coordinates() {
     for zero_first in [false, true] {
         let controller = mock();
         let cfg = RoutineConfig {
-            family: "inside".into(),
+            family: "outside".into(),
             x: 1,
             y: -1,
             z: false,
@@ -300,14 +437,13 @@ async fn result_can_return_before_or_after_zero_using_machine_coordinates() {
             .iter()
             .filter(|s| s.starts_with("G38.3"))
             .collect::<Vec<_>>();
-        assert_eq!(moves.len(), 2);
+        assert_eq!(moves.len(), 1);
         assert!(moves[0].contains(" X") && moves[0].contains(" Y"));
-        assert!(moves[1].starts_with("G38.3 Z-"));
         assert!(log
             .lock()
             .unwrap()
             .iter()
-            .any(|s| s == "G38.3 X-5 Y5 F1000"));
+            .any(|s| s.starts_with("G38.3 X") && s.contains(" Y")));
         if !zero_first {
             result = zero_result(
                 &controller,
@@ -369,7 +505,7 @@ async fn external_traverses_and_finish_use_starting_z() {
 async fn contact_during_return_releases_along_the_diagonal_before_failing() {
     let controller = mock();
     let cfg = RoutineConfig {
-        family: "inside".into(),
+        family: "outside".into(),
         x: 1,
         y: -1,
         z: false,
@@ -469,23 +605,19 @@ async fn geometry_measurements_end_positions_and_script_parity() {
         }
         let final_state = controller.state();
         for i in 0..2 {
-            let expected = result.machine_point[i]
-                .map(|v| v - initial.probe_offset[i])
-                .unwrap_or(initial.position[i]);
+            let expected = if cfg.family == "inside" {
+                initial.position[i]
+            } else {
+                result.machine_point[i]
+                    .map(|v| v - initial.probe_offset[i])
+                    .unwrap_or(initial.position[i])
+            };
             assert!(
                 (final_state.position[i] - expected).abs() < 0.001,
                 "{name}: axis {i}"
             );
         }
-        near(
-            final_state.position[2],
-            initial.position[2]
-                + if !cfg.z && (cfg.family == "inside" || cfg.center_internal()) {
-                    cfg.safe_z_offset
-                } else {
-                    0.0
-                },
-        );
+        near(final_state.position[2], initial.position[2]);
         near(final_state.position[3], initial.position[3]);
         assert_eq!(final_state.modes, initial.modes);
         let runtime = script.lock().unwrap().clone();

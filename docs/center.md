@@ -36,11 +36,9 @@ For Z, the maximum downward search distance. Z always returns to starting Z.
 
 [Results and work zero](results.md)
 
-[Safe Z offset](safe-z.md)
-
 ## Where it finishes
 
-After the last touch and backoff, Boss, Block and ridges raise to starting Z. Hole, Pocket and valleys raise by Safe Z offset to clear the rim. The probe then moves the ball to the measured center in one X/Y move. Ridges and valleys move only their measured axis.
+After the last touch and backoff, Boss, Block and ridges raise to starting Z. Hole, Pocket and valleys stay at probing height. The probe then moves the ball to the measured center in one X/Y move. Ridges and valleys move only their measured axis.
 
 Between touches, Boss, Block and ridges cross the stock at starting Z. Internal two-axis routines center X at probing height before measuring Y.
 

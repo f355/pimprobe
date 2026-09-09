@@ -12,7 +12,7 @@ Use the probe to find an edge, corner, surface or center, then set work zero fro
 4. Check **Settings**, especially the ball diameter and feeds. Position the ball with the machine's controls or MPG.
 5. Choose a tab and enter the distances for your feature. Use the guides below to check the starting position.
 6. Tap the picture of the surface or feature you want. Check the moves, then press **Proceed**.
-7. Read the result. To use it as work zero, enter any offsets and press **Set Work Zero**. **Go to starting position** returns X/Y first, then Z. Press **Close** to leave the result screen.
+7. Read the result. To use it as work zero, enter any offsets and press **Set Work Zero**. Use the positioning button when needed, then press **Close**.
 
 ## Pick a routine
 

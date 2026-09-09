@@ -138,6 +138,7 @@ pub fn router(app: Arc<App>) -> Router {
         .route("/api/v1/routine/run", post(run))
         .route("/api/v1/routine/zero", post(zero))
         .route("/api/v1/routine/return", post(return_start))
+        .route("/api/v1/routine/measured", post(go_to_measured))
         .route("/api/v1/repeatability/run", post(repeatability))
         .route("/api/v1/mock/ready", get(ready))
         .layer(DefaultBodyLimit::max(8192))
@@ -365,39 +366,47 @@ async fn repeatability(
 }
 
 async fn run(State(app): State<Arc<App>>, Json(token): Json<Token>) -> Result<Response, ApiError> {
-    start_motion(app, token, false).await
+    start_motion(app, token, Motion::Run).await
 }
 
 async fn return_start(
     State(app): State<Arc<App>>,
     Json(token): Json<Token>,
 ) -> Result<Response, ApiError> {
-    start_motion(app, token, true).await
+    start_motion(app, token, Motion::Return).await
 }
 
-async fn start_motion(app: Arc<App>, token: Token, returning: bool) -> Result<Response, ApiError> {
+#[derive(Clone, Copy)]
+enum Motion {
+    Run,
+    Return,
+    Measured(f64),
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MeasuredRequest {
+    id: String,
+    safe_z_offset: f64,
+}
+
+async fn go_to_measured(
+    State(app): State<Arc<App>>,
+    Json(request): Json<MeasuredRequest>,
+) -> Result<Response, ApiError> {
+    start_motion(
+        app,
+        Token { id: request.id },
+        Motion::Measured(request.safe_z_offset),
+    )
+    .await
+}
+
+async fn start_motion(app: Arc<App>, token: Token, motion: Motion) -> Result<Response, ApiError> {
     let guard = app.acquire()?;
     let session = app.device.session_id();
-    let (plan, completed) = if returning {
-        let (plan, result) = app
-            .reviews
-            .lock()
-            .await
-            .take_completed(&token.id, session)
-            .ok_or_else(|| ApiError::conflict("return", "No completed result available"))?;
-        if result.returned {
-            app.reviews
-                .lock()
-                .await
-                .finish(token.id, session, plan, result);
-            return Err(ApiError::conflict(
-                "return",
-                "Already returned to starting position",
-            ));
-        }
-        (plan, Some(result))
-    } else {
-        (
+    let (plan, completed) = match motion {
+        Motion::Run => (
             app.reviews
                 .lock()
                 .await
@@ -406,7 +415,31 @@ async fn start_motion(app: Arc<App>, token: Token, returning: bool) -> Result<Re
                     ApiError::conflict("review", "Review expired; review the routine again")
                 })?,
             None,
-        )
+        ),
+        Motion::Return | Motion::Measured(_) => {
+            let (plan, result) = app
+                .reviews
+                .lock()
+                .await
+                .take_completed(&token.id, session)
+                .ok_or_else(|| ApiError::conflict("result", "No completed result available"))?;
+            let already_done = match motion {
+                Motion::Return => result.returned,
+                Motion::Measured(_) => result.positioned,
+                Motion::Run => false,
+            };
+            if already_done {
+                app.reviews
+                    .lock()
+                    .await
+                    .finish(token.id, session, plan, result);
+                return Err(ApiError::conflict(
+                    "result",
+                    "Positioning action already completed",
+                ));
+            }
+            (plan, Some(result))
+        }
     };
     let cancel = app.shutdown.child_token();
     let run_cancel = cancel.clone();
@@ -421,25 +454,41 @@ async fn start_motion(app: Arc<App>, token: Token, returning: bool) -> Result<Re
             let event = json!({"type":"progress","elapsedMs":started.elapsed().as_millis(),"progress":progress});
             queue_progress(&progress_sender, &progress_cancel, event);
         };
-        let result = if let Some(result) = completed {
-            pimprobe_core::return_to_start(
-                &app.device,
-                &plan,
-                &result,
-                TimingPolicy::default(),
-                run_cancel,
-                observe,
-            )
-            .await
-        } else {
-            pimprobe_core::run(
-                &app.device,
-                &plan,
-                TimingPolicy::default(),
-                run_cancel,
-                observe,
-            )
-            .await
+        let result = match (motion, completed) {
+            (Motion::Run, None) => {
+                pimprobe_core::run(
+                    &app.device,
+                    &plan,
+                    TimingPolicy::default(),
+                    run_cancel,
+                    observe,
+                )
+                .await
+            }
+            (Motion::Return, Some(result)) => {
+                pimprobe_core::return_to_start(
+                    &app.device,
+                    &plan,
+                    &result,
+                    TimingPolicy::default(),
+                    run_cancel,
+                    observe,
+                )
+                .await
+            }
+            (Motion::Measured(clearance), Some(result)) => {
+                pimprobe_core::go_to_measured(
+                    &app.device,
+                    &plan,
+                    &result,
+                    clearance,
+                    TimingPolicy::default(),
+                    run_cancel,
+                    observe,
+                )
+                .await
+            }
+            _ => unreachable!(),
         };
         let event = match result {
             Ok(result) => {
@@ -449,8 +498,22 @@ async fn start_motion(app: Arc<App>, token: Token, returning: bool) -> Result<Re
                     .finish(token.id, session, plan, result.clone());
                 json!({"type":"result","result":result})
             }
-            Err(error) => {
+            Err(mut error) => {
                 app.recover(&error).await;
+                let state = app.device.state();
+                if matches!(motion, Motion::Measured(_))
+                    && state.connected
+                    && state.ready
+                    && !state.motion_blocked
+                    && state.modes != plan.start.modes
+                    && let Err(recovery) =
+                        pimprobe_core::restore_modes(&app.device, plan.start.modes).await
+                {
+                    error = Error::Recovery {
+                        cause: Box::new(error),
+                        recovery: Box::new(recovery),
+                    };
+                }
                 json!({"type":"error","code":error_code(&error),"message":error.to_string()})
             }
         };

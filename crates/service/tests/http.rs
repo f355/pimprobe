@@ -479,6 +479,106 @@ async fn zero_and_return_remain_available_in_either_order() {
 }
 
 #[tokio::test]
+async fn inside_result_can_move_over_the_measurement_after_zeroing() {
+    let (_temp, app, router) = app();
+    let mut cfg = config();
+    cfg["family"] = json!("inside");
+    cfg["z"] = json!(false);
+    cfg["x"] = json!(1);
+    cfg["y"] = json!(-1);
+    let start = app.device.state().position;
+    let (code, body) = request(&router, "POST", "/api/v1/routine/review", cfg).await;
+    assert_eq!(code, StatusCode::OK, "{body}");
+    let review: Value = serde_json::from_str(&body).unwrap();
+    let token = json!({"id":review["id"]});
+    let (_, body) = request(&router, "POST", "/api/v1/routine/run", token.clone()).await;
+    let measured: Value = serde_json::from_str(body.lines().last().unwrap()).unwrap();
+    assert_eq!(measured["type"], "result", "{body}");
+    let at_start = app.device.state().position;
+    assert!((at_start[0] - start[0]).abs() < 0.002);
+    assert!((at_start[1] - start[1]).abs() < 0.002);
+    assert!((at_start[2] - start[2]).abs() < 0.002);
+
+    let (code, body) = request(
+        &router,
+        "POST",
+        "/api/v1/routine/zero",
+        json!({"id":review["id"], "offsets":[0,0,0]}),
+    )
+    .await;
+    assert_eq!(code, StatusCode::OK, "{body}");
+    let (code, body) = request(
+        &router,
+        "POST",
+        "/api/v1/routine/measured",
+        json!({"id":review["id"], "safeZOffset":25}),
+    )
+    .await;
+    assert_eq!(code, StatusCode::OK, "{body}");
+    let reply: Value = serde_json::from_str(body.lines().last().unwrap()).unwrap();
+    assert_eq!(reply["result"]["positioned"], true);
+    let end = app.device.state().position;
+    assert!((end[2] - start[2] - 25.0).abs() < 0.002);
+}
+
+#[tokio::test]
+async fn cancelled_result_move_restores_parser_modes_after_stopping() {
+    let temp = tempfile::tempdir().unwrap();
+    let mock = MockController::new().with_delay(std::time::Duration::from_millis(20));
+    mock.set_extended(true).unwrap();
+    let app = App::new(
+        Device::Mock(Box::new(mock)),
+        Settings::open(temp.path().join("settings.json")).unwrap(),
+        Some("test-token".into()),
+    );
+    let router = router(app.clone());
+    let original_modes = app.device.state().modes;
+    let mut cfg = config();
+    cfg["family"] = json!("inside");
+    cfg["z"] = json!(false);
+    cfg["x"] = json!(1);
+    cfg["y"] = json!(-1);
+    let (_, body) = request(&router, "POST", "/api/v1/routine/review", cfg).await;
+    let review: Value = serde_json::from_str(&body).unwrap();
+    let token = json!({"id":review["id"]});
+    let (_, body) = request(&router, "POST", "/api/v1/routine/run", token.clone()).await;
+    assert!(body.lines().last().unwrap().contains("\"type\":\"result\""));
+
+    let response = router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/routine/measured")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({"id":review["id"], "safeZOffset":25}).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    for _ in 0..100 {
+        if app.device.state().modes != original_modes {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+    }
+    assert_ne!(app.device.state().modes, original_modes);
+    drop(response);
+    for _ in 0..100 {
+        let (_, body) = request(&router, "GET", "/api/v1/state", Value::Null).await;
+        let snapshot: Value = serde_json::from_str(&body).unwrap();
+        if snapshot["contactActive"] == false {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+    }
+    assert_eq!(app.device.state().modes, original_modes);
+}
+
+#[tokio::test]
 async fn mock_ready_is_explicit() {
     let (_temp, _app, router) = app();
     let (code, body) = request(&router, "GET", "/api/v1/mock/ready", Value::Null).await;

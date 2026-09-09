@@ -42,7 +42,11 @@ Popup {
     property var activeRequest: null
     property bool zeroed: false
     property bool returned: false
+    property bool positioned: false
     property bool returning: false
+    property bool positioning: false
+    property real safeZOffset: 40
+    signal settingChanged(string key, var value)
     property string completedID: ""
     readonly property bool zeroing: zeroRequest.pending
     property string logText: ""
@@ -104,7 +108,10 @@ Popup {
         zeroed = false;
         completedID = "";
         returned = false;
+        positioned = false;
         returning = false;
+        positioning = false;
+        safeZOffset = Number(value.safeZOffset);
         reviewRequest.cancel();
         zeroRequest.cancel();
         open();
@@ -135,7 +142,7 @@ Popup {
             return;
         var id = reviewID;
         reviewID = "";
-        startMotion(id, false);
+        startMotion(id, "run");
     }
 
     function returnToStart() {
@@ -143,18 +150,28 @@ Popup {
         resultEditor.cancel();
         var id = completedID;
         completedID = "";
-        startMotion(id, true);
+        startMotion(id, "return");
     }
 
-    function startMotion(id, isReturn) {
-        returning = isReturn;
+    function goToMeasured() {
+        if (!completedID || zeroing || positioned || phase !== "result") return;
+        if (resultEditor.target) resultEditor.accept();
+        if (resultEditor.target) return;
+        var id = completedID;
+        completedID = "";
+        startMotion(id, "measured");
+    }
+
+    function startMotion(id, action) {
+        returning = action === "return";
+        positioning = action === "measured";
         phase = "running";
-        if (!isReturn) logText = "";
+        if (action === "run") logText = "";
         failure = "";
         var terminal = false;
-        activeRequest = Api.stream(serviceUrl + (isReturn ? "/routine/return" : "/routine/run"), {
-            id: id
-        }, function (event) {
+        var body = {id: id};
+        if (positioning) body.safeZOffset = safeZOffset;
+        activeRequest = Api.stream(serviceUrl + "/routine/" + action, body, function (event) {
             if (event.type === "progress") {
                 if (event.progress.kind === "script")
                     appendLog(event.progress.message);
@@ -164,6 +181,7 @@ Popup {
                 spans = event.result.spans || [null, null, null];
                 zeroed = event.result.zeroed;
                 returned = event.result.returned === true;
+                positioned = event.result.positioned === true;
                 completedID = id;
                 phase = "result";
                 terminal = true;
@@ -380,6 +398,29 @@ Popup {
                         }
                     }
                     Item { Layout.fillHeight: true }
+                    RowLayout {
+                        visible: flow.routine.family === "inside" && !flow.routine.z
+                        Layout.fillWidth: true
+                        Label {
+                            Layout.fillWidth: true
+                            text: "Safe Z offset"
+                            color: Theme.text
+                            font.pixelSize: 20
+                        }
+                        NumberField {
+                            editor: resultEditor
+                            minimum: 0.1
+                            maximum: 1000
+                            value: flow.safeZOffset
+                            onCommitted: function(value) {
+                                flow.safeZOffset = value;
+                                flow.settingChanged("safeZOffset", value);
+                            }
+                            Layout.preferredWidth: 132
+                            Layout.preferredHeight: 54
+                            font.pixelSize: 24
+                        }
+                    }
                     Label {
                         text: flow.zeroed ? "Work zero set" : "Work zero was not changed"
                         color: flow.zeroed ? Theme.accentBright : Theme.text
@@ -412,12 +453,21 @@ Popup {
                 }
                 LabButton {
                     text: "Go to starting position"
-                    visible: flow.phase === "result"
+                    visible: flow.phase === "result" && (flow.routine.family !== "inside" || flow.routine.z)
                     enabled: !flow.zeroing && !flow.returned && flow.completedID.length > 0
                     Layout.preferredWidth: 280
                     Layout.preferredHeight: 50
                     font.pixelSize: 20
                     onClicked: flow.returnToStart()
+                }
+                LabButton {
+                    text: "Go to measured point"
+                    visible: flow.phase === "result" && flow.routine.family === "inside" && !flow.routine.z
+                    enabled: !flow.zeroing && !flow.positioned && flow.completedID.length > 0
+                    Layout.preferredWidth: 240
+                    Layout.preferredHeight: 50
+                    font.pixelSize: 20
+                    onClicked: flow.goToMeasured()
                 }
                 LabButton {
                     visible: flow.phase !== "running"
@@ -431,7 +481,7 @@ Popup {
                 }
                 Label {
                     visible: flow.phase === "running"
-                    text: flow.returning ? "Returning to starting position..." : "Probing..."
+                    text: flow.returning ? "Returning to starting position..." : flow.positioning ? "Moving to measured point..." : "Probing..."
                     color: Theme.text
                     font.pixelSize: 20
                     Layout.preferredHeight: 50

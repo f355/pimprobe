@@ -24,9 +24,8 @@ function searchFields(family) {
     ];
 }
 var outside = searchFields("outside");
-var safeZ = {key: "safeZOffset", label: "Safe Z offset"};
-var inside = searchFields("inside").concat([safeZ]);
-var center = searchFields("center").concat([safeZ]);
+var inside = searchFields("inside");
+var center = searchFields("center");
 var setup = [
     {key: "probeDiameter", label: "Probe ball diameter"},
     {key: "retractDistance", label: "Retract distance"},

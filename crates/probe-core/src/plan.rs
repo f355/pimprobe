@@ -220,21 +220,32 @@ pub fn review(state: State, config: RoutineConfig) -> Result<RoutinePlan, Error>
         }
     }
     if !c.z {
-        if c.family == "inside" || c.center_internal() {
-            p.mov(Axis::Z, "current_z", c.safe_z_offset);
+        if c.family == "inside" {
+            let targets = p
+                .axes()
+                .into_iter()
+                .map(|axis| MoveTarget {
+                    axis,
+                    reference: format!("start_{}", axis.name()),
+                    offset: 0.0,
+                })
+                .collect();
+            p.steps.push(RoutineStep::Move { targets });
         } else {
-            p.mov(Axis::Z, "start_z", 0.0);
+            if !c.center_internal() {
+                p.mov(Axis::Z, "start_z", 0.0);
+            }
+            let targets = p
+                .axes()
+                .into_iter()
+                .map(|axis| MoveTarget {
+                    axis,
+                    reference: format!("surface_{}", axis.name()),
+                    offset: -p.start.probe_offset[axis.index()],
+                })
+                .collect();
+            p.steps.push(RoutineStep::Move { targets });
         }
-        let targets = p
-            .axes()
-            .into_iter()
-            .map(|axis| MoveTarget {
-                axis,
-                reference: format!("surface_{}", axis.name()),
-                offset: -p.start.probe_offset[axis.index()],
-            })
-            .collect();
-        p.steps.push(RoutineStep::Move { targets });
     }
     p.validate_envelope()?;
     Ok(p)

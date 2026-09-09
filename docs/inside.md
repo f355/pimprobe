@@ -24,11 +24,11 @@ For Z, the maximum downward search distance to find the bottom. After a successf
 
 [Results and work zero](results.md)
 
-[Safe Z offset](safe-z.md)
-
 ## Where it finishes
 
-After the last touch and backoff, the probe raises by Safe Z offset, then moves the ball over the measured wall or corner. An unmeasured axis stays where it is. Choose enough clearance to get above the pocket rim before that sideways move.
+After the last touch and backoff, the probe returns directly to its starting X/Y and stays at probing height.
+
+[Safe Z offset and moving to the measured point](safe-z.md)
 
 Z always returns to its starting height.
 

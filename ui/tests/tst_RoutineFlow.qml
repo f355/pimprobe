@@ -34,6 +34,16 @@ TestCase {
         ProbeFlow { id: flow; serviceUrl: "http://127.0.0.1:18137/api/v1" }
     }
 
+    function descendants(item, type) {
+        var matches = []
+        var children = item.children || []
+        for (var i = 0; i < children.length; ++i) {
+            if (children[i] instanceof type) matches.push(children[i])
+            matches = matches.concat(descendants(children[i], type))
+        }
+        return matches
+    }
+
     function initTestCase() {
         Mock.verifyServer(test, flow.serviceUrl)
         var done = false
@@ -111,6 +121,53 @@ TestCase {
         tryCompare(flow, "phase", "result", 10000)
         compare(flow.failure, "")
         verify(flow.returned)
+        flow.close()
+    }
+
+    function test_inside_result_starts_at_entry_and_can_move_over_measurement() {
+        var before = null
+        Api.request("GET", flow.serviceUrl + "/state", null, function(reply) { before = reply.data })
+        tryVerify(function() { return before !== null }, 3000)
+        flow.showRoutine({family:"inside",x:1,y:-1,z:false,wcs:54,zero:false,safeZOffset:40,
+                          depth:5,xSearchDistance:10,ySearchDistance:10,retract:0.5,diameter:4,
+                          positioningFeed:1000,coarseFeed:30,fineFeed:10})
+        tryVerify(function() { return !flow.reviewing }, 3000)
+        compare(flow.failure, "")
+        flow.proceed()
+        tryCompare(flow, "phase", "result", 10000)
+        var atStart = null
+        Api.request("GET", flow.serviceUrl + "/state", null, function(reply) { atStart = reply.data })
+        tryVerify(function() { return atStart !== null }, 3000)
+        for (var i = 0; i < 3; ++i)
+            verify(Math.abs(atStart.status.machinePosition[i] - before.status.machinePosition[i]) < 0.002)
+
+        var fields = descendants(flow.contentItem, NumberField).filter(function(field) {
+            return field.visible && field.value === flow.safeZOffset
+        })
+        compare(fields.length, 1)
+        fields[0].editor.begin(fields[0])
+        fields[0].editor.typeKey("2")
+        fields[0].editor.typeKey("5")
+        flow.goToMeasured()
+        tryCompare(flow, "phase", "result", 10000)
+        compare(flow.failure, "")
+        verify(flow.positioned)
+        var positioned = null
+        Api.request("GET", flow.serviceUrl + "/state", null, function(reply) { positioned = reply.data })
+        tryVerify(function() { return positioned !== null }, 3000)
+        verify(Math.abs(positioned.status.machinePosition[2] - before.status.machinePosition[2] - 25) < 0.002)
+        verify(Math.abs(positioned.status.machinePosition[0] - before.status.machinePosition[0]) > 0.1)
+        verify(Math.abs(positioned.status.machinePosition[1] - before.status.machinePosition[1]) > 0.1)
+        flow.close()
+    }
+
+    function test_review_error_explains_the_blocked_direction() {
+        flow.showRoutine({family:"outside",x:-1,y:0,z:false,wcs:54,zero:false,safeZOffset:40,
+                          depth:5,xSearchDistance:1000,ySearchDistance:10,retract:0.5,diameter:4,
+                          positioningFeed:1000,coarseFeed:30,fineFeed:10})
+        tryVerify(function() { return !flow.reviewing }, 3000)
+        verify(flow.failure.indexOf("X+") !== -1, flow.failure)
+        verify(flow.failure.indexOf("Move toward X-") !== -1, flow.failure)
         flow.close()
     }
 

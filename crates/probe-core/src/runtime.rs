@@ -33,6 +33,8 @@ pub struct RoutineResult {
     pub zeroed: bool,
     #[serde(default)]
     pub returned: bool,
+    #[serde(default)]
+    pub positioned: bool,
     pub axes: Vec<String>,
     #[serde(skip)]
     pub motion_started: bool,
@@ -69,6 +71,10 @@ pub(crate) async fn set_modes<C: Controller + ?Sized>(c: &C, m: Modes) -> Result
         return Err(Error::Controller("parser modes not confirmed".into()));
     }
     Ok(())
+}
+
+pub async fn restore_modes<C: Controller + ?Sized>(c: &C, modes: Modes) -> Result<(), Error> {
+    set_modes(c, modes).await
 }
 pub fn surface_machine_coordinate(
     contact: &Contact,
@@ -558,6 +564,140 @@ pub async fn return_to_start<C: Controller + ?Sized>(
         _ = cancel.cancelled() => Err(Error::Cancelled),
         result = return_inner(&controller, p, result, t, &observe) => result,
     }
+}
+
+pub async fn go_to_measured<C: Controller + ?Sized>(
+    c: &C,
+    p: &RoutinePlan,
+    result: &RoutineResult,
+    clearance: f64,
+    t: TimingPolicy,
+    cancel: CancellationToken,
+    observe: impl Fn(Progress) + Send + Sync,
+) -> Result<RoutineResult, Error> {
+    let controller = Cancellable {
+        inner: c,
+        cancel: &cancel,
+    };
+    tokio::select! {
+        biased;
+        _ = cancel.cancelled() => Err(Error::Cancelled),
+        result = measured_inner(&controller, p, result, clearance, t, &observe) => result,
+    }
+}
+
+async fn measured_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
+    c: &C,
+    p: &RoutinePlan,
+    result: &RoutineResult,
+    clearance: f64,
+    t: TimingPolicy,
+    observe: &F,
+) -> Result<RoutineResult, Error> {
+    if p.config.family != "inside" || p.config.z || !result.settled || result.positioned {
+        return Err(Error::Preflight(
+            "no matching inside result to position over".into(),
+        ));
+    }
+    if !Parameter::Travel.range().contains(clearance) {
+        return Err(Error::InvalidConfig("invalid safe Z offset".into()));
+    }
+    let state = c.state();
+    let mut check = p.clone();
+    if result.zeroed {
+        check.start.work_position = std::array::from_fn(|i| {
+            p.start.position[i] - (state.position[i] - state.work_position[i])
+        });
+    }
+    check.check_state(&state, state.position)?;
+    let z_target = state.position[2] + clearance;
+    check_path(&state, Axis::Z, state.position[2], z_target)?;
+    let mut xy_target = state.position;
+    xy_target[2] = z_target;
+    for axis in p.axes() {
+        let i = axis.index();
+        xy_target[i] = result.machine_point[i]
+            .ok_or_else(|| Error::Preflight("measured machine position unavailable".into()))?
+            - p.start.probe_offset[i];
+        check_path(
+            &state,
+            axis,
+            state.position[i].min(xy_target[i]),
+            state.position[i].max(xy_target[i]),
+        )?;
+    }
+
+    let scripted = AtomicBool::new(false);
+    let c = Observed {
+        inner: c,
+        observe,
+        scripted: &scripted,
+    };
+    let modes = query_modes(&c).await?;
+    set_modes(&c, Modes::PROBING).await?;
+    let movement = async {
+        let mut position = state.position;
+        let z_position = [position[0], position[1], z_target, position[3]];
+        for (target, comment) in [
+            (z_position, "; Raise by Safe Z offset"),
+            (
+                xy_target,
+                "; Move the probe ball over the measured point, expecting no contact",
+            ),
+        ] {
+            check.check_state(&c.state(), position)?;
+            let delta = std::array::from_fn(|i| quantize(target[i] - position[i]));
+            if delta.iter().any(|value| *value != 0.0) {
+                observe(Progress {
+                    kind: "script".into(),
+                    message: comment.into(),
+                    command: String::new(),
+                });
+                position = run_position_stage(
+                    &c,
+                    positioning_stage(delta, p.config.positioning_feed),
+                    p.config.retract,
+                    t,
+                )
+                .await?
+                .position;
+            }
+        }
+        Ok::<_, Error>(())
+    }
+    .await;
+    if movement.is_ok()
+        || matches!(
+            movement,
+            Err(Error::UnexpectedContact {
+                retracted: true,
+                ..
+            })
+        )
+    {
+        if let Err(recovery) = set_modes(&c, modes).await {
+            return Err(match movement {
+                Ok(()) => recovery,
+                Err(cause) => Error::Recovery {
+                    cause: Box::new(cause),
+                    recovery: Box::new(recovery),
+                },
+            });
+        }
+    }
+    match movement {
+        Err(Error::UnexpectedContact {
+            retracted: true, ..
+        }) => {
+            return Err(Error::Preflight(
+                "Probe touched while moving X/Y. Clear the path and try the move again".into(),
+            ));
+        }
+        other => other?,
+    }
+    let mut updated = result.clone();
+    updated.positioned = true;
+    Ok(updated)
 }
 
 async fn return_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(

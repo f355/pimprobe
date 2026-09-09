@@ -14,7 +14,9 @@ Enter an Offset for each measured axis, then press Set Work Zero. The new WCS or
 
 The keypad opens when you tap an offset. Use ± for a negative value and Enter to accept it. After the machine confirms the change, the page says Work zero set. The measured coordinates stay unchanged.
 
-**Go to starting position** moves X/Y together to where you started, then returns Z to its starting height. You can do this before or after setting work zero; it uses the saved machine position. The downward move is contact-guarded. Z-only probing already returns to the start.
+For Outside and Center results, **Go to starting position** moves X/Y together to where you started, then returns Z to its starting height. You can do this before or after setting work zero; it uses the saved machine position. The downward move is contact-guarded. Z-only probing already returns to the start.
+
+Inside X/Y probing already finishes at its starting X/Y and probing height. **Go to measured point** raises by the displayed Safe Z offset, then moves the ball over the measured wall or corner. You can edit the offset before moving.
 
 **Close** returns to the probing controls, leaving the machine at its current position.
 

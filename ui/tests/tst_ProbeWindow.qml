@@ -135,8 +135,8 @@ TestCase {
         var tabs = descendants(probeWindow.contentItem, TabBar)[0]
         var keys = [
             ["outsideXSearchDistance", "outsideYSearchDistance", "outsideDepth"],
-            ["insideXSearchDistance", "insideYSearchDistance", "insideDepth", "safeZOffset"],
-            ["centerXSearchDistance", "centerYSearchDistance", "centerDepth", "safeZOffset"],
+            ["insideXSearchDistance", "insideYSearchDistance", "insideDepth"],
+            ["centerXSearchDistance", "centerYSearchDistance", "centerDepth"],
             ["probeDiameter", "retractDistance", "positioningFeed", "coarseFeed", "fineFeed"]
         ]
         for (var tab = 0; tab < keys.length; ++tab) {

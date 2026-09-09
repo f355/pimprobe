@@ -188,13 +188,25 @@ pub(crate) fn preflight_machine(s: &State) -> Result<(), Error> {
         return Err(Error::MotionBlocked);
     }
     for (ok, why) in [
-        (s.connected, "disconnected"),
-        (s.ready, "not ready"),
-        (s.spindle_stopped, "spindle running"),
-        (!s.probe_triggered, "probe already triggered"),
-        (s.probe_offset_known, "unknown probe offset"),
-        (s.travel_limits_known, "unknown travel limits"),
-        (finite(s.position), "invalid position"),
+        (s.connected, "Controller is disconnected"),
+        (s.ready, "Machine is not ready"),
+        (s.spindle_stopped, "Stop the spindle before probing"),
+        (
+            !s.probe_triggered,
+            "The probe is already touching something",
+        ),
+        (
+            s.probe_offset_known,
+            "Probe calibration is unavailable; reconnect the controller",
+        ),
+        (
+            s.travel_limits_known,
+            "Machine travel limits are unavailable; reconnect the controller",
+        ),
+        (
+            finite(s.position),
+            "Machine position is unavailable; reconnect the controller",
+        ),
     ] {
         if !ok {
             return Err(Error::Preflight(why.into()));
@@ -204,16 +216,20 @@ pub(crate) fn preflight_machine(s: &State) -> Result<(), Error> {
 }
 pub(crate) fn check_path(s: &State, a: Axis, lo: f64, hi: f64) -> Result<(), Error> {
     let limit = s.travel_limits[a.index()];
-    if !s.travel_limits_known
-        || !positive(limit)
-        || !lo.is_finite()
-        || !hi.is_finite()
-        || lo > hi
-        || lo < -limit + 0.5
-        || hi > 0.0
-    {
+    if !s.travel_limits_known || !positive(limit) || !lo.is_finite() || !hi.is_finite() || lo > hi {
         return Err(Error::Preflight(format!(
-            "{a} path {lo:.3}..{hi:.3} exceeds machine travel"
+            "Cannot validate the {a} movement path"
+        )));
+    }
+    let low_limit = -limit + 0.5;
+    if lo < low_limit {
+        return Err(Error::Preflight(format!(
+            "Not enough {a}- travel: the routine reaches G53 {a}{lo:.3}, past the limit at {a}{low_limit:.3}. Move toward {a}+ or reduce the movement distance"
+        )));
+    }
+    if hi > 0.0 {
+        return Err(Error::Preflight(format!(
+            "Not enough {a}+ travel: the routine reaches G53 {a}{hi:.3}, past the limit at {a}0. Move toward {a}- or reduce the movement distance"
         )));
     }
     Ok(())

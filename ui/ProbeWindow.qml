@@ -455,6 +455,7 @@ ApplicationWindow {
         serviceUrl: window.serviceUrl
         uiFont: window.uiFontFamily
         codeFont: window.monoFontFamily
+        onSettingChanged: function(key, value) { window.settings.setValue(key, value); }
     }
 
     RepeatabilityFlow {

@@ -171,6 +171,12 @@ TestCase {
         flow.close()
     }
 
+    function test_stream_start_error_keeps_service_message() {
+        flow.startMotion("expired", "run")
+        tryCompare(flow, "phase", "failed", 3000)
+        verify(flow.failure.indexOf("Review expired") !== -1, flow.failure)
+    }
+
     function test_zero_failure_retry_data() {
         return [
             {tag: "busy", reply: {ok: false, data: {code: "busy"}, error: "Busy"}, retry: true},

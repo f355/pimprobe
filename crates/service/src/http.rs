@@ -22,7 +22,7 @@ use crate::{
 use axum::{
     Json, Router,
     body::{Body, Bytes},
-    extract::{DefaultBodyLimit, State},
+    extract::{DefaultBodyLimit, FromRequest, Request, State, rejection::JsonRejection},
     http::{StatusCode, header},
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -159,7 +159,32 @@ impl From<Error> for ApiError {
 }
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        (self.0, Json(json!({"code":self.1,"message":self.2}))).into_response()
+        // Qt 6.9's QML XMLHttpRequest discards the status and body of non-2xx
+        // loopback responses. Keep application failures visible to the operator.
+        Json(json!({
+            "error": true,
+            "code": self.1,
+            "message": self.2,
+            "status": self.0.as_u16()
+        }))
+        .into_response()
+    }
+}
+
+struct ApiJson<T>(T);
+
+impl<S, T> FromRequest<S> for ApiJson<T>
+where
+    S: Send + Sync,
+    Json<T>: FromRequest<S, Rejection = JsonRejection>,
+{
+    type Rejection = ApiError;
+
+    async fn from_request(request: Request, state: &S) -> Result<Self, Self::Rejection> {
+        Json::<T>::from_request(request, state)
+            .await
+            .map(|Json(value)| Self(value))
+            .map_err(|error| ApiError(StatusCode::BAD_REQUEST, "request", error.body_text()))
     }
 }
 fn error_code(error: &Error) -> &'static str {
@@ -185,7 +210,7 @@ async fn settings_schema() -> Json<Map<String, Value>> {
 }
 async fn update_settings(
     State(app): State<Arc<App>>,
-    Json(patch): Json<Map<String, Value>>,
+    ApiJson(patch): ApiJson<Map<String, Value>>,
 ) -> Result<Json<Map<String, Value>>, ApiError> {
     let mut store = app.settings.lock().await;
     store.update(patch).map_err(|e| {
@@ -212,7 +237,7 @@ struct ActuatorRequest {
 }
 async fn actuator(
     State(app): State<Arc<App>>,
-    Json(body): Json<ActuatorRequest>,
+    ApiJson(body): ApiJson<ActuatorRequest>,
 ) -> Result<StatusCode, ApiError> {
     let guard = app.acquire()?;
     tokio::spawn(async move {
@@ -231,7 +256,7 @@ struct WcsRequest {
 }
 async fn wcs(
     State(app): State<Arc<App>>,
-    Json(body): Json<WcsRequest>,
+    ApiJson(body): ApiJson<WcsRequest>,
 ) -> Result<StatusCode, ApiError> {
     if !(54..=59).contains(&body.wcs) {
         return Err(ApiError(
@@ -252,7 +277,7 @@ async fn wcs(
 
 async fn review(
     State(app): State<Arc<App>>,
-    Json(config): Json<RoutineConfig>,
+    ApiJson(config): ApiJson<RoutineConfig>,
 ) -> Result<Json<Value>, ApiError> {
     let _guard = app.acquire()?;
     let session = app.device.session_id();
@@ -312,7 +337,7 @@ fn queue_progress(
 
 async fn repeatability(
     State(app): State<Arc<App>>,
-    Json(options): Json<RepeatabilityOptions>,
+    ApiJson(options): ApiJson<RepeatabilityOptions>,
 ) -> Result<Response, ApiError> {
     let guard = app.acquire()?;
     let values = app.settings.lock().await.snapshot();
@@ -365,13 +390,16 @@ async fn repeatability(
         .into_response())
 }
 
-async fn run(State(app): State<Arc<App>>, Json(token): Json<Token>) -> Result<Response, ApiError> {
+async fn run(
+    State(app): State<Arc<App>>,
+    ApiJson(token): ApiJson<Token>,
+) -> Result<Response, ApiError> {
     start_motion(app, token, Motion::Run).await
 }
 
 async fn return_start(
     State(app): State<Arc<App>>,
-    Json(token): Json<Token>,
+    ApiJson(token): ApiJson<Token>,
 ) -> Result<Response, ApiError> {
     start_motion(app, token, Motion::Return).await
 }
@@ -392,7 +420,7 @@ struct MeasuredRequest {
 
 async fn go_to_measured(
     State(app): State<Arc<App>>,
-    Json(request): Json<MeasuredRequest>,
+    ApiJson(request): ApiJson<MeasuredRequest>,
 ) -> Result<Response, ApiError> {
     start_motion(
         app,
@@ -540,7 +568,7 @@ struct ZeroRequest {
 
 async fn zero(
     State(app): State<Arc<App>>,
-    Json(token): Json<ZeroRequest>,
+    ApiJson(token): ApiJson<ZeroRequest>,
 ) -> Result<Json<Value>, ApiError> {
     let guard = app.acquire()?;
     let session = app.device.session_id();

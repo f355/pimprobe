@@ -29,6 +29,10 @@ function request(method, url, body, done) {
                 response.ok = false
             }
         }
+        if (response.data && response.data.error === true) {
+            response.ok = false
+            response.error = response.data.message || "Service error"
+        }
         if (!response.ok && !response.error)
             response.error = response.data && response.data.message
                            ? response.data.message : "Service unavailable"
@@ -61,6 +65,11 @@ function stream(url, body, onEvent, onFinished) {
             var event
             try {
                 event = JSON.parse(line)
+                if (event.error === true) {
+                    finish(event.message || "Service error")
+                    xhr.abort()
+                    return
+                }
                 onEvent(event)
             }
             catch (error) {
@@ -70,12 +79,21 @@ function stream(url, body, onEvent, onFinished) {
             }
         }
         if (xhr.readyState === XMLHttpRequest.DONE) {
+            var tail = text.substring(consumed).trim()
             if (xhr.status !== 200) {
                 var message = "Service unavailable"
                 try { message = JSON.parse(text).message || message } catch (_) {}
                 finish(message)
             }
-            else if (text.substring(consumed).trim().length) finish("Incomplete routine response")
+            else if (tail.length) {
+                try {
+                    var envelope = JSON.parse(tail)
+                    finish(envelope.error === true ? envelope.message || "Service error"
+                                                   : "Incomplete routine response")
+                } catch (_) {
+                    finish("Incomplete routine response")
+                }
+            }
             else finish("")
         }
     }

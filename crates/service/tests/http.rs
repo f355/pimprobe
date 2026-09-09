@@ -47,6 +47,72 @@ fn app() -> (tempfile::TempDir, std::sync::Arc<App>, Router) {
     (temp, app.clone(), router(app))
 }
 
+async fn assert_api_error(
+    router: &Router,
+    method: &str,
+    path: &str,
+    body: Value,
+    status: StatusCode,
+    message: &str,
+) {
+    let (wire_status, body) = request(router, method, path, body).await;
+    assert_eq!(wire_status, StatusCode::OK, "{body}");
+    let envelope: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(envelope["error"], true, "{body}");
+    assert_eq!(envelope["status"], status.as_u16(), "{body}");
+    assert!(
+        envelope["message"].as_str().unwrap().contains(message),
+        "{body}"
+    );
+}
+
+#[tokio::test]
+async fn application_errors_use_qt_compatible_envelopes() {
+    let (_temp, _app, router) = app();
+    assert_api_error(
+        &router,
+        "PATCH",
+        "/api/v1/settings",
+        json!({"coarseFeed":0}),
+        StatusCode::BAD_REQUEST,
+        "coarseFeed",
+    )
+    .await;
+    assert_api_error(
+        &router,
+        "POST",
+        "/api/v1/wcs",
+        json!({"wcs":60}),
+        StatusCode::BAD_REQUEST,
+        "Invalid WCS",
+    )
+    .await;
+    let mut cfg = config();
+    cfg["family"] = json!("inside");
+    cfg["z"] = json!(false);
+    cfg["x"] = json!(0);
+    cfg["y"] = json!(1);
+    cfg["ySearchDistance"] = json!(1000);
+    assert_api_error(
+        &router,
+        "POST",
+        "/api/v1/routine/review",
+        cfg,
+        StatusCode::CONFLICT,
+        "Not enough Y+ travel",
+    )
+    .await;
+    assert_api_error(
+        &router,
+        "POST",
+        "/api/v1/routine/run",
+        json!({"id":"expired"}),
+        StatusCode::CONFLICT,
+        "Review expired",
+    )
+    .await;
+}
+
 #[tokio::test]
 async fn repeatability_streams_each_reading_and_axis_statistics() {
     let (_temp, app, router) = repeatability_app();
@@ -115,11 +181,15 @@ async fn repeatability_rejects_empty_axes_and_fractional_repetitions() {
         json!({"axes":[false,false,false],"repetitions":5,"home":false,"retract":true}),
         json!({"axes":[true,true,true],"repetitions":1.5,"home":false,"retract":true}),
     ] {
-        let (code, _) = request(&router, "POST", "/api/v1/repeatability/run", options).await;
-        assert!(matches!(
-            code,
-            StatusCode::BAD_REQUEST | StatusCode::CONFLICT | StatusCode::UNPROCESSABLE_ENTITY
-        ));
+        let (code, body) = request(&router, "POST", "/api/v1/repeatability/run", options).await;
+        assert_eq!(code, StatusCode::OK, "{body}");
+        let envelope: Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(envelope["error"], true, "{body}");
+        assert!(
+            envelope["message"]
+                .as_str()
+                .is_some_and(|text| !text.is_empty())
+        );
     }
 }
 
@@ -292,14 +362,15 @@ async fn settings_contract_and_validation() {
     )
     .await;
     assert_eq!(code, StatusCode::OK);
-    let (code, _) = request(
+    assert_api_error(
         &router,
         "PATCH",
         "/api/v1/settings",
         json!({"coarseFeed":0}),
+        StatusCode::BAD_REQUEST,
+        "coarseFeed",
     )
     .await;
-    assert_eq!(code, StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]
@@ -314,8 +385,15 @@ async fn state_actuator_and_wcs_contract() {
     .await;
     assert_eq!(code, StatusCode::NO_CONTENT);
     assert!(!app.device.state().probe_extended);
-    let (code, _) = request(&router, "POST", "/api/v1/probe-actuator", json!({})).await;
-    assert!(code.is_client_error());
+    assert_api_error(
+        &router,
+        "POST",
+        "/api/v1/probe-actuator",
+        json!({}),
+        StatusCode::BAD_REQUEST,
+        "extended",
+    )
+    .await;
     let (code, _) = request(&router, "POST", "/api/v1/wcs", json!({"wcs":59})).await;
     assert_eq!(code, StatusCode::NO_CONTENT);
     let (_, body) = request(&router, "GET", "/api/v1/state", Value::Null).await;
@@ -352,10 +430,24 @@ async fn review_run_stream_and_late_zero() {
     assert_eq!(result["zeroed"], true);
     assert_eq!(result["point"], terminal["result"]["point"]);
     assert_eq!(before, app.device.state().position);
-    let (code, _) = request(&router, "POST", "/api/v1/routine/zero", token.clone()).await;
-    assert_eq!(code, StatusCode::CONFLICT);
-    let (code, _) = request(&router, "POST", "/api/v1/routine/run", token).await;
-    assert_eq!(code, StatusCode::CONFLICT);
+    assert_api_error(
+        &router,
+        "POST",
+        "/api/v1/routine/zero",
+        token.clone(),
+        StatusCode::CONFLICT,
+        "already set",
+    )
+    .await;
+    assert_api_error(
+        &router,
+        "POST",
+        "/api/v1/routine/run",
+        token,
+        StatusCode::CONFLICT,
+        "Review expired",
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -409,14 +501,15 @@ async fn new_review_invalidates_old_token() {
     let first: Value = serde_json::from_str(&body).unwrap();
     let (code, _) = request(&router, "POST", "/api/v1/routine/review", config()).await;
     assert_eq!(code, StatusCode::OK);
-    let (code, _) = request(
+    assert_api_error(
         &router,
         "POST",
         "/api/v1/routine/run",
         json!({"id":first["id"]}),
+        StatusCode::CONFLICT,
+        "Review expired",
     )
     .await;
-    assert_eq!(code, StatusCode::CONFLICT);
 }
 
 #[tokio::test]
@@ -473,8 +566,15 @@ async fn zero_and_return_remain_available_in_either_order() {
                 .zip(start)
                 .all(|(a, b)| (a - b).abs() < 0.002)
         );
-        let (code, _) = request(&router, "POST", "/api/v1/routine/return", token).await;
-        assert_eq!(code, StatusCode::CONFLICT);
+        assert_api_error(
+            &router,
+            "POST",
+            "/api/v1/routine/return",
+            token,
+            StatusCode::CONFLICT,
+            "Positioning action already completed",
+        )
+        .await;
     }
 }
 
@@ -611,8 +711,15 @@ async fn dropping_execution_stream_cancels_before_motion_and_consumes_review() {
         tokio::task::yield_now().await;
     }
     assert_eq!(app.device.state().position, before);
-    let (code, _) = request(&router, "POST", "/api/v1/routine/run", token).await;
-    assert_eq!(code, StatusCode::CONFLICT);
+    assert_api_error(
+        &router,
+        "POST",
+        "/api/v1/routine/run",
+        token,
+        StatusCode::CONFLICT,
+        "Review expired",
+    )
+    .await;
     let (_, body) = request(&router, "GET", "/api/v1/state", Value::Null).await;
     let state: Value = serde_json::from_str(&body).unwrap();
     assert_eq!(state["contactActive"], false);
@@ -628,10 +735,23 @@ async fn failed_late_zero_attempt_cannot_be_replayed() {
     let (_, body) = request(&router, "POST", "/api/v1/routine/run", token.clone()).await;
     assert!(body.lines().last().unwrap().contains("\"type\":\"result\""));
     app.device.select_wcs(55).await.unwrap();
-    let (code, _) = request(&router, "POST", "/api/v1/routine/zero", token.clone()).await;
-    assert_eq!(code, StatusCode::CONFLICT);
+    assert_api_error(
+        &router,
+        "POST",
+        "/api/v1/routine/zero",
+        token.clone(),
+        StatusCode::CONFLICT,
+        "machine state changed",
+    )
+    .await;
     app.device.select_wcs(54).await.unwrap();
-    let (code, body) = request(&router, "POST", "/api/v1/routine/zero", token).await;
-    assert_eq!(code, StatusCode::CONFLICT);
-    assert!(body.contains("No unzeroed result"));
+    assert_api_error(
+        &router,
+        "POST",
+        "/api/v1/routine/zero",
+        token,
+        StatusCode::CONFLICT,
+        "No unzeroed result",
+    )
+    .await;
 }

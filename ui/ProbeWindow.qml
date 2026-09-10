@@ -465,6 +465,12 @@ ApplicationWindow {
         codeFont: window.monoFontFamily
     }
 
+    UpdateFlow {
+        id: updateDialog
+        serviceUrl: window.serviceUrl
+        uiFont: window.uiFontFamily
+    }
+
     Dialog {
         id: exitDialog
         parent: Overlay.overlay
@@ -651,15 +657,29 @@ ApplicationWindow {
                     editor: numericEditor
                     parameters: Pages.setup
                     setup: true
-                    footer: Component {
+                    ColumnLayout {
+                        anchors.centerIn: parent
+                        width: parent.width - 28
+                        spacing: 14
                         LabButton {
                             text: "Probe repeatability"
-                            implicitHeight: 48
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 56
+                            font.pixelSize: 19
+                            onClicked: {
+                                numericEditor.cancel();
+                                repeatabilityDialog.showCheck();
+                            }
+                        }
+                        LabButton {
+                            text: "Check for updates"
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 56
                             font.pixelSize: 19
                             primary: true
                             onClicked: {
                                 numericEditor.cancel();
-                                repeatabilityDialog.showCheck();
+                                updateDialog.show();
                             }
                         }
                     }
@@ -671,7 +691,7 @@ ApplicationWindow {
                 anchors.bottom: parent.bottom
                 anchors.margins: 14
                 width: 340
-                visible: tabs.currentIndex === 3 || numericEditor.target !== null
+                visible: numericEditor.target !== null
                 onKeyPressed: function (key) {
                     numericEditor.typeKey(key);
                 }

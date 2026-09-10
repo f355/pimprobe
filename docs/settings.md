@@ -37,3 +37,9 @@ Speed of the second touch. This touch supplies the measurement. A slower feed re
 [Clearance and failed probing](safety.md)
 
 [Probe repeatability](repeatability.md)
+
+## Software update
+
+**Check for updates** opens the release page and shows the notes for the newest stable release. Turn on **Include development releases** to check the rolling development build instead.
+
+**Install update** downloads and verifies the release installer, then restarts the interface to install it. Leave the machine idle with the spindle stopped while updating.

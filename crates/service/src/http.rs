@@ -18,11 +18,12 @@ use crate::{
     device::Device,
     reviews::Reviews,
     settings::{Settings, SettingsError},
+    updates::{UpdateError, UpdateManager},
 };
 use axum::{
     Json, Router,
     body::{Body, Bytes},
-    extract::{DefaultBodyLimit, FromRequest, Request, State, rejection::JsonRejection},
+    extract::{DefaultBodyLimit, FromRequest, Query, Request, State, rejection::JsonRejection},
     http::{StatusCode, header},
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -55,6 +56,7 @@ pub struct App {
     recovery_failed: AtomicBool,
     shutdown: CancellationToken,
     ready_token: Option<String>,
+    updates: UpdateManager,
 }
 
 impl App {
@@ -68,6 +70,7 @@ impl App {
             recovery_failed: AtomicBool::new(false),
             shutdown: CancellationToken::new(),
             ready_token,
+            updates: UpdateManager::production(),
         })
     }
 
@@ -140,6 +143,9 @@ pub fn router(app: Arc<App>) -> Router {
         .route("/api/v1/routine/return", post(return_start))
         .route("/api/v1/routine/measured", post(go_to_measured))
         .route("/api/v1/repeatability/run", post(repeatability))
+        .route("/api/v1/updates/check", get(check_update))
+        .route("/api/v1/updates/install", post(install_update))
+        .route("/api/v1/updates/status", get(update_status))
         .route("/api/v1/mock/ready", get(ready))
         .layer(DefaultBodyLimit::max(8192))
         .with_state(app)
@@ -155,6 +161,15 @@ impl ApiError {
 impl From<Error> for ApiError {
     fn from(error: Error) -> Self {
         Self::conflict(error_code(&error), error.to_string())
+    }
+}
+impl From<UpdateError> for ApiError {
+    fn from(error: UpdateError) -> Self {
+        if matches!(error, UpdateError::MachineBusy) {
+            Self::conflict("machine_busy", error.to_string())
+        } else {
+            Self(StatusCode::BAD_GATEWAY, "update", error.to_string())
+        }
     }
 }
 impl IntoResponse for ApiError {
@@ -228,6 +243,59 @@ async fn ready(State(app): State<Arc<App>>) -> Response {
         Some(token) => token.clone().into_response(),
         None => StatusCode::NOT_FOUND.into_response(),
     }
+}
+
+#[derive(Deserialize)]
+struct UpdateQuery {
+    #[serde(default)]
+    development: bool,
+}
+
+async fn check_update(
+    State(app): State<Arc<App>>,
+    Query(query): Query<UpdateQuery>,
+) -> Result<Json<crate::updates::CheckResult>, ApiError> {
+    Ok(Json(app.updates.check(query.development).await?))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct InstallUpdateRequest {
+    token: String,
+}
+
+async fn install_update(
+    State(app): State<Arc<App>>,
+    ApiJson(body): ApiJson<InstallUpdateRequest>,
+) -> Result<Json<crate::updates::InstallStarted>, ApiError> {
+    let _guard = app.acquire()?;
+    let state = app.device.state();
+    if !state.connected || !state.ready || !state.spindle_stopped {
+        return Err(ApiError::conflict(
+            "machine_busy",
+            "The machine must be idle with the spindle stopped before updating",
+        ));
+    }
+    Ok(Json(
+        app.updates
+            .install(&body.token, || {
+                let state = app.device.state();
+                state.connected && state.ready && state.spindle_stopped
+            })
+            .await?,
+    ))
+}
+
+#[derive(Deserialize)]
+struct UpdateStatusQuery {
+    id: String,
+}
+
+async fn update_status(
+    State(app): State<Arc<App>>,
+    Query(query): Query<UpdateStatusQuery>,
+) -> Result<Json<crate::updates::InstallStatus>, ApiError> {
+    Ok(Json(app.updates.status(&query.id).await?))
 }
 
 #[derive(Deserialize)]

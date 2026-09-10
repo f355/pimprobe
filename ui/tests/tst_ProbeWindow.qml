@@ -32,6 +32,13 @@ TestCase {
         height: 480
         serviceUrl: "http://127.0.0.1:18137/api/v1"
     }
+    Component {
+        id: updateFlowFixture
+        UpdateFlow {
+            width: 800
+            height: 480
+        }
+    }
     function callApi(method, path, body) {
         var reply = null
         Api.request(method, probeWindow.serviceUrl + path, body, function(value) { reply = value })
@@ -354,6 +361,115 @@ TestCase {
                 return b.visible && b.text === "\u2190"
             })[0]
             mouseClick(back)
+        }
+    }
+
+    function test_update_page_checks_release_channel_and_installs_selected_build() {
+        var tabs = descendants(probeWindow.contentItem, TabBar)[0]
+        mouseClick(tabs.itemAt(3))
+        var keypad = descendants(probeWindow.contentItem, NumericKeypad)[0]
+        verify(!keypad.visible)
+        var original = Api.request
+        var checks = []
+        var installedToken = ""
+        Api.request = function(method, url, body, done) {
+            if (url.indexOf("/updates/check") !== -1) {
+                checks.push(url)
+                var development = url.indexOf("development=true") !== -1
+                done({ok: true, data: {
+                    currentVersion: "2026.09.0",
+                    available: {token: development ? "dev-token" : "stable-token",
+                        version: development ? "dev" : "2026.09.1",
+                        name: development ? "Development Build" : "2026.09.1",
+                        notes: development ? "[bugfix] Development fix" : "[feature] Stable feature"}
+                }})
+                return {abort: function() {}}
+            }
+            if (url.endsWith("/updates/install")) {
+                installedToken = body.token
+                done({ok: true, data: {operationId: "01234567-89ab-cdef-0123-456789abcdef"}})
+                return {abort: function() {}}
+            }
+            if (url.indexOf("/updates/status") !== -1) {
+                done({ok: true, data: {state: "failed", message: "Test installer stopped"}})
+                return {abort: function() {}}
+            }
+            return original(method, url, body, done)
+        }
+        try {
+            var checkButton = descendants(probeWindow.contentItem, Button).filter(function(button) {
+                return button.visible && button.text === "Check for updates"
+            })[0]
+            verify(checkButton !== undefined)
+            mouseClick(checkButton)
+            tryCompare(checks, "length", 1)
+            var overlay = probeWindow.Overlay.overlay
+            tryVerify(function() {
+                return descendants(overlay, TextArea).some(function(area) {
+                    return area.visible && area.text.indexOf("Stable feature") !== -1
+                })
+            })
+            var channel = descendants(overlay, Switch).filter(function(control) {
+                return control.visible && control.text === "Include development releases"
+            })[0]
+            verify(channel !== undefined)
+            mouseClick(channel)
+            tryCompare(checks, "length", 2)
+            verify(checks[1].indexOf("development=true") !== -1)
+            tryVerify(function() {
+                return descendants(overlay, TextArea).some(function(area) {
+                    return area.visible && area.text.indexOf("Development fix") !== -1
+                })
+            })
+            waitForRendering(probeWindow.contentItem)
+            grabImage(probeWindow.contentItem.parent).save("/tmp/pimprobe-update.png")
+            var install = descendants(overlay, Button).filter(function(button) {
+                return button.visible && button.text === "Install update"
+            })[0]
+            mouseClick(install)
+            compare(installedToken, "")
+            var confirm = descendants(overlay, Button).filter(function(button) {
+                return button.visible && button.text === "Install"
+            })[0]
+            verify(confirm !== undefined)
+            mouseClick(confirm)
+            compare(installedToken, "dev-token")
+            tryVerify(function() {
+                return descendants(overlay, Label).some(function(label) {
+                    return label.visible && label.text.indexOf("Test installer stopped") !== -1
+                })
+            }, 3000)
+        } finally {
+            Api.request = original
+            var back = descendants(probeWindow.Overlay.overlay, Button).filter(function(button) {
+                return button.visible && button.text === "\u2190"
+            })[0]
+            if (back && back.enabled) mouseClick(back)
+        }
+    }
+
+    function test_update_status_times_out_while_request_is_pending() {
+        var original = Api.request
+        var statusAborted = false
+        Api.request = function(method, url, body, done) {
+            if (url.indexOf("/updates/status") !== -1) {
+                return {abort: function() { statusAborted = true }}
+            }
+            return original(method, url, body, done)
+        }
+        var updateFlow = updateFlowFixture.createObject(probeWindow)
+        try {
+            updateFlow.operationId = "01234567-89ab-cdef-0123-456789abcdef"
+            updateFlow.phase = "installing"
+            updateFlow.pollStatus()
+            verify(updateFlow.statusTicks > 0)
+            updateFlow.statusTicks = 90
+            updateFlow.pollStatus()
+            compare(updateFlow.phase, "error")
+            verify(statusAborted)
+        } finally {
+            Api.request = original
+            updateFlow.destroy()
         }
     }
 

@@ -22,6 +22,7 @@ import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import test from "node:test";
 import { renderPage } from "./build-help.mjs";
+import { releaseNotes } from "./release-notes.mjs";
 
 const root = new URL("../", import.meta.url);
 
@@ -73,4 +74,10 @@ test("operator guide links and images resolve", () => {
         for (const [, target] of readFileSync(page, "utf8").matchAll(/!?\[[^\]]*\]\(([^)]+)\)/g))
             assert.ok(existsSync(new URL(target, page)), name + ": " + target);
     }
+});
+
+test("release notes select user-facing stable changes and retain development history", () => {
+    const subjects = ["[feature] Add updates", "Refactor transport", "[bugfix] Fix probing", "Merge branch x"];
+    assert.equal(releaseNotes(subjects, true), "- [feature] Add updates\n- [bugfix] Fix probing");
+    assert.equal(releaseNotes(subjects, false), subjects.map(subject => `- ${subject}`).join("\n"));
 });

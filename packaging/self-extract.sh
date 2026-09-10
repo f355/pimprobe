@@ -27,7 +27,7 @@ Run only with the machine idle and the spindle stopped.
   sh installer.run                     Interactive installation
   sh installer.run --yes --no-restart   Install; activate after a reboot
   sh installer.run --yes --restart      Install and restart CNC_Lab now
-  sh installer.run --uninstall          Remove PIMProbe, settings and backups
+  sh installer.run --uninstall          Remove PIMProbe and its settings
   sh installer.run --check              Verify the embedded archive only
   sh installer.run --check-target       Verify archive and machine compatibility
   sh installer.run --extract DIRECTORY  Extract into a new directory; do not install

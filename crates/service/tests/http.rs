@@ -114,6 +114,31 @@ async fn application_errors_use_qt_compatible_envelopes() {
 }
 
 #[tokio::test]
+async fn update_install_requires_an_idle_stopped_machine() {
+    for (ready, spindle_stopped) in [(false, true), (true, false)] {
+        let temp = tempfile::tempdir().unwrap();
+        let mut state = MockController::new().state();
+        state.ready = ready;
+        state.spindle_stopped = spindle_stopped;
+        let app = App::new(
+            Device::Mock(Box::new(MockController::with_state(state))),
+            Settings::open(temp.path().join("settings.json")).unwrap(),
+            Some("test-token".into()),
+        );
+        let router = router(app);
+        assert_api_error(
+            &router,
+            "POST",
+            "/api/v1/updates/install",
+            json!({"token":"unused"}),
+            StatusCode::CONFLICT,
+            "idle with the spindle stopped",
+        )
+        .await;
+    }
+}
+
+#[tokio::test]
 async fn repeatability_streams_each_reading_and_axis_statistics() {
     let (_temp, app, router) = repeatability_app();
     let before = app.device.state();

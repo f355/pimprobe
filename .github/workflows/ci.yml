@@ -4,6 +4,7 @@ on:
   pull_request:
   push:
     branches: [main]
+    tags: ['[0-9][0-9][0-9][0-9].[0-9][0-9].*']
   workflow_dispatch:
 
 permissions:
@@ -20,6 +21,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v5
         with:
           node-version: '22'
@@ -63,7 +66,10 @@ jobs:
       - name: Package and test installer
         run: |
           node --test dev/test-installer.mjs
-          node dev/package.mjs --output dist/pimprobe-linux-arm64.run
+          VERSION="${GITHUB_SHA::7}"
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then VERSION="$GITHUB_REF_NAME"; fi
+          node dev/package.mjs --output dist/pimprobe-linux-arm64.run \
+            --version "$VERSION" --commit "$GITHUB_SHA"
           sh dist/pimprobe-linux-arm64.run --check
           docker run --rm \
             -v "$PWD/dist/pimprobe-linux-arm64.run:/package.run:ro" \
@@ -92,6 +98,8 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@v5
         with:
           name: pimprobe-linux-arm64
@@ -104,21 +112,85 @@ jobs:
             exit 0
           fi
 
-          REMOTE_DEV="$(git ls-remote origin refs/tags/dev | cut -f1)"
-          git tag --force dev "$GITHUB_SHA"
-          git push --force-with-lease="refs/tags/dev:$REMOTE_DEV" origin refs/tags/dev
-
-          NOTES="Automatic development build from commit $GITHUB_SHA. This prerelease is replaced after every successful push to main."
+          BASE="$(git tag --merged HEAD --list '????.??.*' | awk '/^[0-9]{4}\.(0[1-9]|1[0-2])\.(0|[1-9][0-9]*)$/' | sort -V | tail -1)"
+          RANGE=HEAD
+          if [[ -n "$BASE" ]]; then RANGE="$BASE..HEAD"; fi
+          node dev/release-notes.mjs development "$RANGE" >release-notes.md
+          printf '\nBuild commit: `%s`\n' "$GITHUB_SHA" >>release-notes.md
+          ASSET="pimprobe-linux-arm64-${GITHUB_SHA::7}.run"
+          cp release-assets/pimprobe-linux-arm64.run "release-assets/$ASSET"
           if gh release view dev >/dev/null 2>&1; then
-            gh release edit dev --title "Development Build" --notes "$NOTES" \
-              --prerelease --target "$GITHUB_SHA"
+            gh release upload dev "release-assets/$ASSET" --clobber
+            gh release edit dev --title "Development Build" --notes-file release-notes.md \
+              --draft=false --prerelease
+            REMOTE_DEV="$(git ls-remote origin refs/tags/dev | cut -f1)"
+            git tag --force dev "$GITHUB_SHA"
+            git push --force-with-lease="refs/tags/dev:$REMOTE_DEV" origin refs/tags/dev
           else
-            gh release create dev --title "Development Build" --notes "$NOTES" \
-              --prerelease --latest=false --verify-tag
+            gh release create dev "release-assets/$ASSET" --title "Development Build" \
+              --notes-file release-notes.md --draft --target "$GITHUB_SHA"
+            gh release edit dev --draft=false --prerelease
           fi
-          gh release upload dev release-assets/pimprobe-linux-arm64.run --clobber
           while IFS= read -r asset; do
-            if [[ -n "$asset" && "$asset" != pimprobe-linux-arm64.run ]]; then
+            if [[ -n "$asset" && "$asset" != "$ASSET" ]]; then
               gh release delete-asset dev "$asset" --yes
             fi
           done < <(gh release view dev --json assets --jq '.assets[].name')
+
+  release-stable:
+    name: Publish stable release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs: linux-arm64
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v5
+        with:
+          name: pimprobe-linux-arm64
+          path: release-assets
+      - name: Validate tag and publish release
+        run: |
+          TAG="$GITHUB_REF_NAME"
+          if [[ ! "$TAG" =~ ^([0-9]{4})\.(0[1-9]|1[0-2])\.(0|[1-9][0-9]*)$ ]]; then
+            echo "Invalid stable release tag: $TAG" >&2
+            exit 1
+          fi
+          SEQUENCE="${BASH_REMATCH[3]}"
+          if (( SEQUENCE > 0 )); then
+            PREVIOUS_MONTHLY="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((SEQUENCE - 1))"
+            git rev-parse -q --verify "refs/tags/$PREVIOUS_MONTHLY" >/dev/null || {
+              echo "Missing preceding monthly release $PREVIOUS_MONTHLY" >&2
+              exit 1
+            }
+          fi
+          PREVIOUS="$(git tag --merged "$GITHUB_SHA^" --list '????.??.*' | awk '/^[0-9]{4}\.(0[1-9]|1[0-2])\.(0|[1-9][0-9]*)$/' | sort -V | tail -1)"
+          RANGE=HEAD
+          if [[ -n "$PREVIOUS" ]]; then RANGE="$PREVIOUS..HEAD"; fi
+          node dev/release-notes.mjs stable "$RANGE" >release-notes.md
+          ASSET="pimprobe-linux-arm64-$TAG.run"
+          cp release-assets/pimprobe-linux-arm64.run "release-assets/$ASSET"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "release-assets/$ASSET" --clobber
+            gh release edit "$TAG" --title "$TAG" --notes-file release-notes.md \
+              --draft=false
+          else
+            gh release create "$TAG" --title "$TAG" --notes-file release-notes.md \
+              --verify-tag --draft "release-assets/$ASSET"
+            gh release edit "$TAG" --draft=false
+          fi
+          while IFS= read -r asset; do
+            if [[ -n "$asset" && "$asset" != "$ASSET" ]]; then
+              gh release delete-asset "$TAG" "$asset" --yes
+            fi
+          done < <(gh release view "$TAG" --json assets --jq '.assets[].name')

@@ -7,8 +7,8 @@ result of using this software. Exercise caution, double-check your parameters an
 
 ## Quickstart
 
-Download [pimprobe-linux-arm64.run](https://github.com/f355/pimprobe/releases/download/dev/pimprobe-linux-arm64.run)
-from the rolling release and transfer it to the machine.
+Download the installer from the [rolling release](https://github.com/f355/pimprobe/releases/tag/dev)
+and transfer it to the machine.
 
 With the machine idle and spindle stopped, run these commands as root on the
 machine, in the directory containing the installer.
@@ -16,13 +16,13 @@ machine, in the directory containing the installer.
 To install:
 
 ```sh
-sh pimprobe-linux-arm64.run
+sh pimprobe-linux-arm64-???????.run
 ```
 
-To uninstall, including settings and backups:
+To uninstall, including settings:
 
 ```sh
-sh pimprobe-linux-arm64.run --uninstall
+sh pimprobe-linux-arm64-???????.run --uninstall
 ```
 
 Follow the prompts to restart the machine's UI, or reboot afterward.
@@ -107,11 +107,13 @@ Linux plugins resolve the NestPad ABI through CNC_Lab at load time. Set
 `PIMPROBE_ABSTRACT_PLUGIN` to a local copy of `libabstractplugin.so` when
 configuring CMake to also check their imports against that library's exports.
 
-## Development Releases
+## Releases
 
 CI runs the Rust, plugin, UI and installer tests and builds the ARM64 installer.
 Successful pushes to `main` update the rolling `dev` prerelease, available on the
-[releases page](https://github.com/f355/pimprobe/releases/tag/dev).
+[releases page](https://github.com/f355/pimprobe/releases/tag/dev). Stable tags use
+`YYYY.MM.N`, with `N` starting at zero each month. Their release notes include
+commit subjects beginning with `[bugfix]`, `[improvement]`, or `[feature]`.
 
 ## Installation
 
@@ -123,7 +125,8 @@ node dev/package.mjs
 
 Output: `dist/pimprobe-<git-version>.run`. Rebuild the artifacts before
 packaging a release. Override input/output paths with `--service PATH`,
-`--plugins BUILD_DIR` and `--output FILE`.
+`--plugins BUILD_DIR` and `--output FILE`. CI supplies `--version` and
+`--commit` so installed builds retain both their release name and source commit.
 
 Replace `<machine-host>` with the machine's IP address or hostname. Transfer the
 installer and run it as root with the machine idle and spindle stopped:
@@ -133,10 +136,8 @@ scp dist/pimprobe-<git-version>.run root@<machine-host>:/userdata/
 ssh -t root@<machine-host> 'sh /userdata/pimprobe-<git-version>.run'
 ```
 
-The installer checks the archive, machine layout and runtime dependencies.
-It preserves configuration and settings, and saves the previous installation
-under `/userdata/backups/pimprobe-install.*`. If installation fails, use the
-reported backup for manual recovery.
+The installer checks the archive, machine layout and runtime dependencies, and
+preserves configuration and settings during upgrades.
 
 Choose to restart CNC_Lab immediately or reboot later to activate the installation.
 
@@ -153,7 +154,7 @@ sh installer.run --uninstall --yes --restart
 `--yes` confirms that you have made the machine idle with its spindle stopped.
 Obtain installers from a trusted source; the checksum detects corruption.
 
-Uninstall removes PIMProbe's service, plugins, UI, settings and backups.
+Uninstall removes PIMProbe's service, plugins, UI and settings.
 The installer file remains available for reinstallation.
 
 ## Configuration

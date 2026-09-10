@@ -38,7 +38,7 @@ fail() { echo "$*" >&2; exit 1; }
 [ "$(uname -s)" = Linux ] && [ "$(uname -m)" = aarch64 ] || fail 'This installer requires Linux ARM64.'
 [ "$(id -u)" = 0 ] || fail 'Run this installer as root.'
 [ "$uninstall" = false ] || [ "$check" = false ] || fail '--uninstall cannot be combined with --check-target.'
-for command in systemctl flock pgrep readlink; do
+for command in systemctl flock readlink; do
     command -v "$command" >/dev/null 2>&1 || fail "Required command missing: $command"
 done
 [ -x "$vendor/CNC_Lab" ] || fail 'Supported NestPad application not found in /root/app.'
@@ -62,7 +62,7 @@ if [ "$check" = true ]; then
 fi
 echo 'The machine must be idle with the spindle stopped.'
 if [ "$uninstall" = true ]; then
-    echo 'Uninstall permanently deletes PIMProbe settings, configuration and backups.'
+    echo 'Uninstall permanently deletes PIMProbe settings and configuration.'
 fi
 if [ "$yes" = false ]; then
     if [ "$uninstall" = true ]; then
@@ -86,15 +86,84 @@ fi
 exec 8</userdata
 flock -n 8 || fail 'Another installation or uninstall is running.'
 stage=''
-backup=''
-changed=false
+rollback=''
+service_was_active=false
+service_stopped=false
+unit_was_enabled=false
+installation_started=false
+destination_installed=false
+plugins_changed=false
+unit_changed=false
+nestpad_was_active=false
+nestpad_restart_attempted=false
+
+stop_pimprobe_ui() {
+    [ -f /run/pimprobe-ui.pid ] || return 0
+    pid=$(cat /run/pimprobe-ui.pid)
+    if [ -r "/proc/$pid/cmdline" ]; then
+        case "$(tr '\0' ' ' <"/proc/$pid/cmdline")" in
+            *'/userdata/pimprobe/bin/pimprobe-ui'*)
+                kill "$pid"
+                for attempt in 1 2 3 4 5; do
+                    if ! kill -0 "$pid" 2>/dev/null; then break; fi
+                    sleep 1
+                done
+                if kill -0 "$pid" 2>/dev/null; then fail 'Probing UI did not exit.'; fi
+                ;;
+            *) fail 'Unexpected process in the probing UI PID file.' ;;
+        esac
+    fi
+}
+
+rollback_installation() {
+    systemctl stop pimprobe-service >/dev/null 2>&1 || true
+    if [ "$plugins_changed" = true ]; then
+        for name in libpimprobeproxyplugin.so libpimprobelauncherplugin.so; do
+            rm -f "$vendor/$name"
+            if [ -L "$rollback/$name" ]; then cp -a "$rollback/$name" "$vendor/$name"; fi
+        done
+    fi
+    if [ "$unit_changed" = true ]; then
+        rm -rf "$unit" "$unit.d" /etc/systemd/system/multi-user.target.wants/pimprobe-service.service
+        if [ -f "$rollback/$(basename "$unit")" ]; then
+            cp -a "$rollback/$(basename "$unit")" "$unit"
+        fi
+        if [ -d "$rollback/$(basename "$unit").d" ]; then
+            cp -a "$rollback/$(basename "$unit").d" "$unit.d"
+        fi
+    fi
+    if [ -d "$rollback/installation" ]; then
+        rm -rf "$destination"
+        mv "$rollback/installation" "$destination"
+    elif [ "$destination_installed" = true ]; then
+        rm -rf "$destination"
+    fi
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    if [ "$unit_was_enabled" = true ]; then
+        systemctl enable pimprobe-service >/dev/null 2>&1 || true
+    else
+        systemctl disable pimprobe-service >/dev/null 2>&1 || true
+    fi
+}
+
 cleanup() {
     status=$?
     trap - EXIT
-    if [ -n "$stage" ]; then rm -rf "$stage"; fi
-    if [ "$status" != 0 ] && [ "$changed" = true ]; then
-        echo "Operation stopped after changes. Backup (if installing): $backup. Do not use probing until repaired." >&2
+    if [ "$status" != 0 ] && [ "$uninstall" = false ] &&
+        { [ "$installation_started" = true ] || [ "$service_stopped" = true ]; }; then
+        if [ "$installation_started" = true ]; then rollback_installation; fi
+        if [ "$nestpad_restart_attempted" = true ] && [ "$nestpad_was_active" = true ]; then
+            systemctl restart nestpad.service >/dev/null 2>&1 || true
+        fi
+        if [ "$service_stopped" = true ] && [ "$service_was_active" = true ]; then
+            systemctl start pimprobe-service >/dev/null 2>&1 || true
+        fi
+        echo 'Installation failed; the previous PIMProbe installation was restored.' >&2
+    elif [ "$status" != 0 ] && [ "$uninstall" = true ]; then
+        echo 'Uninstall did not finish. Reboot before using PIMProbe.' >&2
     fi
+    if [ -n "$stage" ]; then rm -rf "$stage"; fi
+    if [ -n "$rollback" ]; then rm -rf "$rollback"; fi
     exit "$status"
 }
 trap cleanup EXIT
@@ -110,32 +179,24 @@ if [ "$uninstall" = false ]; then
             if [ -f "$destination/$file" ]; then cp -p "$destination/$file" "$stage/$file"; fi
         done
     fi
-    mkdir -p /userdata/backups
-    backup=$(mktemp -d /userdata/backups/pimprobe-install.XXXXXX)
-    if [ -e "$unit" ]; then cp -a "$unit" "$backup/"; fi
+    rollback=$(mktemp -d /userdata/pimprobe-rollback.XXXXXX)
+    if [ -e "$unit" ]; then cp -a "$unit" "$rollback/"; fi
+    if [ -d "$unit.d" ]; then cp -a "$unit.d" "$rollback/"; fi
     for name in libpimprobeproxyplugin.so libpimprobelauncherplugin.so; do
-        if [ -L "$vendor/$name" ]; then cp -a "$vendor/$name" "$backup/"; fi
+        if [ -L "$vendor/$name" ]; then cp -a "$vendor/$name" "$rollback/"; fi
     done
 fi
-# Stop only our UI. The vendor application remains running unless restart was requested.
-if [ -f /run/pimprobe-ui.pid ]; then
-    pid=$(cat /run/pimprobe-ui.pid)
-    if [ -r "/proc/$pid/cmdline" ]; then
-        case "$(tr '\0' ' ' <"/proc/$pid/cmdline")" in
-            *'/userdata/pimprobe/bin/pimprobe-ui'*)
-                kill "$pid"
-                for attempt in 1 2 3 4 5; do
-                    if ! kill -0 "$pid" 2>/dev/null; then break; fi
-                    sleep 1
-                done
-                if kill -0 "$pid" 2>/dev/null; then fail 'Probing UI did not exit.'; fi
-                ;;
-            *) fail 'Unexpected process in the probing UI PID file.' ;;
-        esac
-    fi
+if [ -L /etc/systemd/system/multi-user.target.wants/pimprobe-service.service ]; then unit_was_enabled=true; fi
+if [ "$restart" = yes ]; then
+    systemctl is-active --quiet nestpad.service || fail 'NestPad application service is not running.'
+    nestpad_was_active=true
 fi
-if systemctl is-active --quiet pimprobe-service; then systemctl stop pimprobe-service; fi
-changed=true
+if systemctl is-active --quiet pimprobe-service; then
+    service_was_active=true
+    systemctl stop pimprobe-service
+    service_stopped=true
+fi
+if [ "$restart" = no ] || [ "$uninstall" = true ]; then stop_pimprobe_ui; fi
 if [ "$uninstall" = true ]; then
     if [ -e "$unit" ] || [ -L /etc/systemd/system/multi-user.target.wants/pimprobe-service.service ]; then
         systemctl disable pimprobe-service
@@ -144,19 +205,26 @@ if [ "$uninstall" = true ]; then
     rm -rf "$unit" "$unit.d" /etc/systemd/system/multi-user.target.wants/pimprobe-service.service
     rm -rf "$destination" /root/.config/pimprobe /root/.local/share/pimprobe /root/.cache/pimprobe
     rm -rf /userdata/backups/pimprobe-* /userdata/pimprobe-stage.* /userdata/pimprobe-update.*
-    rm -f /run/pimprobe-controller.sock /run/pimprobe-ui.pid /run/pimprobe-ui.lock /run/pimprobe-install.lock
+    rm -f /run/pimprobe-controller.sock /run/pimprobe-ui.pid /run/pimprobe-ui.lock \
+        /run/pimprobe-update-*.status
     systemctl daemon-reload
     echo 'PIMProbe and its data removed. Installer files and shared system journals were left intact.'
 else
-    if [ -e "$destination" ]; then mv "$destination" "$backup/installation"; fi
+    installation_started=true
+    if [ -e "$destination" ]; then mv "$destination" "$rollback/installation"; fi
     mv "$stage" "$destination"
+    stage=''
+    destination_installed=true
+    plugins_changed=true
     for name in libpimprobeproxyplugin.so libpimprobelauncherplugin.so; do
         ln -sfn "$destination/lib/$name" "$vendor/$name"
     done
+    unit_changed=true
     cp "$payload/pimprobe-service.service" "$unit"
     systemctl daemon-reload
     systemctl enable pimprobe-service
-    echo "Installed $(cat "$destination/VERSION"). Backup: $backup"
+    rm -rf /userdata/backups/pimprobe-install.*
+    echo "Installed $(cat "$destination/VERSION")."
 fi
 if [ "$restart" = no ]; then
     if [ "$uninstall" = true ]; then
@@ -166,34 +234,14 @@ if [ "$restart" = no ]; then
     echo 'Probing service is stopped. Reboot the machine before using PIMProbe.'
     exit 0
 fi
-# Start CNC_Lab directly; S99nestworks also starts wpa_supplicant.
-for pid in $(pgrep -x CNC_Lab || true); do
-    [ "$(readlink "/proc/$pid/exe")" = "$vendor/CNC_Lab" ] || fail 'Unexpected CNC_Lab executable.'
-    kill "$pid"
-done
-for attempt in 1 2 3 4 5 6 7 8 9 10; do
-    if ! pgrep -x CNC_Lab >/dev/null; then break; fi
-    sleep 1
-done
-if pgrep -x CNC_Lab >/dev/null; then fail 'CNC_Lab did not exit; reboot before using probing.'; fi
-log=/tmp/cnc-lab.log
-if [ "$uninstall" = false ]; then log=$destination/cnc-lab.log; fi
-(
-    # Vendor login profiles reference optional, unset environment variables.
-    set +u
-    . /etc/profile
-    set -u
-    export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/var/run}
-    export QT_QPA_PLATFORM=${QT_QPA_PLATFORM:-wayland}
-    cd "$vendor"
-    nohup ./CNC_Lab >"$log" 2>&1 </dev/null 8>&- &
-)
-if [ "$uninstall" = false ]; then systemctl start pimprobe-service; fi
-sleep 1
-pgrep -x CNC_Lab >/dev/null || fail "CNC_Lab did not start. Check $log."
+stop_pimprobe_ui
+nestpad_restart_attempted=true
+systemctl restart nestpad.service
+systemctl is-active --quiet nestpad.service || fail 'NestPad application service did not restart.'
 if [ "$uninstall" = true ]; then
     echo 'CNC_Lab restarted without PIMProbe.'
     exit 0
 fi
+systemctl start pimprobe-service
 systemctl is-active --quiet pimprobe-service || fail 'Probing service did not start. Check journalctl -u pimprobe-service.'
-echo 'CNC_Lab restarted. Use its probe button to open the UI.'
+echo 'CNC_Lab and the probing service restarted.'

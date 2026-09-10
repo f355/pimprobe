@@ -19,3 +19,4 @@ pub mod device;
 pub mod http;
 pub mod reviews;
 pub mod settings;
+pub mod updates;

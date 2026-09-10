@@ -25,19 +25,30 @@ import { buildHelp } from './build-help.mjs';
 import { fetchFonts } from './fetch-fonts.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const options = { service: join(root, 'target/linux/release/pimprobe-service'), plugins: join(root, 'plugins/build-arm64') };
+const options = { service: join(root, 'target/linux/release/pimprobe-service'), plugins: join(root, 'plugins/build-arm64'), version: null, commit: null };
 for (let i = 2; i < process.argv.length; ++i) {
     const arg = process.argv[i];
     if (arg === '--help') {
-        console.log('Usage: node dev/package.mjs [--output FILE] [--service ARM64_BINARY] [--plugins BUILD_DIR]');
+        console.log('Usage: node dev/package.mjs [--output FILE] [--service ARM64_BINARY] [--plugins BUILD_DIR] [--version VERSION] [--commit SHA]');
         process.exit(0);
     }
-    if (!['--output', '--service', '--plugins'].includes(arg) || !process.argv[i + 1])
+    if (!['--output', '--service', '--plugins', '--version', '--commit'].includes(arg) || !process.argv[i + 1])
         throw new Error('Unknown or incomplete argument: ' + arg);
-    options[arg.slice(2)] = resolve(process.argv[++i]);
+    const value = process.argv[++i];
+    options[arg.slice(2)] = ['--output', '--service', '--plugins'].includes(arg) ? resolve(value) : value;
 }
 
-const version = execFileSync('git', ['describe', '--always', '--dirty'], { cwd: root, encoding: 'utf8' }).trim();
+const commit = options.commit || execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+if (!/^[0-9a-f]{40}$/i.test(commit)) throw new Error('Commit identity must be a full Git SHA');
+let version = options.version;
+if (!version) {
+    version = commit.slice(0, 7);
+    const dirty = execFileSync('git', ['status', '--porcelain', '--untracked-files=no'], { cwd: root, encoding: 'utf8' }).trim();
+    if (dirty) version += '-dirty';
+}
+if (!version || /[\r\n]/.test(version)) throw new Error('Version must be a non-empty single line');
+if (/^[0-9]{4}\./.test(version) && !/^[0-9]{4}\.(0[1-9]|1[0-2])\.(0|[1-9][0-9]*)$/.test(version))
+    throw new Error('Stable version must use YYYY.MM.N without a leading zero in N');
 const output = options.output || join(root, 'dist', `pimprobe-${version}.run`);
 const scratch = mkdtempSync(join(tmpdir(), 'pimprobe-package-'));
 const payload = join(scratch, 'payload');
@@ -78,6 +89,7 @@ try {
     for (const destination of ['docs', 'app/docs'])
         cpSync(join(root, 'docs'), join(payload, destination), { recursive: true });
     writeFileSync(join(payload, 'app/VERSION'), version + '\n');
+    writeFileSync(join(payload, 'app/COMMIT'), commit + '\n');
     const archive = join(scratch, 'payload.tar.gz');
     execFileSync('tar', ['--no-xattrs', '--no-acls', '-czf', archive, '-C', payload, '.'], { env: { ...process.env, COPYFILE_DISABLE: '1' } });
     const data = readFileSync(archive);

@@ -31,6 +31,8 @@ axum = "0.8"
 tokio-stream = "0.1"
 tokio-util = "0.7"
 uuid = { version = "1", features = ["v4"] }
+reqwest = { version = "0.12.23", default-features = false, features = ["json", "rustls-tls-webpki-roots", "stream"] }
+sha2 = "0.10"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

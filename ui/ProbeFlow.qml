@@ -322,7 +322,7 @@ Popup {
                     visible: flow.phase === "result"
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    spacing: flow.dimensions.length ? 8 : 14
+                    spacing: flow.dimensions.length ? 8 : 5
                     ColumnLayout {
                         visible: flow.dimensions.length > 0
                         Layout.fillWidth: true
@@ -364,12 +364,13 @@ Popup {
                     }
                     Repeater {
                         model: flow.measuredAxes
-                        ColumnLayout {
+                        RowLayout {
                             required property int modelData
                             Layout.fillWidth: true
-                            spacing: 6
-                            RowLayout {
+                            spacing: 8
+                            ColumnLayout {
                                 Layout.fillWidth: true
+                                spacing: 0
                                 Label {
                                     Layout.fillWidth: true
                                     text: ["X", "Y", "Z"][modelData] + "  " + flow.measuredPosition(modelData).toFixed(3)
@@ -377,23 +378,23 @@ Popup {
                                     font.pixelSize: 26
                                     color: Theme.text
                                 }
-                                NumberField {
-                                    enabled: !flow.zeroing && !flow.zeroed && flow.completedID.length > 0
-                                    editor: resultEditor
-                                    minimum: -1000
-                                    maximum: 1000
-                                    value: flow.offsets[modelData]
-                                    onCommitted: function(value) { flow.setOffset(modelData, value); }
-                                    Layout.preferredWidth: 132
-                                    Layout.preferredHeight: flow.dimensions.length ? 54 : 62
-                                    font.pixelSize: 26
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: "G" + flow.routine.wcs + " zero at G53 " + (flow.measuredPosition(modelData) + flow.offsets[modelData]).toFixed(3)
+                                    font.pixelSize: 17
+                                    color: Theme.textMuted
                                 }
                             }
-                            Label {
-                                Layout.fillWidth: true
-                                text: "G" + flow.routine.wcs + " zero at G53 " + (flow.measuredPosition(modelData) + flow.offsets[modelData]).toFixed(3)
-                                font.pixelSize: 17
-                                color: Theme.textMuted
+                            NumberField {
+                                enabled: !flow.zeroing && !flow.zeroed && flow.completedID.length > 0
+                                editor: resultEditor
+                                minimum: -1000
+                                maximum: 1000
+                                value: flow.offsets[modelData]
+                                onCommitted: function(value) { flow.setOffset(modelData, value); }
+                                Layout.preferredWidth: 132
+                                Layout.preferredHeight: flow.dimensions.length ? 54 : 58
+                                font.pixelSize: 26
                             }
                         }
                     }

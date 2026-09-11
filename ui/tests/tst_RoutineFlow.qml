@@ -90,6 +90,22 @@ TestCase {
                "Expected Y " + expectedY + ", got " + flow.result[1])
         compare(flow.result[2],null)
         verify(!flow.zeroed)
+
+		var resultLabels = descendants(flow.contentItem, Label).filter(function(label) {
+			return label.visible
+		})
+		var xCoordinate = resultLabels.filter(function(label) { return label.text.indexOf("X  ") === 0 })[0]
+		var xZero = resultLabels.filter(function(label) { return label.text.indexOf("G54 zero at G53") === 0 })[0]
+		var yCoordinate = resultLabels.filter(function(label) { return label.text.indexOf("Y  ") === 0 })[0]
+		verify(xCoordinate && xZero && yCoordinate)
+		var xCoordinateBottom = xCoordinate.mapToItem(flow.contentItem, 0, xCoordinate.height).y
+		var xZeroTop = xZero.mapToItem(flow.contentItem, 0, 0).y
+		var xZeroBottom = xZero.mapToItem(flow.contentItem, 0, xZero.height).y
+		var yCoordinateTop = yCoordinate.mapToItem(flow.contentItem, 0, 0).y
+		verify(xZeroTop - xCoordinateBottom <= 2,
+		       "Zero line is too far below X coordinate: " + (xZeroTop - xCoordinateBottom))
+		verify(yCoordinateTop - xZeroBottom <= 12,
+		       "Y coordinate is too far below X zero line: " + (yCoordinateTop - xZeroBottom))
 		verify(flow.completedID.length > 0)
 		var measuredX = flow.measuredPosition(0)
 		var measuredY = flow.measuredPosition(1)

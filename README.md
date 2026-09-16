@@ -7,8 +7,9 @@ result of using this software. Exercise caution, double-check your parameters an
 
 ## Quickstart
 
-Download the installer from the [rolling release](https://github.com/f355/pimprobe/releases/tag/dev)
-and transfer it to the machine.
+Download the installer from the [latest stable release](https://github.com/f355/pimprobe/releases/latest)
+or the [rolling development release](https://github.com/f355/pimprobe/releases/tag/dev),
+then transfer it to the machine.
 
 With the machine idle and spindle stopped, run these commands as root on the
 machine, in the directory containing the installer.

@@ -67,9 +67,12 @@ void LauncherButtonTest::installsOnceInVendorTopBar() {
     QVERIFY(first->text().isEmpty());
     QVERIFY(!first->icon().isNull());
     const auto image = first->icon().pixmap(QSize(40, 50)).toImage();
-    QCOMPARE(image.pixelColor(image.width() / 2, 2), QColor(Qt::white));
-    QCOMPARE(image.pixelColor(image.width() / 2, image.height() * 37 / 50),
-             QColor("#793438"));
+    QCOMPARE(image.pixelColor(image.width() / 2, 5), QColor(Qt::white));
+    QCOMPARE(image.pixelColor(image.width() / 2, 24), QColor(Qt::white));
+    QCOMPARE(image.pixelColor(image.width() / 2, 34), QColor("#A8444C"));
+    QCOMPARE(image.pixelColor(image.width() / 2, 39).alpha(), 0);
+    QCOMPARE(image.pixelColor(image.width() / 2, 40), QColor(Qt::white));
+    QCOMPARE(image.pixelColor(image.width() / 2, 44), QColor("#8D8D8D"));
     QVERIFY(first->grab().save("launcher-button.png"));
     QCOMPARE(window.findChildren<QPushButton *>("pimprobe_launcher_pb").size(), 1);
 }

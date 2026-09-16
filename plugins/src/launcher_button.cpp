@@ -33,6 +33,7 @@
 #include <QMainWindow>
 #include <QPainter>
 #include <QPointer>
+#include <QPolygonF>
 #include <QPushButton>
 #include <QWidget>
 
@@ -94,9 +95,21 @@ QPushButton *installLauncherButton(QMainWindow *window,
         painter.setRenderHint(QPainter::Antialiasing);
         painter.setPen(Qt::NoPen);
         painter.setBrush(Qt::white);
-        painter.drawRect(QRectF(17, 0, 6, 34));
-        painter.setBrush(QColor("#793438"));
-        painter.drawEllipse(QPointF(20, 37), 10, 10);
+        painter.drawPolygon(QPolygonF{
+            QPointF(10, 3), QPointF(30, 3), QPointF(30, 13),
+            QPointF(27, 16), QPointF(13, 16), QPointF(10, 13)});
+        painter.setBrush(QColor("#B8B8B8"));
+        painter.drawRoundedRect(QRectF(16, 16, 8, 3), 1, 1);
+        painter.setBrush(Qt::white);
+        painter.drawPolygon(QPolygonF{
+            QPointF(18, 19), QPointF(22, 19), QPointF(21, 31),
+            QPointF(19, 31)});
+        painter.setBrush(QColor("#A8444C"));
+        painter.drawEllipse(QPointF(20, 34.5), 3.5, 3.5);
+        painter.setBrush(QColor("#8D8D8D"));
+        painter.drawRect(QRectF(7, 41, 26, 6));
+        painter.setBrush(Qt::white);
+        painter.drawRect(QRectF(7, 40, 26, 1.5));
     }
     button->setIcon(QIcon(icon));
     button->setIconSize(QSize(40, 50));

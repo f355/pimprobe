@@ -123,7 +123,12 @@ TestCase {
         verify(reply.ok)
         var tabs = descendants(window.contentItem, TabBar)[0]
         mouseClick(tabs.itemAt(3))
-        var button = descendants(window.contentItem, Button).filter(function(b) {
+        var utilities = descendants(window.contentItem, Button).filter(function(b) {
+            return b.visible && b.text === "Utilities"
+        })[0]
+        verify(utilities !== undefined)
+        mouseClick(utilities)
+        var button = descendants(window.Overlay.overlay, Button).filter(function(b) {
             return b.visible && b.text === "Probe repeatability"
         })[0]
         verify(button !== undefined)

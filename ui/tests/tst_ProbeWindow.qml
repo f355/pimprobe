@@ -364,6 +364,54 @@ TestCase {
         }
     }
 
+    function test_utilities_pane_contains_repeatability() {
+        var tabs = descendants(probeWindow.contentItem, TabBar)[0]
+        mouseClick(tabs.itemAt(3))
+
+        function visibleContentButton(text) {
+            return descendants(probeWindow.contentItem, Button).filter(function(button) {
+                return button.visible && button.text === text
+            })[0]
+        }
+
+        var utilities = visibleContentButton("Utilities")
+        verify(utilities !== undefined)
+        verify(visibleContentButton("Probe repeatability") === undefined)
+        mouseClick(utilities)
+
+        var utilitiesPanel = descendants(probeWindow.Overlay.overlay, UtilitiesPanel).filter(function(panel) {
+            return panel.visible
+        })[0]
+        verify(utilitiesPanel !== undefined)
+        var overlay = probeWindow.Overlay.overlay
+        var panelPosition = utilitiesPanel.mapToItem(overlay, 0, 0)
+        compare(panelPosition.x, 0)
+        compare(panelPosition.y, 0)
+        compare(utilitiesPanel.width, overlay.width)
+        compare(utilitiesPanel.height, overlay.height)
+        var repeatability = descendants(utilitiesPanel, Button).filter(function(button) {
+            return button.visible && button.text === "Probe repeatability"
+        })[0]
+        verify(repeatability !== undefined)
+        var toolPosition = repeatability.mapToItem(utilitiesPanel, 0, 0)
+        verify(toolPosition.y < 150, "Utility buttons start below the top toolbar")
+        mouseClick(repeatability)
+        var flow = probeWindow.contentData.filter(function(item) {
+            return item instanceof RepeatabilityFlow
+        })[0]
+        tryCompare(flow, "opened", true)
+        flow.close()
+
+        var back = descendants(utilitiesPanel, BackButton).filter(function(button) {
+            return button.visible
+        })[0]
+        verify(back !== undefined)
+        mouseClick(back)
+        tryVerify(function() { return !utilitiesPanel.visible })
+        verify(visibleContentButton("Utilities") !== undefined)
+        verify(visibleContentButton("Probe repeatability") === undefined)
+    }
+
     function test_update_page_checks_release_channel_and_installs_selected_build() {
         var tabs = descendants(probeWindow.contentItem, TabBar)[0]
         mouseClick(tabs.itemAt(3))

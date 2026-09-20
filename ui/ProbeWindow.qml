@@ -471,6 +471,29 @@ ApplicationWindow {
         uiFont: window.uiFontFamily
     }
 
+    Popup {
+        id: utilitiesPage
+        parent: Overlay.overlay
+        x: 0
+        y: 0
+        width: parent.width
+        height: parent.height
+        padding: 0
+        modal: true
+        closePolicy: Popup.NoAutoClose
+
+        background: Rectangle {
+            color: Theme.page
+        }
+
+        UtilitiesPanel {
+            anchors.fill: parent
+            uiFont: window.uiFontFamily
+            onClosed: utilitiesPage.close()
+            onRepeatabilityRequested: repeatabilityDialog.showCheck()
+        }
+    }
+
     Dialog {
         id: exitDialog
         parent: Overlay.overlay
@@ -662,13 +685,13 @@ ApplicationWindow {
                         width: parent.width - 28
                         spacing: 14
                         LabButton {
-                            text: "Probe repeatability"
+                            text: "Utilities"
                             Layout.fillWidth: true
                             Layout.preferredHeight: 56
                             font.pixelSize: 19
                             onClicked: {
                                 numericEditor.cancel();
-                                repeatabilityDialog.showCheck();
+                                utilitiesPage.open();
                             }
                         }
                         LabButton {

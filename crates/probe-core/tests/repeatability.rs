@@ -29,6 +29,17 @@ fn settings() -> RepeatabilitySettings {
         fine_feed: 50.0,
     }
 }
+
+#[test]
+fn probe_z_surface_uses_fixed_probe_offset() {
+    let contact = Contact {
+        position: [0.0, 0.0, -112.9, 0.0],
+        success: true,
+    };
+    let surface =
+        surface_machine_coordinate(&contact, Axis::Z, -1, 2.0, [0.0, 0.0, -50.0, 0.0]).unwrap();
+    assert!((surface - -62.9).abs() < 0.001);
+}
 fn machine() -> MockController {
     machine_with_surface_offset(0.0)
 }
@@ -45,7 +56,7 @@ fn corner_geometry(state: &State, offset: f64) -> MockGeometry {
     for (i, coordinate) in corner.iter_mut().enumerate().take(2) {
         *coordinate = REPEATABILITY_REFERENCE_G53[i] - state.probe_offset[i] + 1.0 + offset;
     }
-    let floor = REPEATABILITY_REFERENCE_G53[2] + 57.75 + state.probe_offset[2] + offset;
+    let floor = REPEATABILITY_REFERENCE_G53[2] + state.probe_offset[2] + offset;
     MockGeometry::Corner {
         origin: corner,
         directions: [-1, -1],
@@ -66,7 +77,7 @@ async fn fixed_fixture_can_be_measured_without_setting_work_zero() {
     let mut corner = state.position;
     corner[0] = -232.5 - state.probe_offset[0] + 1.0;
     corner[1] = -204.3 - state.probe_offset[1] + 1.0;
-    let floor = -62.9 + 57.75 + state.probe_offset[2];
+    let floor = -62.9 + state.probe_offset[2];
     machine.set_geometry(MockGeometry::Corner {
         origin: corner,
         directions: [-1, -1],
@@ -96,7 +107,7 @@ async fn fixed_fixture_can_be_measured_without_setting_work_zero() {
     let target = machine.state().position;
     assert!((target[0] - (-232.5 + 15.0 - state.probe_offset[0])).abs() < 0.002);
     assert!((target[1] - (-204.3 + 15.0 - state.probe_offset[1])).abs() < 0.002);
-    assert!((target[2] - (-62.9 + 5.0 + 57.75 + state.probe_offset[2])).abs() < 0.002);
+    assert!((target[2] - (-62.9 + 5.0 + state.probe_offset[2])).abs() < 0.002);
     for (actual, expected) in report.measurements[0].iter().zip([-232.5, -204.3, -62.9]) {
         assert!((actual.unwrap() - expected).abs() < 0.002);
     }
@@ -272,11 +283,7 @@ async fn unselected_axes_stay_unmeasured_and_tip_returns_to_fifteen_fifteen_five
             assert!((state.position[i] + state.probe_offset[i] - reference - 15.0).abs() < 0.001);
         }
         assert!(
-            (state.position[2]
-                - 57.75
-                - state.probe_offset[2]
-                - REPEATABILITY_REFERENCE_G53[2]
-                - 5.0)
+            (state.position[2] - state.probe_offset[2] - REPEATABILITY_REFERENCE_G53[2] - 5.0)
                 .abs()
                 < 0.001
         );
@@ -352,7 +359,6 @@ impl RepeatabilityController for ControllerFixture {
             if extended {
                 assert!(
                     (state.position[2]
-                        - 57.75
                         - state.probe_offset[2]
                         - REPEATABILITY_REFERENCE_G53[2]
                         - 5.0)
@@ -365,9 +371,6 @@ impl RepeatabilityController for ControllerFixture {
             tokio::time::sleep(std::time::Duration::from_secs(45)).await;
         }
         self.inner.set_probe(extended).await
-    }
-    fn probe_reference_z(&self) -> Result<f64, Error> {
-        RepeatabilityController::probe_reference_z(&self.inner)
     }
 }
 

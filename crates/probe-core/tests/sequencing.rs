@@ -109,7 +109,6 @@ fn contact(x: f64, success: bool) -> Event {
         probe: Some(Contact {
             position: pos(x),
             success,
-            tool_length: Some(-57.75),
         }),
         ..Event::default()
     }
@@ -212,7 +211,6 @@ async fn bad_fine_coordinates_and_stop_are_rejected() {
             probe: Some(Contact {
                 position: [-118.0, -109.0, -40.0, 0.0],
                 success: true,
-                tool_length: None,
             }),
             ..Event::default()
         },

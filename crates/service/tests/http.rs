@@ -291,53 +291,6 @@ fn repeatability_app() -> (tempfile::TempDir, std::sync::Arc<App>, Router) {
     (temp, app.clone(), router(app))
 }
 
-#[tokio::test]
-async fn repeatability_refreshes_the_firmware_z_reference() {
-    use pimprobe_controller::{SocketController, frame};
-    use pimprobe_core::RepeatabilityController;
-    let temp = tempfile::tempdir().unwrap();
-    let path = temp.path().join("probe.sock");
-    let listener = tokio::net::UnixListener::bind(&path).unwrap();
-    let controller = SocketController::connect(&path, [240.0, 235.0, 125.0, 0.0])
-        .await
-        .unwrap();
-    let (mut socket, _) = listener.accept().await.unwrap();
-    assert_eq!(
-        frame::read_frame(&mut socket).await.unwrap(),
-        (b'Q', b"$P\n".to_vec())
-    );
-    frame::write_frame(&mut socket, b'D', b"$202=-12\n")
-        .await
-        .unwrap();
-    tokio::time::timeout(std::time::Duration::from_secs(2), async {
-        while controller.snapshot().settings.get(&202) != Some(&-12.0) {
-            tokio::task::yield_now().await;
-        }
-    })
-    .await
-    .unwrap();
-    let device = std::sync::Arc::new(Device::Machine(controller.clone()));
-    let task = tokio::spawn({
-        let device = device.clone();
-        async move { device.refresh_probe_reference().await }
-    });
-    assert_eq!(
-        frame::read_frame(&mut socket).await.unwrap(),
-        (b'Q', b"$$\n".to_vec())
-    );
-    frame::write_frame(&mut socket, b'D', b"ok\n$201=-40\n")
-        .await
-        .unwrap();
-    tokio::task::yield_now().await;
-    assert!(!task.is_finished());
-    frame::write_frame(&mut socket, b'D', b"$202=-42.5\n")
-        .await
-        .unwrap();
-    task.await.unwrap().unwrap();
-    assert_eq!(device.probe_reference_z().unwrap(), -42.5);
-    controller.shutdown().await;
-}
-
 async fn request(router: &Router, method: &str, path: &str, body: Value) -> (StatusCode, String) {
     let response = router
         .clone()

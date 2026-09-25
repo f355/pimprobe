@@ -526,7 +526,6 @@ async fn repeatability(
     };
     options.validate()?;
     settings.validate()?;
-    app.device.refresh_probe_reference().await?;
     pimprobe_core::check_repeatability(&app.device, &options, settings)?;
     app.device.configure_repeatability(settings.diameter)?;
     let run_id = uuid::Uuid::new_v4().to_string();

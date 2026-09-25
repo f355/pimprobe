@@ -121,7 +121,6 @@ pub type ControllerState = State;
 pub struct Contact {
     pub position: Position,
     pub success: bool,
-    pub tool_length: Option<f64>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

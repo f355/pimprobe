@@ -28,27 +28,6 @@ pub enum Device {
 }
 
 impl Device {
-    pub async fn refresh_probe_reference(&self) -> Result<(), Error> {
-        if let Self::Machine(controller) = self {
-            let mut events = controller.subscribe();
-            tokio::time::timeout(std::time::Duration::from_secs(5), async {
-                controller.send("$$").await?;
-                loop {
-                    let event = events.recv().await.map_err(|_| Error::Disconnected)?;
-                    if let Some(code) = event.controller_error {
-                        return Err(Error::Controller(format!("error:{code}")));
-                    }
-                    if event.setting.is_some_and(|(key, _)| key == 202) {
-                        return Ok(());
-                    }
-                }
-            })
-            .await
-            .map_err(|_| Error::Timeout)?
-        } else {
-            Ok(())
-        }
-    }
     pub fn session_id(&self) -> u64 {
         match self {
             Self::Machine(c) => c.snapshot().session_id,
@@ -74,8 +53,7 @@ impl Device {
                 *coordinate = pimprobe_core::REPEATABILITY_REFERENCE_G53[i] - state.probe_offset[i]
                     + diameter / 2.0;
             }
-            let floor = pimprobe_core::REPEATABILITY_REFERENCE_G53[2] - self.probe_reference_z()?
-                + state.probe_offset[2];
+            let floor = pimprobe_core::REPEATABILITY_REFERENCE_G53[2] + state.probe_offset[2];
             mock.set_geometry(MockGeometry::Corner {
                 origin: corner,
                 directions: [-1, -1],
@@ -156,15 +134,6 @@ impl RepeatabilityController for Device {
             Self::Machine(c) => c.set_probe_extended(extended).await,
             Self::Mock(c) => c.set_probe(extended).await,
         }
-    }
-    fn probe_reference_z(&self) -> Result<f64, Error> {
-        let reference = match self {
-            Self::Machine(c) => c.snapshot().settings.get(&202).copied(),
-            Self::Mock(c) => c.probe_reference_z(),
-        };
-        reference
-            .filter(|v| v.is_finite())
-            .ok_or_else(|| Error::Preflight("firmware probe Z reference ($202) unavailable".into()))
     }
 }
 

@@ -271,16 +271,6 @@ impl RoutinePlan {
                                     ),
                                 },
                             });
-                            if *axis == Axis::Z {
-                                lines.push(Line {
-                                    step: idx,
-                                    text: LineText::Declaration {
-                                        name: "probe_report_tool_value".into(),
-                                        description: "trailing tool value from fine-probe report"
-                                            .into(),
-                                    },
-                                });
-                            }
                         }
                     }
                     let name = format!("{}_after_backoff", axis.name());
@@ -294,7 +284,6 @@ impl RoutinePlan {
                     });
                     let mut surface = Expr::variable(format!("contact_{measurement}"));
                     if *axis == Axis::Z {
-                        surface.terms.insert("probe_report_tool_value".into(), 1.0);
                         surface = surface.add(-self.start.probe_offset[2]);
                     } else {
                         surface = surface.add(

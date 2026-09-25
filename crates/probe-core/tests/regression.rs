@@ -874,30 +874,6 @@ async fn modes_changed_after_review_are_intentionally_overridden() {
 }
 
 #[tokio::test]
-async fn missing_z_compensation_returns_to_safe_height_without_zero() {
-    let controller = mock();
-    controller.set_tool_value(None);
-    let cfg = RoutineConfig {
-        zero: true,
-        ..RoutineConfig::default()
-    };
-    controller.configure(&cfg).unwrap();
-    let plan = review(controller.state(), cfg).unwrap();
-    let err = run(
-        &controller,
-        &plan,
-        TimingPolicy::default(),
-        CancellationToken::new(),
-        |_| {},
-    )
-    .await
-    .unwrap_err();
-    assert!(matches!(err, Error::Compensation(_)));
-    assert_eq!(controller.state().position, plan.start.position);
-    assert!(!controller.commands().iter().any(|s| s.starts_with("G10")));
-}
-
-#[tokio::test]
 async fn coarse_miss_returns_z_and_restores_modes_without_zero() {
     let controller = mock();
     let cfg = RoutineConfig {

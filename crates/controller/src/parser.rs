@@ -119,14 +119,13 @@ pub fn parse_line(line: &str) -> Result<Option<Record>, String> {
         let (pos, result) = s.split_once(':').ok_or("missing probe result")?;
         let mut parts = result.split(',');
         let success = number::<i32>(parts.next().unwrap_or(""))? != 0;
-        let tool_length = parts.next().map(finite).transpose()?;
+        parts.next().map(finite).transpose()?;
         if parts.next().is_some() {
             return Err("too many probe result values".into());
         }
         return Ok(Some(Record::Probe(Contact {
             position: position(pos)?,
             success,
-            tool_length,
         })));
     }
     if let Some(s) = line.strip_prefix('<') {
@@ -297,19 +296,15 @@ mod tests {
             panic!()
         };
         assert!(s.motion_blocked && s.door_open && !s.complete);
-        for (line, tool) in [
-            ("[PRB:-104.686,-23.692,-102.073,0.000:1]", None),
-            (
-                "[PROBE:-104.686,-23.692,-102.073,0.000:1,-38.500]",
-                Some(-38.5),
-            ),
+        for line in [
+            "[PRB:-104.686,-23.692,-102.073,0.000:1]",
+            "[PROBE:-104.686,-23.692,-102.073,0.000:1,-38.500]",
         ] {
             let Some(Record::Probe(p)) = parse_line(line).unwrap() else {
                 panic!()
             };
             assert_eq!(p.position, [-104.686, -23.692, -102.073, 0.0]);
             assert!(p.success);
-            assert_eq!(p.tool_length, tool);
         }
         for (line, expected) in [
             ("[GC:G0 G54 G17 G21 G90 G94 M5 M9 T0 F0 S0]", (21, 90, 94)),

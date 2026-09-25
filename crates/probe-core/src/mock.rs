@@ -130,7 +130,6 @@ struct Inner {
     geometry: MockGeometry,
     offsets: BTreeMap<i32, Position>,
     commands: Vec<String>,
-    tool_value: Option<f64>,
 }
 pub struct MockController {
     inner: Mutex<Inner>,
@@ -164,7 +163,7 @@ impl MockController {
             position: [-120.0, -110.0, -60.0, 0.0],
             wcs: 54,
             work_position: [35.0, 20.0, -8.0, 0.0],
-            probe_offset: [-55.872, -5.362, -64.724, 0.0],
+            probe_offset: [-55.872, -5.362, -49.98, 0.0],
             tool: 3,
         })
     }
@@ -176,7 +175,6 @@ impl MockController {
                 geometry: MockGeometry::Empty,
                 offsets: BTreeMap::new(),
                 commands: Vec::new(),
-                tool_value: Some(-57.75),
             }),
             events,
             command_delay: std::time::Duration::ZERO,
@@ -196,12 +194,6 @@ impl MockController {
     }
     pub fn commands(&self) -> Vec<String> {
         self.inner.lock().unwrap().commands.clone()
-    }
-    pub fn set_tool_value(&self, value: Option<f64>) {
-        self.inner.lock().unwrap().tool_value = value;
-    }
-    pub fn probe_reference_z(&self) -> Option<f64> {
-        self.inner.lock().unwrap().tool_value
     }
     pub fn set_geometry(&self, geometry: MockGeometry) {
         self.inner.lock().unwrap().geometry = geometry;
@@ -446,7 +438,6 @@ impl Controller for MockController {
                         inner.state.position
                     },
                     success: hit,
-                    tool_length: inner.tool_value,
                 }),
                 ..Event::default()
             });

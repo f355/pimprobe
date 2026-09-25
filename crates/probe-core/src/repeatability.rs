@@ -135,18 +135,12 @@ pub enum RepeatabilityEvent {
 pub trait RepeatabilityController: Controller {
     /// Submit actuator movement. The routine waits for the reported end state.
     async fn set_probe(&self, extended: bool) -> Result<(), Error>;
-    /// Firmware $202, also carried in the fourth field of TOOL reports.
-    fn probe_reference_z(&self) -> Result<f64, Error>;
 }
 
 #[async_trait]
 impl RepeatabilityController for MockController {
     async fn set_probe(&self, extended: bool) -> Result<(), Error> {
         self.send(if extended { "M122" } else { "M121" }).await
-    }
-    fn probe_reference_z(&self) -> Result<f64, Error> {
-        MockController::probe_reference_z(self)
-            .ok_or_else(|| Error::Preflight("unknown probe Z reference".into()))
     }
 }
 
@@ -158,9 +152,6 @@ impl<C: RepeatabilityController + ?Sized> RepeatabilityController for Cancellabl
             _ = self.cancel.cancelled() => Err(Error::Cancelled),
             result = self.inner.set_probe(extended) => result,
         }
-    }
-    fn probe_reference_z(&self) -> Result<f64, Error> {
-        self.inner.probe_reference_z()
     }
 }
 
@@ -176,7 +167,7 @@ pub fn check_repeatability<C: RepeatabilityController + ?Sized>(
     if !state.homed || !finite(state.probe_offset) {
         return Err(Error::Preflight("home the machine before checking".into()));
     }
-    let target = measurement_start(&state, c.probe_reference_z()?);
+    let target = measurement_start(&state);
     for axis in [Axis::X, Axis::Y, Axis::Z] {
         let i = axis.index();
         check_path(
@@ -203,13 +194,13 @@ pub fn check_repeatability<C: RepeatabilityController + ?Sized>(
 /// Approximate C500 L-bracket X/Y walls and bed surface in machine coordinates.
 pub const REPEATABILITY_REFERENCE_G53: [f64; 3] = [-232.5, -204.3, -62.9];
 
-fn measurement_start(s: &State, reference_z: f64) -> Position {
+fn measurement_start(s: &State) -> Position {
     // Invert the contact-to-surface correction to place the probe tip near the fixture.
     let mut target = s.position;
     for (i, coordinate) in target.iter_mut().enumerate().take(2) {
         *coordinate = REPEATABILITY_REFERENCE_G53[i] + 15.0 - s.probe_offset[i];
     }
-    target[2] = REPEATABILITY_REFERENCE_G53[2] + 5.0 - reference_z + s.probe_offset[2];
+    target[2] = REPEATABILITY_REFERENCE_G53[2] + 5.0 + s.probe_offset[2];
     target
 }
 
@@ -347,8 +338,7 @@ async fn repeat_inner<C: RepeatabilityController + ?Sized>(
     observe: &(impl Fn(RepeatabilityEvent) + Send + Sync),
 ) -> Result<(), Error> {
     let start = machine.state();
-    let reference_z = machine.probe_reference_z()?;
-    let target = measurement_start(&start, reference_z);
+    let target = measurement_start(&start);
     let progress = |p| observe(RepeatabilityEvent::Progress(p));
     let scripted = AtomicBool::new(false);
     let c = Observed {
@@ -390,9 +380,7 @@ async fn repeat_inner<C: RepeatabilityController + ?Sized>(
                 actuate(machine, true).await?;
             }
             let state = c.state();
-            if !within(start.probe_offset, state.probe_offset, 0.001)
-                || (machine.probe_reference_z()? - reference_z).abs() > 0.001
-            {
+            if !within(start.probe_offset, state.probe_offset, 0.001) {
                 return Err(Error::Preflight(
                     "probe calibration changed during the check".into(),
                 ));

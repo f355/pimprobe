@@ -93,11 +93,7 @@ pub fn surface_machine_coordinate(
     }
     let i = axis.index();
     if axis == Axis::Z {
-        let tool = contact
-            .tool_length
-            .filter(|v| v.is_finite())
-            .ok_or_else(|| Error::Compensation("probe report lacks Z tool value".into()))?;
-        Ok(contact.position[i] + tool - offset[i])
+        Ok(contact.position[i] - offset[i])
     } else {
         Ok(contact.position[i] + offset[i] + f64::from(direction) * diameter / 2.0)
     }
@@ -279,7 +275,6 @@ async fn run_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
     stream.command(-1, &refs, observe)?;
     set_modes(&c, Modes::PROBING).await?;
     let mut position = p.start.position;
-    let mut conversion_error = None;
     let execution: Result<(), Error> = async {
         for (index, step) in p.steps.iter().enumerate() {
             p.check_state(&c.state(), position)?;
@@ -346,9 +341,6 @@ async fn run_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
                                 format!("contact_{measurement}"),
                                 contact.position[axis.index()],
                             );
-                            if let Some(tool) = contact.tool_length.filter(|v| v.is_finite()) {
-                                refs.insert("probe_report_tool_value".into(), tool);
-                            }
                             fine = Some(contact);
                         }
                         if stage.kind == StageKind::FinalRetract {
@@ -360,28 +352,20 @@ async fn run_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
                         stream.declarations(index as isize, &refs, observe)?;
                     }
                     let contact = fine.ok_or(Error::NoContact)?;
-                    match surface_machine_coordinate(
+                    let surface = surface_machine_coordinate(
                         &contact,
                         *axis,
                         config.direction,
                         p.config.diameter,
                         p.start.probe_offset,
-                    ) {
-                        Ok(surface) => {
-                            refs.insert(format!("surface_{measurement}"), surface);
-                            if measurement == axis.name() {
-                                result.point[axis.index()] = Some(
-                                    surface
-                                        - (p.start.position[axis.index()]
-                                            - p.start.work_position[axis.index()]),
-                                );
-                            }
-                        }
-                        Err(e) if *axis == Axis::Z => {
-                            conversion_error = Some(e);
-                            continue;
-                        }
-                        Err(e) => return Err(e),
+                    )?;
+                    refs.insert(format!("surface_{measurement}"), surface);
+                    if measurement == axis.name() {
+                        result.point[axis.index()] = Some(
+                            surface
+                                - (p.start.position[axis.index()]
+                                    - p.start.work_position[axis.index()]),
+                        );
                     }
                 }
                 RoutineStep::Move { targets } => {
@@ -418,9 +402,6 @@ async fn run_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
             stream.rest(index as isize, &refs, observe)?;
         }
         p.check_state(&c.state(), position)?;
-        if let Some(e) = conversion_error {
-            return Err(e);
-        }
         result.machine_point = std::array::from_fn(|i| {
             result.point[i].map(|v| v + p.start.position[i] - p.start.work_position[i])
         });

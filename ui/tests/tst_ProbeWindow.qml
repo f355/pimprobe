@@ -56,6 +56,13 @@ TestCase {
         }
         return matches
     }
+    function contentObject(type) {
+        var items = probeWindow.contentData
+        for (var i = 0; i < items.length; ++i) {
+            if (items[i] instanceof type) return items[i]
+        }
+        return null
+    }
     function initTestCase() {
         Mock.verifyServer(test, probeWindow.serviceUrl)
         tryVerify(function() { return probeWindow.settings.loaded && probeWindow.machineState.connected }, 3000)
@@ -365,9 +372,8 @@ TestCase {
         verify(toolPosition.y + repeatability.height >= utilitiesPanel.height - 20,
                "Repeatability stays at the bottom of Utilities")
         mouseClick(repeatability)
-        var flow = probeWindow.contentData.filter(function(item) {
-            return item instanceof RepeatabilityFlow
-        })[0]
+        var flow = contentObject(RepeatabilityFlow)
+        verify(flow !== null)
         tryCompare(flow, "opened", true)
         flow.close()
 
@@ -410,7 +416,7 @@ TestCase {
         })[0]
         verify(historyButton !== undefined)
         mouseClick(historyButton)
-        var history = probeWindow.contentData.filter(function(item) { return item instanceof HistoryFlow })[0]
+        var history = contentObject(HistoryFlow)
         verify(history !== undefined)
         tryVerify(function() { return history.entries.length > 0 }, 3000)
         compare(history.entries[0].status, "success")

@@ -39,7 +39,9 @@ TestCase {
     }
     function descendants(item, type) {
         var matches = item instanceof type ? [item] : []
-        for (var child of item.children || []) matches = matches.concat(descendants(child, type))
+        var children = item.children || []
+        for (var i = 0; i < children.length; ++i)
+            matches = matches.concat(descendants(children[i], type))
         return matches
     }
     function test_machine_coordinate_instructions_and_readings() {

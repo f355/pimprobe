@@ -37,6 +37,26 @@ TestCase {
             codeFont: "DejaVu Sans Mono"
         }
     }
+    function descendants(item, type) {
+        var matches = item instanceof type ? [item] : []
+        for (var child of item.children || []) matches = matches.concat(descendants(child, type))
+        return matches
+    }
+    function test_machine_coordinate_instructions_and_readings() {
+        flow.showCheck()
+        tryCompare(flow, "opened", true)
+        verify(descendants(flow.contentItem, Label).some(function(label) {
+            return label.visible && label.text.indexOf("machine coordinates (G53)") >= 0
+        }))
+        verify(descendants(flow.contentItem, Button).some(function(button) {
+            return button.visible && button.text === "Fixture is ready"
+        }))
+        flow.phase = "running"
+        verify(descendants(flow.contentItem, Label).some(function(label) {
+            return label.visible && label.text === "G53 measurements (mm)"
+        }))
+        flow.close()
+    }
     function test_preparation_options_and_keypad() {
         flow.showCheck()
         tryCompare(flow, "opened", true)
@@ -65,26 +85,22 @@ TestCase {
         verify(!flow.canStart)
         flow.axes = [true, true, true]
         verify(flow.canStart)
-        waitForRendering(flow.contentItem)
-        grabImage(flow.contentItem).save("/tmp/pimprobe-repeatability-options.png")
         flow.close()
     }
     function test_partial_results_survive_failure() {
         flow.showCheck()
         flow.phase = "running"
-        flow.handleEvent({type:"measurement", repetition:1, axis:"X", value:0.012})
-        flow.handleEvent({type:"measurement", repetition:1, axis:"Y", value:-0.008})
-        compare(flow.measurements[0], [0.012,-0.008,null])
+        flow.handleEvent({type:"measurement", repetition:1, axis:"X", value:-232.488})
+        flow.handleEvent({type:"measurement", repetition:1, axis:"Y", value:-204.308})
+        compare(flow.measurements[0], [-232.488,-204.308,null])
         flow.handleEvent({type:"error", message:"coarse search made no contact", result: {
-            measurements:[[0.012,-0.008,null]], statistics:[
-                {count:1,mean:0.012,median:0.012,stddev:null,range:0},
-                {count:1,mean:-0.008,median:-0.008,stddev:null,range:0},null]}})
+            measurements:[[-232.488,-204.308,null]], statistics:[
+                {count:1,mean:-232.488,median:-232.488,stddev:null,range:0},
+                {count:1,mean:-204.308,median:-204.308,stddev:null,range:0},null]}})
         compare(flow.phase, "failed")
-        compare(flow.measurements[0][0], 0.012)
+        compare(flow.measurements[0][0], -232.488)
         compare(flow.statistics[0].count, 1)
         compare(flow.number(null), "--")
-        waitForRendering(flow.contentItem)
-        grabImage(flow.contentItem).save("/tmp/pimprobe-repeatability-results.png")
         flow.close()
     }
     function test_summary_updates_during_measurement() {
@@ -132,7 +148,7 @@ TestCase {
         compare(flow.measurements.length, 2)
         for (var i = 0; i < 3; ++i) {
             compare(flow.statistics[i].count, 2)
-            verify(Math.abs(flow.statistics[i].mean) < 0.001)
+            verify(Math.abs(flow.statistics[i].mean - [-232.5, -204.3, -62.9][i]) < 0.001)
         }
         flow.close()
     }

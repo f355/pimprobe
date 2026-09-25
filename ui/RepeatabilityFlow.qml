@@ -147,7 +147,7 @@ Popup {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 Layout.margins: 16
-                text: "First, set G54 X and Y zero on the inside corner of the L bracket, and Z zero on the bed.\n\nSelect G54. Leave room for the probe to extend and clear the path to X15 Y15 inside the bracket."
+                text: "Home the machine with the L bracket installed. The probe uses machine coordinates (G53) to find the bracket walls and bed.\n\nLeave room for the probe to extend and clear the path to the bracket."
                 color: Theme.text
                 font.pixelSize: 24
                 wrapMode: Text.WordWrap
@@ -165,7 +165,7 @@ Popup {
                     Label {
                         anchors.fill: parent
                         anchors.margins: 14
-                        text: "The probe travels to X15 Y15, then Z5, and measures toward the walls and bed.\n\n" +
+                        text: "The probe tip approaches about 15 mm from the bracket walls and 5 mm above the bed, then measures the selected surfaces.\n\n" +
                             (flow.home ? "The machine homes before each repetition." : "X/Y travel starts at the current height. Make sure the path is clear.")
                         color: Theme.text
                         font.pixelSize: 20
@@ -280,7 +280,7 @@ Popup {
                     Layout.fillHeight: true
                     spacing: 4
                     Label {
-                        text: flow.phase === "running" ? "G54 measurements (mm)" : "Deviation from mean (mm)"
+                        text: flow.phase === "running" ? "G53 measurements (mm)" : "Deviation from mean (mm)"
                         color: Theme.text
                         font.pixelSize: 18
                     }
@@ -332,7 +332,7 @@ Popup {
                     }
                     Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.divider }
                     Repeater {
-                        model: [{label:"Mean G54",key:"mean"}, {label:"Median",key:"median"}, {label:"Std dev",key:"stddev"}, {label:"Range",key:"range"}]
+                        model: [{label:"Mean G53",key:"mean"}, {label:"Median",key:"median"}, {label:"Std dev",key:"stddev"}, {label:"Range",key:"range"}]
                         RowLayout {
                             id: summary
                             required property var modelData
@@ -373,7 +373,7 @@ Popup {
                 }
                 LabButton {
                     visible: flow.phase !== "running"
-                    text: flow.phase === "prepare" ? "G54 is ready" : flow.phase === "options" ? "Start check" : "Close"
+                    text: flow.phase === "prepare" ? "Fixture is ready" : flow.phase === "options" ? "Start check" : "Close"
                     enabled: flow.phase !== "options" || flow.canStart
                     Layout.preferredWidth: 180
                     Layout.preferredHeight: 50

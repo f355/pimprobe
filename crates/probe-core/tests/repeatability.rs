@@ -37,13 +37,37 @@ fn machine_with_surface_offset(offset: f64) -> MockController {
     state.probe_extended = true;
     state.work_position = [70.0, 20.0, 15.0, 0.0];
     let mock = MockController::with_state(state.clone());
+    mock.set_geometry(corner_geometry(&state, offset));
+    mock
+}
+fn corner_geometry(state: &State, offset: f64) -> MockGeometry {
     let mut corner = state.position;
     for (i, coordinate) in corner.iter_mut().enumerate().take(2) {
-        *coordinate =
-            state.position[i] - state.work_position[i] - state.probe_offset[i] + 1.0 + offset;
+        *coordinate = REPEATABILITY_REFERENCE_G53[i] - state.probe_offset[i] + 1.0 + offset;
     }
-    let floor = state.position[2] - state.work_position[2] + 57.75 + state.probe_offset[2];
-    mock.set_geometry(MockGeometry::Corner {
+    let floor = REPEATABILITY_REFERENCE_G53[2] + 57.75 + state.probe_offset[2] + offset;
+    MockGeometry::Corner {
+        origin: corner,
+        directions: [-1, -1],
+        travel: [0.0, 0.0],
+        top: floor + 20.0,
+        floor,
+        internal: true,
+    }
+}
+
+#[tokio::test]
+async fn fixed_fixture_can_be_measured_without_setting_work_zero() {
+    let mut state = MockController::new().state();
+    state.probe_extended = true;
+    state.wcs = 55;
+    state.work_position = [31.0, -47.0, 12.0, 0.0];
+    let machine = MockController::with_state(state.clone());
+    let mut corner = state.position;
+    corner[0] = -232.5 - state.probe_offset[0] + 1.0;
+    corner[1] = -204.3 - state.probe_offset[1] + 1.0;
+    let floor = -62.9 + 57.75 + state.probe_offset[2];
+    machine.set_geometry(MockGeometry::Corner {
         origin: corner,
         directions: [-1, -1],
         travel: [0.0, 0.0],
@@ -51,7 +75,61 @@ fn machine_with_surface_offset(offset: f64) -> MockController {
         floor,
         internal: true,
     });
-    mock
+
+    let mut report = RepeatabilityReport::default();
+    run_repeatability(
+        &machine,
+        &RepeatabilityOptions {
+            axes: [true, true, true],
+            repetitions: 1,
+            home: false,
+            retract: false,
+        },
+        settings(),
+        &mut report,
+        CancellationToken::new(),
+        |_| {},
+    )
+    .await
+    .unwrap();
+
+    let target = machine.state().position;
+    assert!((target[0] - (-232.5 + 15.0 - state.probe_offset[0])).abs() < 0.002);
+    assert!((target[1] - (-204.3 + 15.0 - state.probe_offset[1])).abs() < 0.002);
+    assert!((target[2] - (-62.9 + 5.0 + 57.75 + state.probe_offset[2])).abs() < 0.002);
+    for (actual, expected) in report.measurements[0].iter().zip([-232.5, -204.3, -62.9]) {
+        assert!((actual.unwrap() - expected).abs() < 0.002);
+    }
+    assert_eq!(machine.state().wcs, 55);
+}
+
+#[tokio::test]
+async fn coarse_search_covers_fixture_drift_on_all_axes() {
+    for drift in [-2.5, 2.5] {
+        let machine = machine_with_surface_offset(drift);
+        let mut report = RepeatabilityReport::default();
+        run_repeatability(
+            &machine,
+            &RepeatabilityOptions {
+                repetitions: 1,
+                home: false,
+                retract: false,
+                ..Default::default()
+            },
+            settings(),
+            &mut report,
+            CancellationToken::new(),
+            |_| {},
+        )
+        .await
+        .unwrap();
+        for (actual, reference) in report.measurements[0]
+            .iter()
+            .zip(REPEATABILITY_REFERENCE_G53)
+        {
+            assert!((actual.unwrap() - reference - drift).abs() < 0.002);
+        }
+    }
 }
 
 #[test]
@@ -105,7 +183,7 @@ async fn failure_keeps_the_completed_axes_and_stops_before_next_repetition() {
     .await;
     assert_eq!(result, Err(Error::CoarseNoContact));
     assert_eq!(report.measurements.len(), 1);
-    assert!(report.measurements[0][0].unwrap().abs() < 0.001);
+    assert!((report.measurements[0][0].unwrap() - REPEATABILITY_REFERENCE_G53[0]).abs() < 0.001);
     assert_eq!(report.measurements[0][1], None);
     assert_eq!(report.statistics[0].as_ref().unwrap().count, 1);
 }
@@ -183,14 +261,25 @@ async fn unselected_axes_stay_unmeasured_and_tip_returns_to_fifteen_fifteen_five
         for (i, selected) in axes.iter().enumerate() {
             assert_eq!(report.measurements[0][i].is_some(), *selected);
             if *selected {
-                assert!(report.measurements[0][i].unwrap().abs() < 0.001);
+                assert!(
+                    (report.measurements[0][i].unwrap() - REPEATABILITY_REFERENCE_G53[i]).abs()
+                        < 0.001
+                );
             }
         }
         let state = machine.state();
-        for i in 0..2 {
-            assert!((state.work_position[i] + state.probe_offset[i] - 15.0).abs() < 0.001);
+        for (i, reference) in REPEATABILITY_REFERENCE_G53.iter().enumerate().take(2) {
+            assert!((state.position[i] + state.probe_offset[i] - reference - 15.0).abs() < 0.001);
         }
-        assert!((state.work_position[2] - 57.75 - state.probe_offset[2] - 5.0).abs() < 0.001);
+        assert!(
+            (state.position[2]
+                - 57.75
+                - state.probe_offset[2]
+                - REPEATABILITY_REFERENCE_G53[2]
+                - 5.0)
+                .abs()
+                < 0.001
+        );
         assert_eq!(state.modes, initial.modes);
     }
 }
@@ -255,12 +344,20 @@ impl RepeatabilityController for ControllerFixture {
         let state = self.inner.state();
         let extending_at_home = extended && state.position[..3] == [-1.0, -1.0, 0.0];
         if !extending_at_home {
-            for i in 0..2 {
-                assert!((state.work_position[i] + state.probe_offset[i] - 15.0).abs() < 0.001);
+            for (i, reference) in REPEATABILITY_REFERENCE_G53.iter().enumerate().take(2) {
+                assert!(
+                    (state.position[i] + state.probe_offset[i] - reference - 15.0).abs() < 0.001
+                );
             }
             if extended {
                 assert!(
-                    (state.work_position[2] - 57.75 - state.probe_offset[2] - 5.0).abs() < 0.001
+                    (state.position[2]
+                        - 57.75
+                        - state.probe_offset[2]
+                        - REPEATABILITY_REFERENCE_G53[2]
+                        - 5.0)
+                        .abs()
+                        < 0.001
                 );
             }
         }
@@ -300,45 +397,30 @@ async fn measurements_preserve_surface_coordinates() {
             {
                 let summary = statistics[axis.index()].as_ref().unwrap();
                 assert_eq!(summary.count, repetition);
-                let expected_mean = if repetition == 1 { 0.2 } else { 0.22 };
+                let expected_mean = REPEATABILITY_REFERENCE_G53[axis.index()]
+                    + if repetition == 1 { 0.2 } else { 0.22 };
                 assert!((summary.mean - expected_mean).abs() < 0.001);
                 readings.lock().unwrap().push(value);
                 if repetition == 1 && axis == Axis::Y {
-                    let state = machine.state();
-                    let mut corner = state.position;
-                    for (i, coordinate) in corner.iter_mut().enumerate().take(2) {
-                        *coordinate =
-                            state.position[i] - state.work_position[i] - state.probe_offset[i]
-                                + 1.24;
-                    }
-                    let floor =
-                        state.position[2] - state.work_position[2] + 57.75 + state.probe_offset[2];
-                    machine.set_geometry(MockGeometry::Corner {
-                        origin: corner,
-                        directions: [-1, -1],
-                        travel: [0.0, 0.0],
-                        top: floor + 20.0,
-                        floor,
-                        internal: true,
-                    });
+                    machine.set_geometry(corner_geometry(&machine.state(), 0.24));
                 }
             }
         },
     )
     .await
     .unwrap();
-    for (value, expected) in readings
-        .into_inner()
-        .unwrap()
-        .iter()
-        .zip([0.2, 0.2, 0.24, 0.24])
-    {
+    for (value, expected) in readings.into_inner().unwrap().iter().zip([
+        REPEATABILITY_REFERENCE_G53[0] + 0.2,
+        REPEATABILITY_REFERENCE_G53[1] + 0.2,
+        REPEATABILITY_REFERENCE_G53[0] + 0.24,
+        REPEATABILITY_REFERENCE_G53[1] + 0.24,
+    ]) {
         assert!((value - expected).abs() < 0.001, "{value}");
     }
-    for i in 0..2 {
-        assert!((report.measurements[0][i].unwrap() - 0.2).abs() < 0.001);
-        assert!((report.measurements[1][i].unwrap() - 0.24).abs() < 0.001);
-        assert!((report.statistics[i].as_ref().unwrap().mean - 0.22).abs() < 0.001);
+    for (i, reference) in REPEATABILITY_REFERENCE_G53.iter().enumerate().take(2) {
+        assert!((report.measurements[0][i].unwrap() - reference - 0.2).abs() < 0.001);
+        assert!((report.measurements[1][i].unwrap() - reference - 0.24).abs() < 0.001);
+        assert!((report.statistics[i].as_ref().unwrap().mean - reference - 0.22).abs() < 0.001);
     }
 }
 
@@ -385,7 +467,7 @@ async fn fine_reading_survives_a_failed_backoff() {
     .await
     .unwrap_err();
     assert_eq!(error, Error::Controller("backoff failed".into()));
-    assert!(report.measurements[0][0].unwrap().abs() < 0.001);
+    assert!((report.measurements[0][0].unwrap() - REPEATABILITY_REFERENCE_G53[0]).abs() < 0.001);
     assert_eq!(report.statistics[0].as_ref().unwrap().count, 1);
 }
 

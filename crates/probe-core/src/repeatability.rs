@@ -173,14 +173,8 @@ pub fn check_repeatability<C: RepeatabilityController + ?Sized>(
     settings.validate()?;
     let state = c.state();
     preflight_machine(&state)?;
-    if !state.homed
-        || state.wcs != 54
-        || !finite(state.work_position)
-        || !finite(state.probe_offset)
-    {
-        return Err(Error::Preflight(
-            "home the machine and select the zeroed G54 first".into(),
-        ));
+    if !state.homed || !finite(state.probe_offset) {
+        return Err(Error::Preflight("home the machine before checking".into()));
     }
     let target = measurement_start(&state, c.probe_reference_z()?);
     for axis in [Axis::X, Axis::Y, Axis::Z] {
@@ -206,12 +200,16 @@ pub fn check_repeatability<C: RepeatabilityController + ?Sized>(
     Ok(())
 }
 
+/// Approximate C500 L-bracket X/Y walls and bed surface in machine coordinates.
+pub const REPEATABILITY_REFERENCE_G53: [f64; 3] = [-232.5, -204.3, -62.9];
+
 fn measurement_start(s: &State, reference_z: f64) -> Position {
+    // Invert the contact-to-surface correction to place the probe tip near the fixture.
     let mut target = s.position;
     for (i, coordinate) in target.iter_mut().enumerate().take(2) {
-        *coordinate = s.position[i] - s.work_position[i] + 15.0 - s.probe_offset[i];
+        *coordinate = REPEATABILITY_REFERENCE_G53[i] + 15.0 - s.probe_offset[i];
     }
-    target[2] = s.position[2] - s.work_position[2] + 5.0 - reference_z + s.probe_offset[2];
+    target[2] = REPEATABILITY_REFERENCE_G53[2] + 5.0 - reference_z + s.probe_offset[2];
     target
 }
 
@@ -219,8 +217,7 @@ fn contact_settings(axis: Axis, settings: RepeatabilitySettings) -> ContactConfi
     ContactConfig {
         axis,
         direction: -1,
-        // Allow half a millimeter beyond the zeroed surface.
-        coarse_travel: if axis == Axis::Z { 5.5 } else { 15.5 },
+        coarse_travel: if axis == Axis::Z { 10.0 } else { 20.0 },
         retract_distance: settings.retract,
         coarse_feed: settings.coarse_feed,
         fine_feed: settings.fine_feed,
@@ -352,7 +349,6 @@ async fn repeat_inner<C: RepeatabilityController + ?Sized>(
     let start = machine.state();
     let reference_z = machine.probe_reference_z()?;
     let target = measurement_start(&start, reference_z);
-    let origin: Position = std::array::from_fn(|i| start.position[i] - start.work_position[i]);
     let progress = |p| observe(RepeatabilityEvent::Progress(p));
     let scripted = AtomicBool::new(false);
     let c = Observed {
@@ -381,7 +377,7 @@ async fn repeat_inner<C: RepeatabilityController + ?Sized>(
                 let mut lateral = c.state().position;
                 lateral[0] = target[0];
                 lateral[1] = target[1];
-                comment("Move probe tip to G54 X15 Y15".into());
+                comment("Move probe tip near the L bracket".into());
                 move_to(&c, lateral, settings).await?;
                 comment("Retract probe".into());
                 actuate(machine, false).await?;
@@ -394,24 +390,20 @@ async fn repeat_inner<C: RepeatabilityController + ?Sized>(
                 actuate(machine, true).await?;
             }
             let state = c.state();
-            let current_origin =
-                std::array::from_fn(|i| state.position[i] - state.work_position[i]);
-            if state.wcs != 54
-                || !within(origin, current_origin, 0.01)
-                || !within(start.probe_offset, state.probe_offset, 0.001)
+            if !within(start.probe_offset, state.probe_offset, 0.001)
                 || (machine.probe_reference_z()? - reference_z).abs() > 0.001
             {
                 return Err(Error::Preflight(
-                    "G54 or probe calibration changed during the check".into(),
+                    "probe calibration changed during the check".into(),
                 ));
             }
             preflight_machine(&c.state())?;
             let mut lateral = c.state().position;
             lateral[0] = target[0];
             lateral[1] = target[1];
-            comment("Move probe tip to G54 X15 Y15".into());
+            comment("Move probe tip near the L bracket".into());
             move_to(&c, lateral, settings).await?;
-            comment("Move probe tip to G54 Z5".into());
+            comment("Lower probe tip near the bed".into());
             move_to(&c, target, settings).await?;
             if !c.state().probe_extended {
                 comment("Extend probe".into());
@@ -445,8 +437,7 @@ async fn repeat_inner<C: RepeatabilityController + ?Sized>(
                             -1,
                             settings.diameter,
                             start.probe_offset,
-                        )
-                        .map(|surface| surface - origin[axis.index()]);
+                        );
                         if let Ok(value) = coordinate {
                             report.record(repetition, axis, value);
                             observe(RepeatabilityEvent::Measurement {

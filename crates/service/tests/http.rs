@@ -174,7 +174,12 @@ async fn repeatability_streams_each_reading_and_axis_statistics() {
                 assert!(event["statistics"][i].is_null());
             } else {
                 assert_eq!(event["statistics"][i]["count"], *count);
-                assert!(event["statistics"][i]["mean"].as_f64().unwrap().abs() < 0.001);
+                assert!(
+                    (event["statistics"][i]["mean"].as_f64().unwrap()
+                        - pimprobe_core::REPEATABILITY_REFERENCE_G53[i])
+                        .abs()
+                        < 0.001
+                );
             }
         }
     }
@@ -275,7 +280,7 @@ fn repeatability_app() -> (tempfile::TempDir, std::sync::Arc<App>, Router) {
     let temp = tempfile::tempdir().unwrap();
     let mut state = MockController::new().state();
     state.probe_extended = true;
-    // The tip starts inside the bracket and above the bed.
+    state.wcs = 55;
     state.work_position = [70.0, 20.0, 15.0, 0.0];
     let app = App::new(
         Device::Mock(Box::new(MockController::with_state(state))),

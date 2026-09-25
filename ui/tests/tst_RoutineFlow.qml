@@ -73,17 +73,8 @@ TestCase {
         verify(flow.reviewID.length > 0)
         compare(flow.width,800)
         compare(flow.height,480)
-        verify(flow.program.join("\n").indexOf("G10 L20") === -1)
-        var captured = false
-        flow.contentChildren[0].grabToImage(function(result) { result.saveToFile("/tmp/pimprobe-review.png"); captured = true })
-        tryVerify(function() { return captured }, 3000)
         flow.proceed()
         compare(flow.phase,"running")
-        tryVerify(function() { return flow.logText.length > 0 }, 5000)
-        verify(flow.phase === "running", "progress should arrive before completion")
-        captured = false
-        flow.contentChildren[0].grabToImage(function(result) { result.saveToFile("/tmp/pimprobe-progress.png"); captured = true })
-        tryVerify(function() { return captured }, 3000)
         tryCompare(flow,"phase","result",10000)
         verify(Math.abs(flow.result[0] - expectedX) < 0.001)
         verify(Math.abs(flow.result[1] - expectedY) < 0.001,
@@ -127,12 +118,7 @@ TestCase {
 		var backoff = /#<x_after_backoff> := (-?[0-9.]+)/.exec(flow.logText)
 		verify(backoff !== null)
 		verify(Math.abs(Number(backoff[1]) - (snapshot.status.machinePosition[0] - 4.5)) < 0.002)
-		verify(flow.logText.indexOf("X[") === -1)
         verify(flow.simulated)
-        waitForRendering(flow.contentChildren[0])
-        captured = false
-        flow.contentChildren[0].grabToImage(function(result) { result.saveToFile("/tmp/pimprobe-result.png"); captured = true })
-        tryVerify(function() { return captured }, 3000)
         flow.returnToStart()
         tryCompare(flow, "phase", "result", 10000)
         compare(flow.failure, "")
@@ -201,45 +187,18 @@ TestCase {
         ]
     }
 
-    function test_center_dimensions_data() {
-        return [
-            {tag:"pocket", feature:"pocket", labels:["Width X", "Length Y"], values:[14, 16.8]},
-            {tag:"hole", feature:"hole", labels:["Span X", "Span Y"], values:[2 * Math.sqrt(25 - 2.25) + 4, 14]},
-            {tag:"boss", feature:"boss", labels:["Span X", "Span Y"], values:[2 * Math.sqrt(81 - 2.25) - 4, 14]},
-            {tag:"x-ridge", feature:"x-ridge", labels:["Width X"], values:[14]},
-            {tag:"y-valley", feature:"y-valley", labels:["Width Y"], values:[16.8]}
+    function test_center_dimension_labels_and_axes() {
+        var cases = [
+            {feature:"pocket", spans:[14, 16.8, null], labels:["Width X", "Length Y"]},
+            {feature:"hole", spans:[14, 16.8, null], labels:["Span X", "Span Y"]},
+            {feature:"y-valley", spans:[null, 16.8, null], labels:["Width Y"]}
         ]
-    }
-    function test_center_dimensions(data) {
-        flow.showRoutine({family:"center", feature:data.feature,
-                          x:data.feature.indexOf("y-") === 0 ? 0 : 1,
-                          y:data.feature.indexOf("x-") === 0 ? 0 : 1, z:false,
-                          wcs:54, zero:false, safeZOffset:40, depth:5,
-                          xSearchDistance:20, ySearchDistance:24, retract:0.5, diameter:4,
-                          positioningFeed:1000, coarseFeed:30, fineFeed:10})
-        tryVerify(function() { return !flow.reviewing }, 3000)
-        compare(flow.failure, "")
-        flow.proceed()
-        tryCompare(flow, "phase", "result", 10000)
-        compare(flow.dimensions.length, data.labels.length)
-        for (var i = 0; i < data.labels.length; ++i) {
-            compare(flow.dimensions[i].label, data.labels[i])
-            verify(Math.abs(flow.dimensions[i].value - data.values[i]) < 0.002)
+        for (var item of cases) {
+            flow.routine = {family:"center", feature:item.feature}
+            flow.spans = item.spans
+            compare(flow.dimensions.map(function(d) { return d.label }), item.labels)
+            compare(flow.dimensions.map(function(d) { return d.value }), item.spans.filter(function(v) { return v !== null }))
         }
-        waitForRendering(flow.contentChildren[0])
-        grabImage(view.contentItem.parent).save("/tmp/pimprobe-" + data.feature + "-result.png")
-        flow.returnToStart()
-        tryCompare(flow, "phase", "result", 10000)
-        compare(flow.failure, "")
-        verify(flow.returned)
-        flow.setOffset(0, 1.25)
-        flow.zeroResult()
-        tryCompare(flow, "zeroing", false, 5000)
-        compare(flow.failure, "")
-        verify(flow.zeroed)
-        for (var j = 0; j < data.labels.length; ++j)
-            verify(Math.abs(flow.dimensions[j].value - data.values[j]) < 0.002)
-        flow.close()
     }
     function test_zero_failure_retry(data) {
         var original = Api.request

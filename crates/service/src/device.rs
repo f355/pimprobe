@@ -71,10 +71,10 @@ impl Device {
             let state = mock.state();
             let mut corner = state.position;
             for (i, coordinate) in corner.iter_mut().enumerate().take(2) {
-                *coordinate = state.position[i] - state.work_position[i] - state.probe_offset[i]
+                *coordinate = pimprobe_core::REPEATABILITY_REFERENCE_G53[i] - state.probe_offset[i]
                     + diameter / 2.0;
             }
-            let floor = state.position[2] - state.work_position[2] - self.probe_reference_z()?
+            let floor = pimprobe_core::REPEATABILITY_REFERENCE_G53[2] - self.probe_reference_z()?
                 + state.probe_offset[2];
             mock.set_geometry(MockGeometry::Corner {
                 origin: corner,

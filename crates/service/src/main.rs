@@ -42,9 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let settings = Settings::open(options.settings)?;
     let logs = LogStore::open(log_dir)?;
     let device = if options.mock {
-        Device::Mock(Box::new(
-            MockController::new().with_delay(std::time::Duration::from_millis(75)),
-        ))
+        Device::Mock(Box::new(MockController::new()))
     } else {
         let [x, y, z] = options.config.travel_limits;
         Device::Machine(

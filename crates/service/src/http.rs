@@ -16,6 +16,7 @@
 
 use crate::{
     device::Device,
+    logs::LogStore,
     reviews::Reviews,
     settings::{Settings, SettingsError},
     updates::{UpdateError, UpdateManager},
@@ -36,6 +37,8 @@ use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use std::{
     convert::Infallible,
+    fs,
+    path::{Path, PathBuf},
     pin::Pin,
     sync::{
         Arc,
@@ -57,10 +60,16 @@ pub struct App {
     shutdown: CancellationToken,
     ready_token: Option<String>,
     updates: UpdateManager,
+    logs: Arc<LogStore>,
 }
 
 impl App {
-    pub fn new(device: Device, settings: Settings, ready_token: Option<String>) -> Arc<Self> {
+    pub fn new(
+        device: Device,
+        settings: Settings,
+        ready_token: Option<String>,
+        logs: LogStore,
+    ) -> Arc<Self> {
         Arc::new(Self {
             device,
             settings: Mutex::new(settings),
@@ -71,6 +80,7 @@ impl App {
             shutdown: CancellationToken::new(),
             ready_token,
             updates: UpdateManager::production(),
+            logs: Arc::new(logs),
         })
     }
 
@@ -143,6 +153,9 @@ pub fn router(app: Arc<App>) -> Router {
         .route("/api/v1/routine/return", post(return_start))
         .route("/api/v1/routine/measured", post(go_to_measured))
         .route("/api/v1/repeatability/run", post(repeatability))
+        .route("/api/v1/logs/history", get(history))
+        .route("/api/v1/logs/export", post(export_logs))
+        .route("/api/v1/logs/clear", post(clear_logs))
         .route("/api/v1/updates/check", get(check_update))
         .route("/api/v1/updates/install", post(install_update))
         .route("/api/v1/updates/status", get(update_status))
@@ -209,6 +222,101 @@ fn error_code(error: &Error) -> &'static str {
         Error::UnexpectedContact { .. } => "unexpected_contact",
         _ => "failed",
     }
+}
+
+fn log_error(error: std::io::Error) -> ApiError {
+    ApiError(StatusCode::INTERNAL_SERVER_ERROR, "log", error.to_string())
+}
+
+fn log_warning(result: std::io::Result<()>) {
+    if let Err(error) = result {
+        eprintln!("Probing log: {error}");
+    }
+}
+
+fn software_info() -> Value {
+    let root = Path::new("/userdata/pimprobe");
+    let version = fs::read_to_string(root.join("VERSION"))
+        .unwrap_or_else(|_| env!("CARGO_PKG_VERSION").into());
+    let commit = fs::read_to_string(root.join("COMMIT")).unwrap_or_default();
+    json!({"version":version.trim(), "commit":commit.trim()})
+}
+
+fn routine_label(config: &RoutineConfig) -> String {
+    if config.z {
+        return "Z surface".into();
+    }
+    if config.family == "center" {
+        return format!("{} center", config.feature.replace('-', " "));
+    }
+    let feature = match (config.x, config.y) {
+        (0, y) => format!("Y{} edge", if y > 0 { "+" } else { "-" }),
+        (x, 0) => format!("X{} edge", if x > 0 { "+" } else { "-" }),
+        (x, y) => format!(
+            "X{}/Y{} corner",
+            if x > 0 { "+" } else { "-" },
+            if y > 0 { "+" } else { "-" }
+        ),
+    };
+    format!(
+        "{} {feature}",
+        if config.family == "inside" {
+            "Inside"
+        } else {
+            "Outside"
+        }
+    )
+}
+
+async fn history(State(app): State<Arc<App>>) -> Result<Json<Vec<Value>>, ApiError> {
+    let logs = app.logs.clone();
+    let entries = tokio::task::spawn_blocking(move || logs.history())
+        .await
+        .map_err(|e| ApiError::conflict("log", e.to_string()))?
+        .map_err(log_error)?;
+    Ok(Json(entries))
+}
+
+fn usb_mount(mounts: &str) -> Option<PathBuf> {
+    let mut candidates = mounts.lines().filter_map(|line| {
+        let mut fields = line.split_whitespace();
+        let source = fields.next()?;
+        let target = fields.next()?.replace("\\040", " ");
+        (source.starts_with("/dev/")
+            && (target == "/mnt/udisk" || target.starts_with("/run/media/")))
+        .then_some(PathBuf::from(target))
+    });
+    candidates
+        .clone()
+        .find(|path| path == Path::new("/mnt/udisk"))
+        .or_else(|| candidates.next())
+}
+
+async fn export_logs(State(app): State<Arc<App>>) -> Result<Json<Value>, ApiError> {
+    let _guard = app.acquire()?;
+    let mounts = fs::read_to_string("/proc/mounts").map_err(log_error)?;
+    let destination = usb_mount(&mounts)
+        .ok_or_else(|| ApiError::conflict("usb", "Insert a mounted USB drive before exporting"))?;
+    let usb_root = destination.clone();
+    let logs = app.logs.clone();
+    let folder = tokio::task::spawn_blocking(move || logs.export_to(&destination))
+        .await
+        .map_err(|e| ApiError::conflict("log", e.to_string()))?
+        .map_err(log_error)?;
+    let relative = folder
+        .strip_prefix(&usb_root)
+        .map_err(|error| ApiError::conflict("log", error.to_string()))?;
+    Ok(Json(json!({"path":folder,"relativePath":relative})))
+}
+
+async fn clear_logs(State(app): State<Arc<App>>) -> Result<Json<Value>, ApiError> {
+    let _guard = app.acquire()?;
+    let logs = app.logs.clone();
+    tokio::task::spawn_blocking(move || logs.clear())
+        .await
+        .map_err(|e| ApiError::conflict("log", e.to_string()))?
+        .map_err(log_error)?;
+    Ok(Json(json!({"cleared":true})))
 }
 
 async fn state(State(app): State<Arc<App>>) -> Json<Value> {
@@ -421,6 +529,16 @@ async fn repeatability(
     app.device.refresh_probe_reference().await?;
     pimprobe_core::check_repeatability(&app.device, &options, settings)?;
     app.device.configure_repeatability(settings.diameter)?;
+    let run_id = uuid::Uuid::new_v4().to_string();
+    app.logs
+        .start(
+            &run_id,
+            "Probe repeatability",
+            "repeatability",
+            json!({"options":options,"settings":values}),
+            json!({"controller":app.device.state(),"software":software_info()}),
+        )
+        .map_err(log_error)?;
     let cancel = app.shutdown.child_token();
     let run_cancel = cancel.clone();
     let (sender, receiver) = mpsc::channel(256);
@@ -428,6 +546,8 @@ async fn repeatability(
     tokio::spawn(async move {
         let _guard = guard;
         let mut report = RepeatabilityReport::default();
+        let progress_id = run_id.clone();
+        let progress_logs = app.logs.clone();
         let result = pimprobe_core::run_repeatability(
             &app.device, &options, settings, &mut report, run_cancel.clone(), |event| {
                 let event = match event {
@@ -435,16 +555,47 @@ async fn repeatability(
                     RepeatabilityEvent::Measurement { repetition, axis, value, statistics } =>
                         json!({"type":"measurement", "repetition":repetition, "axis":axis, "value":value, "statistics":statistics}),
                 };
+                let name = if event["progress"]["kind"] == "contact" {
+                    "contact"
+                } else {
+                    event["type"].as_str().unwrap_or("progress")
+                };
+                let data = if name == "contact" {
+                    json!({"measurement":event["progress"]["measurement"],"contact":event["progress"]["contact"]})
+                } else {
+                    event.clone()
+                };
+                log_warning(progress_logs.trace(&progress_id, name, data));
                 queue_progress(&sender, &run_cancel, event);
             },
         ).await;
         let event = match result {
-            Ok(()) => json!({"type":"result", "result":report}),
+            Ok(()) => {
+                log_warning(
+                    app.logs
+                        .finish(&run_id, "success", Some(json!(report)), None),
+                );
+                json!({"type":"result", "result":report})
+            }
             Err(error) => {
                 app.recover(&error).await;
+                log_warning(app.logs.finish(
+                    &run_id,
+                    if matches!(error, Error::Cancelled) {
+                        "cancelled"
+                    } else {
+                        "failed"
+                    },
+                    Some(json!(report)),
+                    Some(error.to_string()),
+                ));
                 json!({"type":"error", "code":error_code(&error), "message":error.to_string(), "result":report})
             }
         };
+        log_warning(
+            app.logs
+                .trace(&run_id, "end_state", json!(app.device.state())),
+        );
         app.active.store(false, Ordering::SeqCst);
         let _ = sender.try_send(encoded(event));
     });
@@ -537,6 +688,23 @@ async fn start_motion(app: Arc<App>, token: Token, motion: Motion) -> Result<Res
             (plan, Some(result))
         }
     };
+    if matches!(motion, Motion::Run) {
+        app.logs
+            .start(
+                &token.id,
+                &routine_label(&plan.config),
+                "routine",
+                json!(plan.config),
+                json!({"controller":plan.start,"software":software_info()}),
+            )
+            .map_err(log_error)?;
+    } else {
+        log_warning(app.logs.trace(
+            &token.id,
+            "action_start",
+            json!({"action":match motion { Motion::Return => "return_to_start", Motion::Measured(_) => "go_to_measured", Motion::Run => unreachable!() }}),
+        ));
+    }
     let cancel = app.shutdown.child_token();
     let run_cancel = cancel.clone();
     let (sender, receiver) = mpsc::channel(256);
@@ -544,10 +712,24 @@ async fn start_motion(app: Arc<App>, token: Token, motion: Motion) -> Result<Res
     tokio::spawn(async move {
         let _guard = guard;
         let started = Instant::now();
+        let run_id = token.id.clone();
         let progress_sender = sender.clone();
         let progress_cancel = run_cancel.clone();
-        let observe = move |progress| {
+        let progress_logs = app.logs.clone();
+        let progress_id = run_id.clone();
+        let observe = move |progress: pimprobe_core::Progress| {
             let event = json!({"type":"progress","elapsedMs":started.elapsed().as_millis(),"progress":progress});
+            let name = if event["progress"]["kind"] == "contact" {
+                "contact"
+            } else {
+                "progress"
+            };
+            let data = if name == "contact" {
+                json!({"elapsedMs":event["elapsedMs"],"measurement":progress.measurement,"contact":progress.contact})
+            } else {
+                event.clone()
+            };
+            log_warning(progress_logs.trace(&progress_id, name, data));
             queue_progress(&progress_sender, &progress_cancel, event);
         };
         let result = match (motion, completed) {
@@ -588,6 +770,24 @@ async fn start_motion(app: Arc<App>, token: Token, motion: Motion) -> Result<Res
         };
         let event = match result {
             Ok(result) => {
+                match motion {
+                    Motion::Run => {
+                        log_warning(
+                            app.logs
+                                .finish(&run_id, "success", Some(json!(result)), None),
+                        )
+                    }
+                    Motion::Return => log_warning(app.logs.action(
+                        &run_id,
+                        "return_to_start",
+                        json!({"result":result}),
+                    )),
+                    Motion::Measured(clearance) => log_warning(app.logs.action(
+                        &run_id,
+                        "go_to_measured",
+                        json!({"safeZOffset":clearance,"result":result}),
+                    )),
+                }
                 app.reviews
                     .lock()
                     .await
@@ -610,9 +810,31 @@ async fn start_motion(app: Arc<App>, token: Token, motion: Motion) -> Result<Res
                         recovery: Box::new(recovery),
                     };
                 }
+                if matches!(motion, Motion::Run) {
+                    log_warning(app.logs.finish(
+                        &run_id,
+                        if matches!(error, Error::Cancelled) {
+                            "cancelled"
+                        } else {
+                            "failed"
+                        },
+                        None,
+                        Some(error.to_string()),
+                    ));
+                } else {
+                    log_warning(app.logs.action(
+                        &run_id,
+                        "action_failed",
+                        json!({"message":error.to_string()}),
+                    ));
+                }
                 json!({"type":"error","code":error_code(&error),"message":error.to_string()})
             }
         };
+        log_warning(
+            app.logs
+                .trace(&run_id, "end_state", json!(app.device.state())),
+        );
         app.active.store(false, Ordering::SeqCst);
         let _ = sender.try_send(encoded(event));
     });
@@ -666,7 +888,17 @@ async fn zero(
         .await;
         if let Err(error) = &updated {
             app.recover(error).await;
+            log_warning(app.logs.action(
+                &token.id,
+                "work_zero_failed",
+                json!({"offsets":token.offsets,"message":error.to_string()}),
+            ));
         } else if let Ok(result) = &updated {
+            log_warning(app.logs.action(
+                &token.id,
+                "work_zero",
+                json!({"offsets":token.offsets,"result":result}),
+            ));
             app.reviews
                 .lock()
                 .await
@@ -682,6 +914,17 @@ async fn zero(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn usb_mount_prefers_the_machine_mount_and_requires_a_block_device() {
+        let mounts = "tmpfs /mnt/udisk tmpfs rw 0 0\n/dev/sdb1 /run/media/backup vfat rw 0 0\n/dev/sda1 /mnt/udisk vfat rw 0 0\n";
+        assert_eq!(usb_mount(mounts), Some(PathBuf::from("/mnt/udisk")));
+        assert_eq!(
+            usb_mount("tmpfs /mnt/udisk tmpfs rw 0 0\n/dev/sdb1 /run/media/backup vfat rw 0 0\n"),
+            Some(PathBuf::from("/run/media/backup"))
+        );
+        assert_eq!(usb_mount("tmpfs /mnt/udisk tmpfs rw 0 0\n"), None);
+    }
 
     #[tokio::test]
     async fn slow_reader_always_has_room_for_terminal_event() {

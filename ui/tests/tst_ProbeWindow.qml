@@ -20,6 +20,7 @@ import QtQuick.Layouts
 import QtTest
 import ".."
 import "../Api.js" as Api
+import "../ProbePages.js" as Pages
 import "Mock.js" as Mock
 
 TestCase {
@@ -393,8 +394,14 @@ TestCase {
             return button.visible && button.text === "Probe repeatability"
         })[0]
         verify(repeatability !== undefined)
+        for (var label of ["Probe history", "Export logs", "Clear logs"]) {
+            verify(descendants(utilitiesPanel, Button).some(function(button) {
+                return button.visible && button.text === label
+            }), label + " is available in Utilities")
+        }
         var toolPosition = repeatability.mapToItem(utilitiesPanel, 0, 0)
-        verify(toolPosition.y < 150, "Utility buttons start below the top toolbar")
+        verify(toolPosition.y + repeatability.height >= utilitiesPanel.height - 20,
+               "Repeatability stays at the bottom of Utilities")
         mouseClick(repeatability)
         var flow = probeWindow.contentData.filter(function(item) {
             return item instanceof RepeatabilityFlow
@@ -410,6 +417,47 @@ TestCase {
         tryVerify(function() { return !utilitiesPanel.visible })
         verify(visibleContentButton("Utilities") !== undefined)
         verify(visibleContentButton("Probe repeatability") === undefined)
+    }
+
+    function test_probe_history_lists_a_completed_run() {
+        callApi("POST", "/logs/clear", null)
+        callApi("POST", "/wcs", {wcs:54})
+        callApi("POST", "/probe-actuator", {extended:true})
+        var routine = Pages.routine(probeWindow.settings.values, "outside", {x:0, y:0, z:true}, 54)
+        var review = callApi("POST", "/routine/review", routine)
+        var terminal = null
+        Api.stream(probeWindow.serviceUrl + "/routine/run", {id:review.id}, function(event) {
+            if (event.type === "result" || event.type === "error") terminal = event
+        }, function(error) { if (error) terminal = {type:"error", message:error} })
+        tryVerify(function() { return terminal !== null }, 5000)
+        compare(terminal.type, "result")
+
+        var tabs = descendants(probeWindow.contentItem, TabBar)[0]
+        tryVerify(function() { return tabs.enabled && !probeWindow.controlsLocked() }, 3000)
+        mouseClick(tabs.itemAt(3))
+        tryCompare(tabs, "currentIndex", 3)
+        var utilities = descendants(probeWindow.contentItem, Button).filter(function(button) {
+            return button.visible && button.text === "Utilities"
+        })[0]
+        verify(utilities !== undefined)
+        mouseClick(utilities)
+        var panel = descendants(probeWindow.Overlay.overlay, UtilitiesPanel).filter(function(item) {
+            return item.visible
+        })[0]
+        var historyButton = descendants(panel, Button).filter(function(button) {
+            return button.visible && button.text === "Probe history"
+        })[0]
+        verify(historyButton !== undefined)
+        mouseClick(historyButton)
+        var history = probeWindow.contentData.filter(function(item) { return item instanceof HistoryFlow })[0]
+        verify(history !== undefined)
+        tryVerify(function() { return history.entries.length > 0 }, 3000)
+        compare(history.entries[0].status, "success")
+        compare(history.entries[0].label, "Z surface")
+        waitForRendering(probeWindow.contentItem)
+        grabImage(probeWindow.contentItem.parent).save("/tmp/pimprobe-history.png")
+        history.close()
+        panel.closed()
     }
 
     function test_update_page_checks_release_channel_and_installs_selected_build() {

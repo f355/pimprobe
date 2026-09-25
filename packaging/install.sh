@@ -62,7 +62,7 @@ if [ "$check" = true ]; then
 fi
 echo 'The machine must be idle with the spindle stopped.'
 if [ "$uninstall" = true ]; then
-    echo 'Uninstall permanently deletes PIMProbe settings and configuration.'
+    echo 'Uninstall permanently deletes PIMProbe settings and probing logs.'
 fi
 if [ "$yes" = false ]; then
     if [ "$uninstall" = true ]; then
@@ -203,7 +203,7 @@ if [ "$uninstall" = true ]; then
     fi
     rm -f "$vendor/libpimprobeproxyplugin.so" "$vendor/libpimprobelauncherplugin.so"
     rm -rf "$unit" "$unit.d" /etc/systemd/system/multi-user.target.wants/pimprobe-service.service
-    rm -rf "$destination" /root/.config/pimprobe /root/.local/share/pimprobe /root/.cache/pimprobe
+    rm -rf "$destination" /userdata/pimprobe-data /root/.config/pimprobe /root/.local/share/pimprobe /root/.cache/pimprobe
     rm -rf /userdata/backups/pimprobe-* /userdata/pimprobe-stage.* /userdata/pimprobe-update.*
     rm -f /run/pimprobe-controller.sock /run/pimprobe-ui.pid /run/pimprobe-ui.lock \
         /run/pimprobe-update-*.status

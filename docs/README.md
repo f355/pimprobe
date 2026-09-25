@@ -21,7 +21,7 @@ Use the probe to find an edge, corner, surface or center, then set work zero fro
 | [Outside](outside.md) | A side or corner of stock, or its top surface |
 | [Inside](inside.md) | A wall or corner inside an opening, or its bottom |
 | [Center](center.md) | The center of a boss, block, hole, pocket, ridge or valley |
-| [Settings](settings.md) | Ball diameter, backoff, feeds and repeatability check |
+| [Settings](settings.md) | Ball diameter, backoff and feeds |
 
 In the button pictures, the crosshair is the starting position of the probe ball, the arrows point towards the surfaces to touch, and the green dot is the point being measured. Z measures straight down. Distances are in mm and feeds in mm/min.
 
@@ -55,4 +55,4 @@ Each surface gets a coarse touch, a short backoff, a slow fine touch and another
 
 Screenshots use simulated stock in the local preview.
 
-[Probe repeatability](repeatability.md)
+[Utilities](history.md)

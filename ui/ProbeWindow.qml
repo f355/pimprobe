@@ -465,6 +465,12 @@ ApplicationWindow {
         codeFont: window.monoFontFamily
     }
 
+    HistoryFlow {
+        id: historyDialog
+        serviceUrl: window.serviceUrl
+        uiFont: window.uiFontFamily
+    }
+
     UpdateFlow {
         id: updateDialog
         serviceUrl: window.serviceUrl
@@ -489,8 +495,10 @@ ApplicationWindow {
         UtilitiesPanel {
             anchors.fill: parent
             uiFont: window.uiFontFamily
+            serviceUrl: window.serviceUrl
             onClosed: utilitiesPage.close()
             onRepeatabilityRequested: repeatabilityDialog.showCheck()
+            onHistoryRequested: historyDialog.showHistory()
         }
     }
 

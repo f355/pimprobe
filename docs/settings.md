@@ -36,7 +36,7 @@ Speed of the second touch. This touch supplies the measurement. A slower feed re
 
 [Clearance and failed probing](safety.md)
 
-[Probe repeatability](repeatability.md)
+[Utilities](history.md)
 
 ## Software update
 

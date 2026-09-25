@@ -162,6 +162,10 @@ pub struct Progress {
     pub kind: String,
     pub command: String,
     pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub measurement: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub contact: Option<Contact>,
 }
 
 pub(crate) fn positive(v: f64) -> bool {

@@ -75,6 +75,8 @@ test -f /etc/systemd/system/pimprobe-service.service
 cmp /userdata/pimprobe/config.json /expected-config.json
 printf '{"coarseFeed":42}\n' >/userdata/pimprobe/settings.json
 printf '{"listenAddress":"127.0.0.1:8137","travelLimits":[210,235,123]}\n' >/userdata/pimprobe/config.json
+mkdir -p /userdata/pimprobe-data
+printf 'saved probe history\n' >/userdata/pimprobe-data/history.jsonl
 cp /userdata/pimprobe/settings.json /tmp/expected-settings
 cp /userdata/pimprobe/config.json /tmp/expected-config
 printf 'obsolete UI\n' >/userdata/pimprobe/ui/Old.qml
@@ -82,6 +84,7 @@ touch /tmp/service-active
 sh /package.run --yes --no-restart
 cmp /userdata/pimprobe/settings.json /tmp/expected-settings
 cmp /userdata/pimprobe/config.json /tmp/expected-config
+test "$(cat /userdata/pimprobe-data/history.jsonl)" = 'saved probe history'
 test -z "$(find /userdata -maxdepth 1 -name 'pimprobe-rollback.*')"
 test -z "$(find /userdata -maxdepth 2 -name 'pimprobe-install.*')"
 test ! -e /tmp/service-active
@@ -137,6 +140,7 @@ printf 'n\n' | sh /package.run --uninstall --no-restart
 test -d /userdata/pimprobe
 sh /package.run --uninstall --yes --no-restart
 test ! -e /userdata/pimprobe
+test ! -e /userdata/pimprobe-data
 test ! -e /root/.config/pimprobe
 test ! -L /root/app/libpimprobeproxyplugin.so
 test ! -L /root/app/libpimprobelauncherplugin.so

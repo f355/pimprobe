@@ -365,6 +365,7 @@ async fn repeat_inner<C: RepeatabilityController + ?Sized>(
             kind: "script".into(),
             command: String::new(),
             message: format!("; {message}"),
+            ..Progress::default()
         })
     };
     let modes = query_modes(&c).await?;
@@ -428,6 +429,16 @@ async fn repeat_inner<C: RepeatabilityController + ?Sized>(
                     contact_settings(axis, settings),
                     TimingPolicy::default(),
                     |contact| {
+                        progress(Progress {
+                            kind: "contact".into(),
+                            measurement: Some(format!(
+                                "{} repetition {}",
+                                axis.name(),
+                                repetition + 1
+                            )),
+                            contact: Some(contact.clone()),
+                            ..Progress::default()
+                        });
                         let coordinate = surface_machine_coordinate(
                             contact,
                             axis,

@@ -155,7 +155,7 @@ sh installer.run --uninstall --yes --restart
 `--yes` confirms that you have made the machine idle with its spindle stopped.
 Obtain installers from a trusted source; the checksum detects corruption.
 
-Uninstall removes PIMProbe's service, plugins, UI and settings.
+Uninstall removes PIMProbe's service, plugins, UI, settings and probing logs.
 The installer file remains available for reinstallation.
 
 ## Configuration

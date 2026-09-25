@@ -142,6 +142,7 @@ impl<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync> Controller for Obser
                 kind: "script".into(),
                 command: String::new(),
                 message: trim_command(command),
+                ..Progress::default()
             });
         }
         self.inner.send(command).await?;
@@ -150,6 +151,7 @@ impl<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync> Controller for Obser
                 kind: "command".into(),
                 command: command.into(),
                 message: "Submitted".into(),
+                ..Progress::default()
             });
         }
         Ok(())
@@ -167,6 +169,7 @@ impl Stream<'_> {
             kind: "script".into(),
             message,
             command: String::new(),
+            ..Progress::default()
         });
         self.cursor += 1;
         Ok(())
@@ -204,6 +207,7 @@ impl Stream<'_> {
                     kind: "script".into(),
                     command: String::new(),
                     message: "; Probe report tool value unavailable".into(),
+                    ..Progress::default()
                 });
                 self.cursor += 1;
             } else {
@@ -332,6 +336,12 @@ async fn run_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
                         position = stopped;
                         if stage.kind == StageKind::FineProbe {
                             let contact = contact.ok_or(Error::NoContact)?;
+                            observe(Progress {
+                                kind: "contact".into(),
+                                measurement: Some(measurement.clone()),
+                                contact: Some(contact.clone()),
+                                ..Progress::default()
+                            });
                             refs.insert(
                                 format!("contact_{measurement}"),
                                 contact.position[axis.index()],
@@ -477,6 +487,7 @@ async fn run_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
         kind: "stage".into(),
         message: "Routine complete".into(),
         command: String::new(),
+        ..Progress::default()
     });
     Ok(result)
 }
@@ -652,6 +663,7 @@ async fn measured_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
                     kind: "script".into(),
                     message: comment.into(),
                     command: String::new(),
+                    ..Progress::default()
                 });
                 position = run_position_stage(
                     &c,
@@ -760,6 +772,7 @@ async fn return_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
                     kind: "script".into(),
                     message: comment.into(),
                     command: String::new(),
+                    ..Progress::default()
                 });
                 position = run_position_stage(
                     &c,

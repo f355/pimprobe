@@ -1,6 +1,6 @@
 # Probe repeatability
 
-Use **Probe repeatability** in Settings to measure the same reference surfaces several times.
+Open **Settings → Utilities → Probe repeatability** to measure the same reference surfaces several times.
 
 ## Prepare
 

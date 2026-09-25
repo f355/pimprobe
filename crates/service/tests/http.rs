@@ -20,10 +20,11 @@ use axum::{
     http::{Request, StatusCode},
 };
 use http_body_util::BodyExt;
-use pimprobe_core::{Controller, MockController};
+use pimprobe_core::{Controller, MockController, MockGeometry};
 use pimprobe_service::{
     device::Device,
     http::{App, router},
+    logs::LogStore,
     settings::Settings,
 };
 use serde_json::{Value, json};
@@ -43,6 +44,7 @@ fn app() -> (tempfile::TempDir, std::sync::Arc<App>, Router) {
         Device::Mock(Box::new(mock)),
         Settings::open(temp.path().join("settings.json")).unwrap(),
         Some("test-token".into()),
+        LogStore::open(temp.path().join("logs")).unwrap(),
     );
     (temp, app.clone(), router(app))
 }
@@ -124,6 +126,7 @@ async fn update_install_requires_an_idle_stopped_machine() {
             Device::Mock(Box::new(MockController::with_state(state))),
             Settings::open(temp.path().join("settings.json")).unwrap(),
             Some("test-token".into()),
+            LogStore::open(temp.path().join("logs")).unwrap(),
         );
         let router = router(app);
         assert_api_error(
@@ -278,6 +281,7 @@ fn repeatability_app() -> (tempfile::TempDir, std::sync::Arc<App>, Router) {
         Device::Mock(Box::new(MockController::with_state(state))),
         Settings::open(temp.path().join("settings.json")).unwrap(),
         None,
+        LogStore::open(temp.path().join("logs")).unwrap(),
     );
     (temp, app.clone(), router(app))
 }
@@ -476,6 +480,124 @@ async fn review_run_stream_and_late_zero() {
 }
 
 #[tokio::test]
+async fn routine_history_keeps_measurement_and_later_work_zero() {
+    let (temp, _app, router) = app();
+    let (_, body) = request(&router, "POST", "/api/v1/routine/review", config()).await;
+    let review: Value = serde_json::from_str(&body).unwrap();
+    let id = review["id"].as_str().unwrap();
+    let (_, body) = request(&router, "POST", "/api/v1/routine/run", json!({"id":id})).await;
+    let result: Value = serde_json::from_str(body.lines().last().unwrap()).unwrap();
+    assert_eq!(result["type"], "result", "{body}");
+    let (_, body) = request(
+        &router,
+        "POST",
+        "/api/v1/routine/zero",
+        json!({"id":id,"offsets":[0,0,-2]}),
+    )
+    .await;
+    assert_eq!(
+        serde_json::from_str::<Value>(&body).unwrap()["zeroed"],
+        true
+    );
+
+    let (status, body) = request(&router, "GET", "/api/v1/logs/history", Value::Null).await;
+    assert_eq!(status, StatusCode::OK);
+    let entries: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(entries.as_array().unwrap().len(), 1);
+    assert_eq!(entries[0]["status"], "success");
+    assert_eq!(entries[0]["result"]["point"], result["result"]["point"]);
+    assert_eq!(entries[0]["workZero"]["offsets"][2].as_f64(), Some(-2.0));
+
+    let trace = std::fs::read_to_string(temp.path().join("logs/diagnostics.jsonl")).unwrap();
+    let events: Vec<Value> = trace
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert!(events.iter().any(|event| {
+        event["event"] == "progress"
+            && event["data"]["progress"]["command"]
+                .as_str()
+                .is_some_and(|command| command.starts_with("G38."))
+    }));
+    assert!(events.iter().any(|event| event["event"] == "contact" && event["data"]["contact"]["success"] == true));
+
+    let (status, body) = request(&router, "POST", "/api/v1/logs/clear", Value::Null).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let (_, body) = request(&router, "GET", "/api/v1/logs/history", Value::Null).await;
+    assert!(
+        serde_json::from_str::<Value>(&body)
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        std::fs::read_to_string(temp.path().join("logs/diagnostics.jsonl"))
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn failed_probe_keeps_its_context_and_error() {
+    let (_temp, app, router) = app();
+    let (_, body) = request(&router, "POST", "/api/v1/routine/review", config()).await;
+    let review: Value = serde_json::from_str(&body).unwrap();
+    let Device::Mock(mock) = &app.device else {
+        unreachable!()
+    };
+    mock.set_geometry(MockGeometry::Empty);
+    let (_, body) = request(
+        &router,
+        "POST",
+        "/api/v1/routine/run",
+        json!({"id":review["id"]}),
+    )
+    .await;
+    let terminal: Value = serde_json::from_str(body.lines().last().unwrap()).unwrap();
+    assert_eq!(terminal["type"], "error", "{body}");
+    let (_, body) = request(&router, "GET", "/api/v1/logs/history", Value::Null).await;
+    let entries: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(entries[0]["status"], "failed");
+    assert_eq!(entries[0]["config"]["wcs"], 54);
+    assert_eq!(entries[0]["error"], terminal["message"]);
+}
+
+#[tokio::test]
+async fn repeatability_history_keeps_report() {
+    let (temp, _app, router) = repeatability_app();
+    let (_, body) = request(
+        &router,
+        "POST",
+        "/api/v1/repeatability/run",
+        json!({"axes":[true,false,false],"repetitions":2,"home":false,"retract":false}),
+    )
+    .await;
+    assert_eq!(
+        serde_json::from_str::<Value>(body.lines().last().unwrap()).unwrap()["type"],
+        "result",
+        "{body}"
+    );
+    let (_, body) = request(&router, "GET", "/api/v1/logs/history", Value::Null).await;
+    let entries: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(entries[0]["category"], "repeatability");
+    assert_eq!(
+        entries[0]["result"]["measurements"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    let trace = std::fs::read_to_string(temp.path().join("logs/diagnostics.jsonl")).unwrap();
+    let contacts = trace
+        .lines()
+        .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+        .filter(|event| event["event"] == "contact")
+        .count();
+    assert_eq!(contacts, 2);
+}
+
+#[tokio::test]
 async fn result_offsets_set_machine_origin_without_moving_or_changing_measurements() {
     for (z, offsets) in [(true, [0.0, 0.0, -2.0]), (false, [1.25, -3.5, 0.0])] {
         let (_temp, app, router) = app();
@@ -655,6 +777,7 @@ async fn cancelled_result_move_restores_parser_modes_after_stopping() {
         Device::Mock(Box::new(mock)),
         Settings::open(temp.path().join("settings.json")).unwrap(),
         Some("test-token".into()),
+        LogStore::open(temp.path().join("logs")).unwrap(),
     );
     let router = router(app.clone());
     let original_modes = app.device.state().modes;

@@ -20,6 +20,7 @@ use pimprobe_service::{
     config::Options,
     device::Device,
     http::{App, router},
+    logs::LogStore,
     settings::Settings,
 };
 
@@ -33,7 +34,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
     let options = Options::parse(args).map_err(std::io::Error::other)?;
+    let log_dir = if options.mock {
+        options.settings.with_file_name("logs")
+    } else {
+        "/userdata/pimprobe-data".into()
+    };
     let settings = Settings::open(options.settings)?;
+    let logs = LogStore::open(log_dir)?;
     let device = if options.mock {
         Device::Mock(Box::new(
             MockController::new().with_delay(std::time::Duration::from_millis(75)),
@@ -48,6 +55,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         device,
         settings,
         options.mock.then_some(options.ready_token),
+        logs,
     );
     let listener = tokio::net::TcpListener::bind(options.config.listen_address).await?;
     eprintln!(

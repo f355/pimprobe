@@ -25,6 +25,8 @@ use std::{sync::atomic::AtomicBool, time::Duration};
 pub struct RepeatabilityOptions {
     pub axes: [bool; 3],
     pub repetitions: usize,
+    #[serde(default, rename = "jogHome")]
+    pub jog_home: bool,
     pub home: bool,
     pub retract: bool,
 }
@@ -33,6 +35,7 @@ impl Default for RepeatabilityOptions {
         Self {
             axes: [true; 3],
             repetitions: 5,
+            jog_home: false,
             home: false,
             retract: true,
         }
@@ -239,7 +242,7 @@ async fn actuate<C: RepeatabilityController + ?Sized>(c: &C, extended: bool) -> 
     .map_err(|_| Error::Timeout)?
 }
 
-async fn home<C: Controller + ?Sized>(c: &C) -> Result<(), Error> {
+async fn jog_home<C: Controller + ?Sized>(c: &C) -> Result<(), Error> {
     for (command, coordinates) in [
         ("G90 G53 G0 Z0", &[(2, 0.0)][..]),
         ("G90 G53 G0 X-20 Y-5", &[(0, -20.0), (1, -5.0)][..]),
@@ -256,7 +259,9 @@ async fn home<C: Controller + ?Sized>(c: &C) -> Result<(), Error> {
             loop {
                 if let Some(status) = receive(&mut events).await?.status {
                     if status.wcs != state.wcs {
-                        return Err(Error::Position("WCS changed before homing".into()));
+                        return Err(Error::Position(
+                            "WCS changed while jogging near home".into(),
+                        ));
                     }
                     if status.ready && within(status.position, target, 0.05) {
                         return Ok(());
@@ -267,6 +272,10 @@ async fn home<C: Controller + ?Sized>(c: &C) -> Result<(), Error> {
         .await
         .map_err(|_| Error::Timeout)??;
     }
+    Ok(())
+}
+
+async fn home<C: Controller + ?Sized>(c: &C) -> Result<(), Error> {
     let mut events = c.subscribe();
     tokio::time::timeout(Duration::from_secs(600), async {
         c.send("$H").await?;
@@ -363,7 +372,9 @@ async fn repeat_inner<C: RepeatabilityController + ?Sized>(
                 repetition + 1,
                 options.repetitions
             ));
-            if c.state().probe_extended && (options.home || (repetition > 0 && options.retract)) {
+            if c.state().probe_extended
+                && (options.home || options.jog_home || (repetition > 0 && options.retract))
+            {
                 let mut lateral = c.state().position;
                 lateral[0] = target[0];
                 lateral[1] = target[1];
@@ -372,9 +383,13 @@ async fn repeat_inner<C: RepeatabilityController + ?Sized>(
                 comment("Retract probe".into());
                 actuate(machine, false).await?;
             }
-            if options.home {
-                comment("Home machine".into());
-                home(&c).await?;
+            if options.home || options.jog_home {
+                comment("Jog near home".into());
+                jog_home(&c).await?;
+                if options.home {
+                    comment("Home machine".into());
+                    home(&c).await?;
+                }
                 set_modes(&c, Modes::PROBING).await?;
                 comment("Extend probe".into());
                 actuate(machine, true).await?;

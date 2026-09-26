@@ -28,9 +28,11 @@ Popup {
     property string phase: "prepare"
     property var axes: [true, true, true]
     property int repetitions: 5
+    property bool jogHome: false
     property bool home: false
     property bool retract: true
-    readonly property bool retractEachTime: home || retract
+    readonly property bool retractEachTime: jogHome || home || retract
+    onHomeChanged: if (home) jogHome = true
     property string failure: ""
     property string logText: ""
     property var measurements: []
@@ -100,7 +102,8 @@ Popup {
         phase = "running";
         terminalReceived = false;
         activeRequest = Api.stream(serviceUrl + "/repeatability/run", {
-            axes: axes.slice(), repetitions: repetitions, home: home, retract: retractEachTime
+            axes: axes.slice(), repetitions: repetitions, jogHome: jogHome,
+            home: home, retract: retractEachTime
         }, handleEvent, function(error) {
             activeRequest = null;
             if (error || !terminalReceived) {
@@ -166,7 +169,9 @@ Popup {
                         anchors.fill: parent
                         anchors.margins: 14
                         text: "The probe tip approaches about 15 mm from the bracket walls and 5 mm above the bed, then measures the selected surfaces.\n\n" +
-                            (flow.home ? "The machine homes before each repetition." : "X/Y travel starts at the current height. Make sure the path is clear.")
+                            (flow.home ? "The machine jogs near home and homes before each repetition." :
+                             flow.jogHome ? "The machine jogs near home before each repetition." :
+                             "X/Y travel starts at the current height. Make sure the path is clear.")
                         color: Theme.text
                         font.pixelSize: 20
                         wrapMode: Text.WordWrap
@@ -224,6 +229,17 @@ Popup {
                     }
                     RowLayout {
                         Layout.fillWidth: true
+                        Label { text: "Jog home each time"; color: Theme.text; font.pixelSize: 19; Layout.fillWidth: true }
+                        ProbeSwitch {
+                            Layout.preferredWidth: 110
+                            Layout.preferredHeight: 54
+                            checked: flow.jogHome
+                            enabled: !flow.home
+                            onClicked: flow.jogHome = checked
+                        }
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
                         Label { text: "Home each time"; color: Theme.text; font.pixelSize: 19; Layout.fillWidth: true }
                         ProbeSwitch {
                             Layout.preferredWidth: 110
@@ -239,7 +255,7 @@ Popup {
                             Layout.preferredWidth: 110
                             Layout.preferredHeight: 54
                             checked: flow.retractEachTime
-                            enabled: !flow.home
+                            enabled: !flow.jogHome
                             onClicked: flow.retract = checked
                         }
                     }
@@ -359,7 +375,10 @@ Popup {
                 Layout.fillWidth: true
                 Label {
                     Layout.fillWidth: true
-                    text: flow.showingResults ? (flow.home ? "Home: yes" : "Home: no") + "    " + (flow.retractEachTime ? "Retract: yes" : "Retract: no") : ""
+                    text: flow.showingResults ?
+                        (flow.jogHome ? "Jog home: yes" : "Jog home: no") + "    " +
+                        (flow.home ? "Home: yes" : "Home: no") + "    " +
+                        (flow.retractEachTime ? "Retract: yes" : "Retract: no") : ""
                     color: Theme.textMuted
                     font.pixelSize: 16
                 }

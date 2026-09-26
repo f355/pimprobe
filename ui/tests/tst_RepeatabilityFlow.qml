@@ -65,6 +65,7 @@ TestCase {
         compare(flow.phase, "prepare")
         compare(flow.axes, [true, true, true])
         compare(flow.repetitions, 5)
+        compare(flow.jogHome, false)
         compare(flow.home, false)
         compare(flow.retract, true)
         flow.confirmPreparation()
@@ -124,12 +125,19 @@ TestCase {
         flow.close()
     }
     function test_homing_implies_retraction() {
+        flow.jogHome = false
         flow.home = false
         flow.retract = false
         verify(!flow.retractEachTime)
+        flow.jogHome = true
+        verify(flow.retractEachTime)
+        flow.jogHome = false
         flow.home = true
+        verify(flow.jogHome)
         verify(flow.retractEachTime)
         flow.home = false
+        verify(flow.jogHome)
+        flow.jogHome = false
         flow.retract = true
     }
     function test_streamed_check() {

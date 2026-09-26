@@ -93,6 +93,7 @@ async fn fixed_fixture_can_be_measured_without_setting_work_zero() {
         &RepeatabilityOptions {
             axes: [true, true, true],
             repetitions: 1,
+            jog_home: false,
             home: false,
             retract: false,
         },
@@ -255,6 +256,7 @@ async fn unselected_axes_stay_unmeasured_and_tip_returns_to_fifteen_fifteen_five
         let options = RepeatabilityOptions {
             axes,
             repetitions: 2,
+            jog_home: false,
             home: false,
             retract: false,
         };
@@ -384,6 +386,7 @@ async fn measurements_preserve_surface_coordinates() {
         &RepeatabilityOptions {
             axes: [true, true, false],
             repetitions: 2,
+            jog_home: false,
             retract: false,
             home: false,
         },
@@ -526,6 +529,41 @@ async fn homing_implies_retraction_at_the_measuring_point() {
         );
         assert!(cycle[positioning].starts_with("G38.3 "));
     }
+}
+
+#[tokio::test]
+async fn jog_home_uses_the_homing_approach_without_homing() {
+    let machine = machine();
+    let mut report = RepeatabilityReport::default();
+    run_repeatability(
+        &machine,
+        &RepeatabilityOptions {
+            repetitions: 2,
+            jog_home: true,
+            home: false,
+            retract: false,
+            ..Default::default()
+        },
+        settings(),
+        &mut report,
+        CancellationToken::new(),
+        |_| {},
+    )
+    .await
+    .unwrap();
+    let commands = machine.commands();
+    assert_eq!(commands.iter().filter(|c| *c == "$H").count(), 0);
+    assert_eq!(commands.iter().filter(|c| *c == "G90 G53 G0 Z0").count(), 2);
+    assert_eq!(
+        commands
+            .iter()
+            .filter(|c| *c == "G90 G53 G0 X-20 Y-5")
+            .count(),
+        2
+    );
+    assert_eq!(commands.iter().filter(|c| *c == "M121").count(), 2);
+    assert_eq!(commands.iter().filter(|c| *c == "M122").count(), 2);
+    assert_eq!(report.measurements.len(), 2);
 }
 
 #[tokio::test(start_paused = true)]

@@ -297,6 +297,7 @@ pub(crate) async fn execute<C: Controller + ?Sized>(
     }
     let deadline = t.deadline(s)?;
     let mut inconsistent_ready = false;
+    let mut probe_ready = false;
     tokio::time::timeout(deadline, async {
         c.send(&s.command).await?;
         let probe = matches!(
@@ -304,6 +305,7 @@ pub(crate) async fn execute<C: Controller + ?Sized>(
             StageKind::CoarseProbe | StageKind::FineProbe | StageKind::GuardedMove
         );
         let (mut moving, mut failed, mut hit) = (false, false, None::<Contact>);
+        let mut final_position = None;
         loop {
             let e = receive(&mut rx).await?;
             if let Some(status) = &e.status {
@@ -326,38 +328,47 @@ pub(crate) async fn execute<C: Controller + ?Sized>(
                     }
                 }
             }
-            let Some(status) = e.status else { continue };
-            if !status.ready {
-                continue;
-            }
-            if !probe {
-                if within(status.position, end, 0.05) {
-                    return Ok((None, status.position));
+            if let Some(status) = e.status {
+                if !status.ready {
+                    continue;
                 }
-                inconsistent_ready = true;
-                continue;
+                if !probe {
+                    if within(status.position, end, 0.05) {
+                        return Ok((None, status.position));
+                    }
+                    inconsistent_ready = true;
+                    continue;
+                }
+                if moving {
+                    probe_ready = true;
+                    final_position = Some(status.position);
+                }
             }
-            if !moving {
+            let Some(position) = final_position else {
                 continue;
-            }
+            };
             if s.kind == StageKind::GuardedMove {
-                segment(s, start, status.position)?;
+                segment(s, start, position)?;
                 if hit.is_some() {
                     return Err(Error::UnexpectedContact {
-                        position: status.position,
+                        position,
                         retracted: false,
                     });
                 }
-                if !failed || !within(end, status.position, 0.05) {
-                    return Err(Error::Position(
-                        "guarded move missing no-contact report or stopped short".into(),
-                    ));
+                if !within(end, position, 0.05) {
+                    return Err(Error::Position("guarded move stopped short".into()));
                 }
-                return Ok((None, status.position));
+                if failed {
+                    return Ok((None, position));
+                }
+                continue;
             }
             if failed || hit.is_none() {
-                segment(s, start, status.position)?;
-                if s.no_error && !within(end, status.position, 0.05) {
+                if !failed {
+                    continue;
+                }
+                segment(s, start, position)?;
+                if s.no_error && !within(end, position, 0.05) {
                     return Err(Error::Position("coarse miss stopped short".into()));
                 }
                 return Err(if s.no_error {
@@ -368,24 +379,26 @@ pub(crate) async fn execute<C: Controller + ?Sized>(
             }
             let mut hit = hit.take().unwrap();
             if s.no_error {
-                segment(s, start, status.position)?;
-                hit.position = status.position;
+                segment(s, start, position)?;
+                hit.position = position;
             } else {
                 for j in 0..4 {
-                    let d = (status.position[j] - hit.position[j])
+                    let d = (position[j] - hit.position[j])
                         * if j == i { s.delta[i].signum() } else { 1.0 };
                     if (j == i && !(-0.05..=0.10).contains(&d)) || (j != i && d.abs() > 0.05) {
                         return Err(Error::Position("stop inconsistent with trigger".into()));
                     }
                 }
             }
-            return Ok((Some(hit), status.position));
+            return Ok((Some(hit), position));
         }
     })
     .await
     .map_err(|_| {
         if inconsistent_ready {
             Error::Position("move did not reach expected endpoint".into())
+        } else if probe_ready {
+            Error::Position("probe report missing after motion completed".into())
         } else {
             Error::Timeout
         }

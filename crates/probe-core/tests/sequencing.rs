@@ -257,7 +257,7 @@ async fn changed_wcs_nonfinite_status_and_controller_errors_abort() {
     }
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn guarded_move_requires_failed_probe_report_and_full_endpoint() {
     for events in [
         vec![status(-120.0, false), status(-115.0, true)],
@@ -283,6 +283,39 @@ async fn guarded_move_requires_failed_probe_report_and_full_endpoint() {
             Err(Error::Position(_))
         ));
     }
+}
+
+#[tokio::test]
+async fn guarded_move_accepts_no_contact_report_after_ready() {
+    let c = Scripted::new(vec![vec![
+        status(-120.0, false),
+        status(-115.0, true),
+        contact(-115.0, false),
+    ]]);
+    let result = run_guarded_move(
+        &c,
+        GuardedMoveConfig {
+            axis: Axis::X,
+            distance: 5.0,
+            feed: 1000.0,
+            retract_distance: 0.5,
+        },
+        timing(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(result.position, pos(-115.0));
+}
+
+#[tokio::test]
+async fn contact_stages_accept_probe_report_after_ready() {
+    let mut replies = good();
+    replies[0].swap(1, 2);
+    replies[2].swap(1, 2);
+    let c = Scripted::new(replies);
+    let result = run_contact(&c, config(), timing()).await.unwrap();
+    assert_eq!(result.contact.position, pos(-118.0));
+    assert_eq!(result.final_position, pos(-118.46));
 }
 
 #[tokio::test]

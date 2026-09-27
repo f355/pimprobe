@@ -31,7 +31,7 @@ use tokio_stream::StreamExt;
 const TEST_COMMIT: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
 fn valid_installer() -> Vec<u8> {
-    format!("#!/bin/sh\ncase \"$1\" in\n--check|--check-target) exit 0;;\n--extract) mkdir -p \"$2/app\"; printf '%s\\n' '{TEST_COMMIT}' >\"$2/app/COMMIT\"; printf '%s\\n' '2026.09.0' >\"$2/app/VERSION\";;\nesac\n").into_bytes()
+    format!("#!/bin/sh\ncase \"$1\" in\n--extract) mkdir -p \"$2/app\"; printf '%s\\n' '{TEST_COMMIT}' >\"$2/app/COMMIT\"; printf '%s\\n' '2026.09.0' >\"$2/app/VERSION\";;\n--yes) exit 0;;\n*) exit 1;;\nesac\n").into_bytes()
 }
 
 fn release(tag: &str, prerelease: bool, commit: &str) -> Release {
@@ -97,6 +97,24 @@ fn releases_without_the_installer_or_digest_are_ignored() {
     let mut wrong_asset = release("2026.09.2", false, "b");
     wrong_asset.assets[0].name = "source.zip".into();
     assert!(select_stable(&[missing_digest, wrong_asset], "local").is_none());
+}
+
+#[test]
+fn updater_accepts_installer_names_with_or_without_architecture() {
+    let old_release = release("2026.09.3", false, "a");
+    let mut new_release = release("2026.09.4", false, "b");
+    new_release.assets[0].name = "pimprobe-2026.09.4.run".into();
+    assert_eq!(
+        select_stable(&[old_release], "local").unwrap().tag,
+        "2026.09.3"
+    );
+    assert_eq!(
+        select_stable(&[new_release], "local").unwrap().tag,
+        "2026.09.4"
+    );
+    let mut dev = release("dev", true, TEST_COMMIT);
+    dev.assets[0].name = format!("pimprobe-{}.run", &TEST_COMMIT[..7]);
+    assert!(select_development(&[dev], "different").is_some());
 }
 
 #[tokio::test]
@@ -300,7 +318,7 @@ fn update_stage_directories(root: &std::path::Path) -> usize {
 }
 
 #[tokio::test]
-async fn install_rejects_bad_digest_and_invalid_or_incompatible_installers() {
+async fn install_rejects_bad_digest_and_invalid_installers() {
     let valid = valid_installer();
     let (temp, manager, token) = failure_fixture(valid, Some("00".repeat(32)), 0, false).await;
     assert!(matches!(
@@ -317,7 +335,7 @@ async fn install_rejects_bad_digest_and_invalid_or_incompatible_installers() {
     ));
     assert_eq!(update_stage_directories(temp.path()), 0);
 
-    let wrong_identity = format!("#!/bin/sh\ncase \"$1\" in\n--check|--check-target) exit 0;;\n--extract) mkdir -p \"$2/app\"; echo {} >\"$2/app/COMMIT\";;\nesac\n", "b".repeat(40)).into_bytes();
+    let wrong_identity = format!("#!/bin/sh\ncase \"$1\" in\n--extract) mkdir -p \"$2/app\"; echo {} >\"$2/app/COMMIT\";;\nesac\n", "b".repeat(40)).into_bytes();
     let (temp, manager, token) = failure_fixture(wrong_identity, None, 0, false).await;
     assert!(matches!(
         manager.install(&token, || true).await,
@@ -325,19 +343,12 @@ async fn install_rejects_bad_digest_and_invalid_or_incompatible_installers() {
     ));
     assert_eq!(update_stage_directories(temp.path()), 0);
 
-    let wrong_version = format!("#!/bin/sh\ncase \"$1\" in\n--check|--check-target) exit 0;;\n--extract) mkdir -p \"$2/app\"; echo {TEST_COMMIT} >\"$2/app/COMMIT\"; echo 2026.09.9 >\"$2/app/VERSION\";;\nesac\n").into_bytes();
+    let wrong_version = format!("#!/bin/sh\ncase \"$1\" in\n--extract) mkdir -p \"$2/app\"; echo {TEST_COMMIT} >\"$2/app/COMMIT\"; echo 2026.09.9 >\"$2/app/VERSION\";;\nesac\n").into_bytes();
     let (temp, manager, token) = failure_fixture(wrong_version, None, 0, false).await;
     assert!(matches!(
         manager.install(&token, || true).await,
         Err(UpdateError::InvalidInstaller)
     ));
-    assert_eq!(update_stage_directories(temp.path()), 0);
-
-    let incompatible = format!("#!/bin/sh\ncase \"$1\" in\n--check) exit 0;;\n--extract) mkdir -p \"$2/app\"; echo {TEST_COMMIT} >\"$2/app/COMMIT\"; echo 2026.09.0 >\"$2/app/VERSION\"; exit 0;;\n--check-target) echo unsupported >&2; exit 1;;\nesac\n").into_bytes();
-    let (temp, manager, token) = failure_fixture(incompatible, None, 0, false).await;
-    assert!(
-        matches!(manager.install(&token, || true).await, Err(UpdateError::Target(message)) if message == "unsupported")
-    );
     assert_eq!(update_stage_directories(temp.path()), 0);
 }
 

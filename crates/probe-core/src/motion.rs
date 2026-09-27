@@ -382,8 +382,8 @@ pub(crate) async fn execute<C: Controller + ?Sized>(
                 segment(s, start, position)?;
                 hit.position = position;
             } else {
-                for j in 0..4 {
-                    let d = (position[j] - hit.position[j])
+                for (j, &coordinate) in position.iter().enumerate() {
+                    let d = (coordinate - hit.position[j])
                         * if j == i { s.delta[i].signum() } else { 1.0 };
                     if (j == i && !(-0.05..=0.10).contains(&d)) || (j != i && d.abs() > 0.05) {
                         return Err(Error::Position("stop inconsistent with trigger".into()));

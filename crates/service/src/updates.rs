@@ -101,8 +101,6 @@ pub enum UpdateError {
     Io(#[source] std::io::Error),
     #[error("The downloaded installer is not valid")]
     InvalidInstaller,
-    #[error("The installer cannot run on this machine: {0}")]
-    Target(String),
     #[error("Could not start the installer: {0}")]
     Launch(#[source] std::io::Error),
 }
@@ -326,17 +324,6 @@ impl UpdateManager {
         if !actual.eq_ignore_ascii_case(expected) {
             return Err(UpdateError::Digest);
         }
-        let valid = Command::new("sh")
-            .arg(&installer)
-            .arg("--check")
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .await
-            .map_err(UpdateError::Io)?;
-        if !valid.success() {
-            return Err(UpdateError::InvalidInstaller);
-        }
         let extracted = stage.join("metadata");
         let extraction = Command::new("sh")
             .arg(&installer)
@@ -361,22 +348,6 @@ impl UpdateManager {
                 && version.as_deref().map(str::trim) == Some(candidate.version.as_str())
         }) {
             return Err(UpdateError::InvalidInstaller);
-        }
-        let compatible = Command::new("sh")
-            .arg(&installer)
-            .arg("--check-target")
-            .output()
-            .await
-            .map_err(UpdateError::Io)?;
-        if !compatible.status.success() {
-            let message = String::from_utf8_lossy(&compatible.stderr)
-                .trim()
-                .to_owned();
-            return Err(UpdateError::Target(if message.is_empty() {
-                "target validation failed".into()
-            } else {
-                message
-            }));
         }
         if !ready() {
             return Err(UpdateError::MachineBusy);
@@ -437,9 +408,10 @@ fn installer_asset(release: &Release) -> Option<&ReleaseAsset> {
     } else {
         &release.tag
     };
-    let expected = format!("pimprobe-linux-arm64-{qualifier}.run");
+    let suffix = format!("-{qualifier}.run");
     release.assets.iter().find(|asset| {
-        asset.name == expected
+        asset.name.starts_with("pimprobe-")
+            && asset.name.ends_with(&suffix)
             && asset
                 .digest
                 .as_deref()

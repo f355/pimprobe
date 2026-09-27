@@ -68,18 +68,17 @@ jobs:
           node --test dev/test-installer.mjs
           VERSION="${GITHUB_SHA::7}"
           if [[ "$GITHUB_REF_TYPE" == tag ]]; then VERSION="$GITHUB_REF_NAME"; fi
-          node dev/package.mjs --output dist/pimprobe-linux-arm64.run \
+          node dev/package.mjs --output dist/pimprobe.run \
             --version "$VERSION" --commit "$GITHUB_SHA"
-          sh dist/pimprobe-linux-arm64.run --check
           docker run --rm \
-            -v "$PWD/dist/pimprobe-linux-arm64.run:/package.run:ro" \
+            -v "$PWD/dist/pimprobe.run:/package.run:ro" \
             -v "$PWD/dev/test-install-container.sh:/test.sh:ro" \
             -v "$PWD/packaging/config.example.json:/expected-config.json:ro" \
             pimprobe-rust-builder sh /test.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: pimprobe-linux-arm64
-          path: dist/pimprobe-linux-arm64.run
+          name: pimprobe
+          path: dist/pimprobe.run
           if-no-files-found: error
 
   release-dev:
@@ -102,7 +101,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/download-artifact@v5
         with:
-          name: pimprobe-linux-arm64
+          name: pimprobe
           path: release-assets
       - name: Publish rolling development release
         run: |
@@ -117,8 +116,8 @@ jobs:
           if [[ -n "$BASE" ]]; then RANGE="$BASE..HEAD"; fi
           node dev/release-notes.mjs development "$RANGE" >release-notes.md
           printf '\nBuild commit: `%s`\n' "$GITHUB_SHA" >>release-notes.md
-          ASSET="pimprobe-linux-arm64-${GITHUB_SHA::7}.run"
-          cp release-assets/pimprobe-linux-arm64.run "release-assets/$ASSET"
+          ASSET="pimprobe-${GITHUB_SHA::7}.run"
+          cp release-assets/pimprobe.run "release-assets/$ASSET"
           if gh release view dev >/dev/null 2>&1; then
             gh release upload dev "release-assets/$ASSET" --clobber
             gh release edit dev --title "Development Build" --notes-file release-notes.md \
@@ -157,7 +156,7 @@ jobs:
           node-version: '22'
       - uses: actions/download-artifact@v5
         with:
-          name: pimprobe-linux-arm64
+          name: pimprobe
           path: release-assets
       - name: Validate tag and publish release
         run: |
@@ -178,8 +177,8 @@ jobs:
           RANGE=HEAD
           if [[ -n "$PREVIOUS" ]]; then RANGE="$PREVIOUS..HEAD"; fi
           node dev/release-notes.mjs stable "$RANGE" >release-notes.md
-          ASSET="pimprobe-linux-arm64-$TAG.run"
-          cp release-assets/pimprobe-linux-arm64.run "release-assets/$ASSET"
+          ASSET="pimprobe-$TAG.run"
+          cp release-assets/pimprobe.run "release-assets/$ASSET"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "release-assets/$ASSET" --clobber
             gh release edit "$TAG" --title "$TAG" --notes-file release-notes.md \

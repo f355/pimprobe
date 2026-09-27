@@ -9,24 +9,26 @@ result of using this software. Exercise caution, double-check your parameters an
 
 Download the installer from the [latest stable release](https://github.com/f355/pimprobe/releases/latest)
 or the [rolling development release](https://github.com/f355/pimprobe/releases/tag/dev),
-then transfer it to the machine.
+rename it to `pimprobe.run` and copy it to a USB drive.
 
-With the machine idle and spindle stopped, run these commands as root on the
-machine, in the directory containing the installer.
+Make sure the machine is idle with the spindle stopped.
+Connect a USB keyboard to the port on the right side of the machine.
+Press `Ctrl-Alt-T`, a terminal window will open on the NestPad.
 
-To install:
-
-```sh
-sh pimprobe-linux-arm64-???????.run
-```
-
-To uninstall, including settings:
+Have your USB drive ready. Type the following in the terminal exactly, press Enter,
+then swap the keyboard for the USB drive within 20 seconds, and wait for the NestPad UI to restart.
 
 ```sh
-sh pimprobe-linux-arm64-???????.run --uninstall
+sleep 20; sh /mnt/udisk/pimprobe.run -y -r
 ```
 
-Follow the prompts to restart the machine's UI, or reboot afterward.
+To uninstall, including settings, follow the same procedure, just use a different command:
+
+```sh
+sleep 20; sh /mnt/udisk/pimprobe.run --uninstall -y -r
+```
+
+To get new versions as they are released, head to the Settings tab and press "Check for updates".
 
 ## Documentation
 
@@ -140,19 +142,17 @@ ssh -t root@<machine-host> 'sh /userdata/pimprobe-<git-version>.run'
 The installer checks the archive, machine layout and runtime dependencies, and
 preserves configuration and settings during upgrades.
 
-Choose to restart CNC_Lab immediately or reboot later to activate the installation.
+Reboot later to activate the installation, or use `-r` to restart CNC_Lab immediately.
 
 ```sh
-sh installer.run --check                 # Verify archive checksum
 sh installer.run --extract ./unpacked    # Extract to a new directory
-sh installer.run --check-target          # Check machine compatibility
-sh installer.run --yes --no-restart      # Install; reboot later
-sh installer.run --yes --restart         # Install and restart CNC_Lab
+sh installer.run -y                      # Install; reboot later
+sh installer.run -y -r                   # Install and restart CNC_Lab
 sh installer.run --uninstall             # Remove PIMProbe and its data
-sh installer.run --uninstall --yes --restart
+sh installer.run --uninstall -y -r
 ```
 
-`--yes` confirms that you have made the machine idle with its spindle stopped.
+`-y` (`--yes`) confirms that you have made the machine idle with its spindle stopped.
 Obtain installers from a trusted source; the checksum detects corruption.
 
 Uninstall removes PIMProbe's service, plugins, UI, settings and probing logs.

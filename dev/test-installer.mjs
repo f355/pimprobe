@@ -35,7 +35,6 @@ test('self-extracting package preserves its payload and rejects corruption', () 
         const commit = '0123456789abcdef0123456789abcdef01234567';
         run('node', ['dev/package.mjs', '--output', installer, '--version', '2026.09.01', '--commit', commit], 1);
         run('node', ['dev/package.mjs', '--output', installer, '--version', '2026.09.0', '--commit', commit]);
-        run('sh', [installer, '--check']);
         const extracted = join(temp, 'unpacked');
         run('sh', [installer, '--extract', extracted]);
         assert.equal(readFileSync(join(extracted, 'app/VERSION'), 'utf8'), '2026.09.0\n');
@@ -57,7 +56,6 @@ test('self-extracting package preserves its payload and rejects corruption', () 
         const corrupt = readFileSync(installer);
         corrupt[corrupt.length - 20] ^= 1;
         writeFileSync(installer, corrupt);
-        run('sh', [installer, '--check'], 1);
         const rejected = join(temp, 'rejected');
         run('sh', [installer, '--extract', rejected], 1);
         assert.equal(existsSync(rejected), false, 'corrupt archive must be rejected before extraction');

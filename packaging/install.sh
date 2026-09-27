@@ -20,24 +20,20 @@ payload=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 destination=/userdata/pimprobe
 vendor=/root/app
 unit=/etc/systemd/system/pimprobe-service.service
-restart=ask
+restart=no
 yes=false
-check=false
 uninstall=false
 for arg in "$@"; do
     case "$arg" in
         --uninstall) uninstall=true ;;
-        --yes) yes=true ;;
-        --restart) restart=yes ;;
-        --no-restart) restart=no ;;
-        --check-target) check=true ;;
+        --yes|-y) yes=true ;;
+        --restart|-r) restart=yes ;;
         *) echo "Unknown option: $arg" >&2; exit 1 ;;
     esac
 done
 fail() { echo "$*" >&2; exit 1; }
 [ "$(uname -s)" = Linux ] && [ "$(uname -m)" = aarch64 ] || fail 'This installer requires Linux ARM64.'
 [ "$(id -u)" = 0 ] || fail 'Run this installer as root.'
-[ "$uninstall" = false ] || [ "$check" = false ] || fail '--uninstall cannot be combined with --check-target.'
 for command in systemctl flock readlink; do
     command -v "$command" >/dev/null 2>&1 || fail "Required command missing: $command"
 done
@@ -56,10 +52,6 @@ for name in libpimprobeproxyplugin.so libpimprobelauncherplugin.so; do
         [ -L "$link" ] && [ "$(readlink "$link")" = "$destination/lib/$name" ] || fail "Refusing to replace an unexpected plugin: $link"
     fi
 done
-if [ "$check" = true ]; then
-    echo 'Target layout and runtime dependencies OK. Plugin compatibility is limited to supported NestPad firmware.'
-    exit 0
-fi
 echo 'The machine must be idle with the spindle stopped.'
 if [ "$uninstall" = true ]; then
     echo 'Uninstall permanently deletes PIMProbe settings and probing logs.'
@@ -73,15 +65,6 @@ if [ "$yes" = false ]; then
     read -r answer || exit 1
     case "$answer" in y|Y|yes) ;; *) echo 'Cancelled.'; exit 0 ;; esac
 fi
-if [ "$restart" = ask ]; then
-    if [ "$yes" = true ]; then
-        restart=no
-    else
-        printf 'Restart CNC_Lab to finish now? [y/N; otherwise reboot later] '
-        read -r answer || exit 1
-        case "$answer" in y|Y|yes) restart=yes ;; *) restart=no ;; esac
-    fi
-fi
 # Serialize installation and removal with a directory lock.
 exec 8</userdata
 flock -n 8 || fail 'Another installation or uninstall is running.'
@@ -94,8 +77,6 @@ installation_started=false
 destination_installed=false
 plugins_changed=false
 unit_changed=false
-nestpad_was_active=false
-nestpad_restart_attempted=false
 
 stop_pimprobe_ui() {
     [ -f /run/pimprobe-ui.pid ] || return 0
@@ -152,9 +133,6 @@ cleanup() {
     if [ "$status" != 0 ] && [ "$uninstall" = false ] &&
         { [ "$installation_started" = true ] || [ "$service_stopped" = true ]; }; then
         if [ "$installation_started" = true ]; then rollback_installation; fi
-        if [ "$nestpad_restart_attempted" = true ] && [ "$nestpad_was_active" = true ]; then
-            systemctl restart nestpad.service >/dev/null 2>&1 || true
-        fi
         if [ "$service_stopped" = true ] && [ "$service_was_active" = true ]; then
             systemctl start pimprobe-service >/dev/null 2>&1 || true
         fi
@@ -189,7 +167,6 @@ fi
 if [ -L /etc/systemd/system/multi-user.target.wants/pimprobe-service.service ]; then unit_was_enabled=true; fi
 if [ "$restart" = yes ]; then
     systemctl is-active --quiet nestpad.service || fail 'NestPad application service is not running.'
-    nestpad_was_active=true
 fi
 if systemctl is-active --quiet pimprobe-service; then
     service_was_active=true
@@ -235,13 +212,16 @@ if [ "$restart" = no ]; then
     exit 0
 fi
 stop_pimprobe_ui
-nestpad_restart_attempted=true
-systemctl restart nestpad.service
-systemctl is-active --quiet nestpad.service || fail 'NestPad application service did not restart.'
-if [ "$uninstall" = true ]; then
-    echo 'CNC_Lab restarted without PIMProbe.'
-    exit 0
+if [ "$uninstall" = false ]; then
+    systemctl start pimprobe-service
+    systemctl is-active --quiet pimprobe-service || fail 'Probing service did not start. Check journalctl -u pimprobe-service.'
 fi
-systemctl start pimprobe-service
-systemctl is-active --quiet pimprobe-service || fail 'Probing service did not start. Check journalctl -u pimprobe-service.'
-echo 'CNC_Lab and the probing service restarted.'
+if [ -n "$stage" ]; then rm -rf "$stage"; stage=''; fi
+if [ -n "$rollback" ]; then rm -rf "$rollback"; rollback=''; fi
+trap - EXIT
+if [ "$uninstall" = true ]; then
+    echo 'PIMProbe removed; restarting CNC_Lab.'
+else
+    echo 'Probing service started; restarting CNC_Lab.'
+fi
+systemctl restart nestpad.service

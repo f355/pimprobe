@@ -25,21 +25,18 @@ PIMProbe offline installer for NestPad (Linux ARM64).
 Run only with the machine idle and the spindle stopped.
 
   sh installer.run                     Interactive installation
-  sh installer.run --yes --no-restart   Install; activate after a reboot
-  sh installer.run --yes --restart      Install and restart CNC_Lab now
+  sh installer.run -y                   Install; activate after a reboot
+  sh installer.run -y -r                Install and restart CNC_Lab now
   sh installer.run --uninstall          Remove PIMProbe and its data
-  sh installer.run --check              Verify the embedded archive only
-  sh installer.run --check-target       Verify archive and machine compatibility
   sh installer.run --extract DIRECTORY  Extract into a new directory; do not install
 
---yes confirms that the machine is idle. Without --yes, changes ask first.
---uninstall supports --yes, --restart and --no-restart. It leaves this installer
-and shared system journals intact. Without a restart, reboot to unload plugins.
+-y is short for --yes; -r is short for --restart. Without -y, changes ask first.
+--uninstall supports -y and -r. It leaves this installer and shared system
+journals intact. Without a restart, reboot to unload plugins.
 HELP
 }
 case "${1:-}" in
     --help|-h) usage; exit 0 ;;
-    --check|--check-target) [ "$#" = 1 ] || { usage; exit 1; } ;;
     --extract) [ "$#" = 2 ] || { usage; exit 1; } ;;
 esac
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/pimprobe-unpack.XXXXXX")
@@ -53,10 +50,6 @@ else
     actual=$(shasum -a 256 "$scratch/payload.tar.gz")
 fi
 [ "${actual%% *}" = "$digest" ] || { echo 'Payload checksum mismatch; nothing installed.' >&2; exit 1; }
-if [ "${1:-}" = --check ]; then
-    echo 'Payload checksum OK.'
-    exit 0
-fi
 if [ "${1:-}" = --extract ]; then
     mkdir -- "$2"
     tar -xzf "$scratch/payload.tar.gz" -C "$2"

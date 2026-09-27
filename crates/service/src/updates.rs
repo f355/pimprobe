@@ -25,7 +25,7 @@ use std::{
 use tokio::{fs, io::AsyncWriteExt, process::Command, sync::Mutex};
 use uuid::Uuid;
 
-const INSTALLER: &str = "pimprobe-linux-arm64.run";
+const INSTALLER: &str = "pimprobe.run";
 const MAX_INSTALLER_SIZE: usize = 128 * 1024 * 1024;
 const CANDIDATE_LIFETIME: Duration = Duration::from_secs(15 * 60);
 const MAX_CANDIDATES: usize = 8;

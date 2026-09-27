@@ -44,7 +44,8 @@ case "$1" in
     stop) rm -f /tmp/service-active ;;
     restart)
         if [ "$2" = nestpad.service ]; then
-            if [ -e /tmp/fail-nestpad-restart ]; then rm -f /tmp/fail-nestpad-restart; exit 1; fi
+            test -z "$(find /userdata -maxdepth 1 -name 'pimprobe-rollback.*')" || exit 1
+            if [ -e /userdata/pimprobe ]; then test -e /tmp/service-active || exit 1; fi
             touch /tmp/nestpad-active /tmp/nestpad-restarted
         fi
         ;;
@@ -57,17 +58,15 @@ STUB
 chmod +x /test-bin/*
 export PATH=/test-bin:$PATH
 touch /tmp/nestpad-active
-sh /package.run --check
-sh /package.run --check-target
 # A failed preflight must leave the existing installation usable.
 mkdir -p /userdata/pimprobe
 printf 'old version\n' >/userdata/pimprobe/VERSION
 touch /tmp/missing-library
-if sh /package.run --yes --no-restart; then exit 1; fi
+if sh /package.run -y; then exit 1; fi
 test "$(cat /userdata/pimprobe/VERSION)" = 'old version'
 rm /tmp/missing-library
 rm -rf /userdata/pimprobe
-sh /package.run --yes --no-restart
+printf 'y\n' | sh /package.run
 test -x /userdata/pimprobe/bin/pimprobe-service
 test -f /userdata/pimprobe/ui/Main.qml
 test "$(readlink /root/app/libpimprobeproxyplugin.so)" = /userdata/pimprobe/lib/libpimprobeproxyplugin.so
@@ -81,7 +80,7 @@ cp /userdata/pimprobe/settings.json /tmp/expected-settings
 cp /userdata/pimprobe/config.json /tmp/expected-config
 printf 'obsolete UI\n' >/userdata/pimprobe/ui/Old.qml
 touch /tmp/service-active
-sh /package.run --yes --no-restart
+sh /package.run -y
 cmp /userdata/pimprobe/settings.json /tmp/expected-settings
 cmp /userdata/pimprobe/config.json /tmp/expected-config
 test "$(cat /userdata/pimprobe-data/history.jsonl)" = 'saved probe history'
@@ -103,7 +102,7 @@ chmod +x /userdata/pimprobe/bin/pimprobe-ui
 ui_pid=$!
 printf '%s\n' "$ui_pid" >/run/pimprobe-ui.pid
 touch /tmp/service-active /tmp/fail-daemon-reload
-if sh /package.run --yes --restart; then exit 1; fi
+if sh /package.run -y -r; then exit 1; fi
 kill -0 "$ui_pid"
 test "$(cat /userdata/pimprobe/VERSION)" = 'old version'
 test -e /tmp/service-active
@@ -111,24 +110,19 @@ grep -q PIMPROBE_TEST /etc/systemd/system/pimprobe-service.service.d/test.conf
 kill "$ui_pid"
 wait "$ui_pid" 2>/dev/null || true
 rm -f /run/pimprobe-ui.pid
-# A failed supervised restart restores the previous installation and service.
-printf 'old version\n' >/userdata/pimprobe/VERSION
-touch /tmp/service-active /tmp/fail-nestpad-restart
-if sh /package.run --yes --restart; then exit 1; fi
-test "$(cat /userdata/pimprobe/VERSION)" = 'old version'
-test -e /tmp/service-active
 # Conflicting plugin ownership must not get overwritten.
 rm /root/app/libpimprobeproxyplugin.so
 printf 'unrelated plugin\n' >/root/app/libpimprobeproxyplugin.so
-if sh /package.run --yes --no-restart; then exit 1; fi
+if sh /package.run -y; then exit 1; fi
 test "$(cat /root/app/libpimprobeproxyplugin.so)" = 'unrelated plugin'
 rm /root/app/libpimprobeproxyplugin.so
 # Match the vendor profile's use of optional environment variables.
 printf '\n: "$OPTIONAL_VENDOR_VARIABLE"\n' >>/etc/profile
 rm -f /tmp/nestpad-restarted
-sh /package.run --yes --restart
+sh /package.run -y -r
 test -e /tmp/nestpad-restarted
 test -e /tmp/service-active
+test -z "$(find /userdata -maxdepth 1 -name 'pimprobe-rollback.*')"
 cmp /userdata/pimprobe/settings.json /tmp/expected-settings
 # Uninstall must work even when the UI runtime is broken, and preserve unrelated data.
 mkdir -p /userdata/other-app /root/.config/pimprobe
@@ -136,9 +130,9 @@ touch /userdata/other-app/keep /root/.config/pimprobe/settings.json
 touch /run/pimprobe-controller.sock /run/pimprobe-ui.lock
 touch /tmp/missing-library
 rm /usr/bin/qmlscene
-printf 'n\n' | sh /package.run --uninstall --no-restart
+printf 'n\n' | sh /package.run --uninstall
 test -d /userdata/pimprobe
-sh /package.run --uninstall --yes --no-restart
+sh /package.run --uninstall -y
 test ! -e /userdata/pimprobe
 test ! -e /userdata/pimprobe-data
 test ! -e /root/.config/pimprobe
@@ -150,12 +144,12 @@ test ! -e /run/pimprobe-ui.lock
 test -f /userdata/other-app/keep
 test -x /root/app/CNC_Lab
 test ! -e /tmp/service-active
-sh /package.run --uninstall --yes --no-restart
+sh /package.run --uninstall -y
 # The same package can install again after complete removal.
 rm /tmp/missing-library /tmp/nestpad-restarted
 printf '#!/bin/sh\nexit 0\n' >/usr/bin/qmlscene
 chmod +x /usr/bin/qmlscene
-sh /package.run --yes --no-restart
+sh /package.run -y
 cmp /userdata/pimprobe/config.json /expected-config.json
 cat >/userdata/pimprobe/bin/pimprobe-ui <<'STUB'
 #!/bin/sh
@@ -165,7 +159,7 @@ chmod +x /userdata/pimprobe/bin/pimprobe-ui
 /userdata/pimprobe/bin/pimprobe-ui &
 ui_pid=$!
 printf '%s\n' "$ui_pid" >/run/pimprobe-ui.pid
-sh /package.run --uninstall --yes --restart
+sh /package.run --uninstall -y -r
 if kill -0 "$ui_pid" 2>/dev/null; then exit 1; fi
 wait "$ui_pid" 2>/dev/null || true
 test -e /tmp/nestpad-restarted

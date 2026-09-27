@@ -226,7 +226,7 @@ async fn install_verifies_the_download_and_hands_it_to_a_transient_service() {
     let launch = tokio::fs::read_to_string(record).await.unwrap();
     assert!(launch.contains("--collect"), "{launch}");
     assert!(launch.contains("--yes --restart"), "{launch}");
-    assert!(launch.contains("pimprobe-linux-arm64.run"), "{launch}");
+    assert!(launch.contains("pimprobe.run"), "{launch}");
     assert_eq!(manager.status(&operation).await.unwrap().state, "unknown");
     assert_eq!(update_stage_directories(temp.path()), 0);
     assert!(matches!(

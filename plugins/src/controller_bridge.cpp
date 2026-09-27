@@ -40,10 +40,13 @@ bool connectControllerOutput(QObject *source, QObject *receiver) {
                               SLOT(publishRawData(QByteArray)))) {
             return false;
         }
+        if (auto *bridge = qobject_cast<ControllerBridge *>(receiver)) {
+            bridge->useRawStatus(true);
+        }
     }
     const auto robot = QObject::connect(
         source, SIGNAL(robotinfoSignal(QByteArray)), receiver,
-        SLOT(publishControllerData(QByteArray)));
+        SLOT(publishRobotData(QByteArray)));
     const auto other = QObject::connect(
         source, SIGNAL(otherinfoSignal(QByteArray)), receiver,
         SLOT(publishControllerData(QByteArray)));
@@ -63,6 +66,7 @@ bool ControllerBridge::listen(const QString &path) {
 QString ControllerBridge::errorString() const { return server_.errorString(); }
 
 QString ControllerBridge::serverName() const { return server_.serverName(); }
+void ControllerBridge::useRawStatus(bool enabled) { rawStatus_ = enabled; }
 
 void ControllerBridge::acceptConnections() {
     while (server_.hasPendingConnections()) {
@@ -114,6 +118,20 @@ void ControllerBridge::readClientData() {
 
 void ControllerBridge::publishControllerData(const QByteArray &data) {
     writeFrame('D', data);
+}
+
+void ControllerBridge::publishRobotData(const QByteArray &data) {
+    QByteArray record = data.trimmed();
+    if (record.startsWith("[SerialReport:")) {
+        const auto end = record.indexOf("] ");
+        if (end >= 0) {
+            record = record.mid(end + 2);
+        }
+    }
+    if (rawStatus_ && record.startsWith('<') && record.endsWith('>')) {
+        return;
+    }
+    publishControllerData(data);
 }
 
 void ControllerBridge::publishRawData(const QByteArray &data) {

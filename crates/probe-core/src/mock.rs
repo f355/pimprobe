@@ -275,8 +275,13 @@ impl MockController {
         Ok(())
     }
     fn publish(&self, s: &State) {
+        self.publish_mode(s, if s.ready { "Ready" } else { "Moving" });
+    }
+    fn publish_mode(&self, s: &State, mode: &str) {
         let _ = self.events.send(Event {
             status: Some(MotionStatus {
+                mode: mode.into(),
+                homed: s.homed,
                 ready: s.ready,
                 motion_blocked: s.motion_blocked,
                 position: s.position,
@@ -342,10 +347,10 @@ impl Controller for MockController {
         if command == "$H" {
             inner.state.ready = false;
             inner.state.homed = false;
-            self.publish(&inner.state);
+            self.publish_mode(&inner.state, "Homing");
             let origin: Position =
                 std::array::from_fn(|i| inner.state.position[i] - inner.state.work_position[i]);
-            inner.state.position = [-1.0, -1.0, 0.0, 0.0];
+            inner.state.position = [0.0; 4];
             inner.state.work_position =
                 std::array::from_fn(|i| inner.state.position[i] - origin[i]);
             inner.state.homed = true;

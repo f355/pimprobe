@@ -49,9 +49,11 @@ public:
     bool listen(const QString &path);
     QString errorString() const;
     QString serverName() const;
+    void useRawStatus(bool enabled);
 
 public slots:
     void publishControllerData(const QByteArray &data);
+    void publishRobotData(const QByteArray &data);
     void publishRawData(const QByteArray &data);
 
 signals:
@@ -72,6 +74,7 @@ private:
     QLocalSocket *client_ = nullptr;
     QByteArray input_;
     QByteArray rawInput_;
+    bool rawStatus_ = false;
 };
 
 }  // namespace pimprobe

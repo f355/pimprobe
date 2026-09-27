@@ -126,6 +126,8 @@ pub struct Contact {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MotionStatus {
+    pub mode: String,
+    pub homed: bool,
     pub ready: bool,
     pub motion_blocked: bool,
     pub position: Position,

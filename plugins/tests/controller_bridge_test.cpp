@@ -133,13 +133,12 @@ void ControllerBridgeTest::forwardsOnlyParsedControllerRecords() {
         QByteArrayLiteral("|WPos:4.000,5.000,6.000,0.000>") +
         QByteArray::fromHex("00ff"));
 
-    emit source.robotinfoSignal(QByteArrayLiteral("<Ready>\r\n"));
+    emit source.robotinfoSignal(QByteArrayLiteral("[SerialReport:180] <Ready>\r\n"));
     emit source.otherinfoSignal(QByteArrayLiteral("$33=-55.872\r\n"));
     QTRY_VERIFY(socket.bytesAvailable() >= 10);
     QCOMPARE(socket.readAll(),
              frame('D', QByteArrayLiteral(
                             "<Ready|MPos:1.000,2.000,3.000,0.000|WPos:4.000,5.000,6.000,0.000>")) +
-                 frame('D', QByteArrayLiteral("<Ready>\r\n")) +
                  frame('D', QByteArrayLiteral("$33=-55.872\r\n")));
 }
 

@@ -489,6 +489,8 @@ fn apply(inner: &Inner, record: Record) {
                 }
             }
             event.status = Some(MotionStatus {
+                mode: status.mode.clone(),
+                homed: status.homed,
                 ready: status.complete && status.mode == "Ready",
                 motion_blocked: status.motion_blocked,
                 position: status.m_pos,

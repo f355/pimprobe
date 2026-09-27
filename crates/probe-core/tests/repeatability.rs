@@ -297,6 +297,7 @@ enum Behaviour {
     FailBackoff,
     HomeRetracts,
     HomeReadyOnly,
+    HomeUnrelatedMove,
     SlowActuationAndHoming,
 }
 struct ControllerFixture {
@@ -337,6 +338,9 @@ impl Controller for ControllerFixture {
         if command == "$H" && matches!(self.behaviour, Behaviour::HomeReadyOnly) {
             return self.inner.set_extended(self.inner.state().probe_extended);
         }
+        if command == "$H" && matches!(self.behaviour, Behaviour::HomeUnrelatedMove) {
+            return self.inner.send("G90 G53 G0 X0 Y0").await;
+        }
         self.inner.send(command).await?;
         if command.starts_with("G38.2 ") {
             self.fine_completed.store(true, Ordering::Relaxed);
@@ -351,7 +355,7 @@ impl Controller for ControllerFixture {
 impl RepeatabilityController for ControllerFixture {
     async fn set_probe(&self, extended: bool) -> Result<(), Error> {
         let state = self.inner.state();
-        let extending_at_home = extended && state.position[..3] == [-1.0, -1.0, 0.0];
+        let extending_at_home = extended && state.position[..3] == [0.0, 0.0, 0.0];
         if !extending_at_home {
             for (i, reference) in REPEATABILITY_REFERENCE_G53.iter().enumerate().take(2) {
                 assert!(
@@ -586,6 +590,25 @@ async fn homing_needs_a_moving_to_ready_transition() {
     .await;
     assert_eq!(result, Err(Error::Timeout));
     assert!(report.measurements.is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn homing_ignores_an_unrelated_move_to_machine_zero() {
+    let machine = fixture(Behaviour::HomeUnrelatedMove);
+    let result = run_repeatability(
+        &machine,
+        &RepeatabilityOptions {
+            repetitions: 1,
+            home: true,
+            ..Default::default()
+        },
+        settings(),
+        &mut RepeatabilityReport::default(),
+        CancellationToken::new(),
+        |_| {},
+    )
+    .await;
+    assert_eq!(result, Err(Error::Timeout));
 }
 
 #[tokio::test]

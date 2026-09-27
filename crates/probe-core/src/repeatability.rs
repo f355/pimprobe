@@ -253,9 +253,13 @@ async fn jog_home<C: Controller + ?Sized>(c: &C) -> Result<(), Error> {
         for &(axis, coordinate) in coordinates {
             target[axis] = coordinate;
         }
+        if within(state.position, target, 0.05) {
+            continue;
+        }
         let mut events = c.subscribe();
         tokio::time::timeout(Duration::from_secs(120), async {
             c.send(command).await?;
+            let mut moving = false;
             loop {
                 if let Some(status) = receive(&mut events).await?.status {
                     if status.wcs != state.wcs {
@@ -263,7 +267,8 @@ async fn jog_home<C: Controller + ?Sized>(c: &C) -> Result<(), Error> {
                             "WCS changed while jogging near home".into(),
                         ));
                     }
-                    if status.ready && within(status.position, target, 0.05) {
+                    moving |= !status.ready;
+                    if moving && status.ready && within(status.position, target, 0.05) {
                         return Ok(());
                     }
                 }
@@ -279,11 +284,17 @@ async fn home<C: Controller + ?Sized>(c: &C) -> Result<(), Error> {
     let mut events = c.subscribe();
     tokio::time::timeout(Duration::from_secs(600), async {
         c.send("$H").await?;
-        let mut moving = false;
+        let mut homing = false;
         loop {
             if let Some(status) = receive(&mut events).await?.status {
-                moving |= !status.ready;
-                if moving && status.ready && c.state().homed {
+                homing |= status.mode == "Homing";
+                if homing
+                    && status.ready
+                    && status.homed
+                    && status.position[..3]
+                        .iter()
+                        .all(|p| p.is_finite() && p.abs() <= 0.05)
+                {
                     return Ok(());
                 }
             }
@@ -488,6 +499,57 @@ async fn repeat_inner<C: RepeatabilityController + ?Sized>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio::sync::broadcast;
+
+    struct ReadyOnlyJog {
+        state: State,
+        events: broadcast::Sender<Event>,
+    }
+
+    #[async_trait]
+    impl Controller for ReadyOnlyJog {
+        fn state(&self) -> State {
+            self.state.clone()
+        }
+
+        fn subscribe(&self) -> broadcast::Receiver<Event> {
+            self.events.subscribe()
+        }
+
+        async fn send(&self, command: &str) -> Result<(), Error> {
+            let mut position = self.state.position;
+            match command {
+                "G90 G53 G0 Z0" => position[2] = 0.0,
+                "G90 G53 G0 X-20 Y-5" => {
+                    position[0] = -20.0;
+                    position[1] = -5.0;
+                }
+                _ => panic!("unexpected command: {command}"),
+            }
+            let _ = self.events.send(Event {
+                status: Some(MotionStatus {
+                    mode: "Ready".into(),
+                    homed: true,
+                    ready: true,
+                    position,
+                    wcs: self.state.wcs,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            });
+            Ok(())
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn jog_home_waits_for_motion_before_accepting_ready() {
+        let (events, _) = broadcast::channel(8);
+        let machine = ReadyOnlyJog {
+            state: MockController::new().state(),
+            events,
+        };
+        assert_eq!(jog_home(&machine).await, Err(Error::Timeout));
+    }
 
     #[tokio::test]
     async fn positioning_waits_for_a_delayed_completion_report() {

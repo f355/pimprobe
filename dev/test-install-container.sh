@@ -56,6 +56,14 @@ cat >/test-bin/ldd <<'STUB'
 if [ -f /tmp/missing-library ]; then echo 'libexample.so => not found'; else echo 'Runtime dependencies OK'; fi
 STUB
 chmod +x /test-bin/*
+cat >/test-bin/sync <<'STUB'
+#!/bin/sh
+/bin/sync
+if [ -f /etc/systemd/system/pimprobe-service.service ] && [ -f /userdata/pimprobe/bin/pimprobe-service ]; then
+    sha256sum /etc/systemd/system/pimprobe-service.service /userdata/pimprobe/bin/pimprobe-service >/tmp/synced-installation
+fi
+STUB
+chmod +x /test-bin/sync
 export PATH=/test-bin:$PATH
 touch /tmp/nestpad-active
 # A failed preflight must leave the existing installation usable.
@@ -67,6 +75,7 @@ test "$(cat /userdata/pimprobe/VERSION)" = 'old version'
 rm /tmp/missing-library
 rm -rf /userdata/pimprobe
 printf 'y\n' | sh /package.run
+sha256sum -c /tmp/synced-installation
 test -x /userdata/pimprobe/bin/pimprobe-service
 test -f /userdata/pimprobe/ui/Main.qml
 test "$(readlink /root/app/libpimprobeproxyplugin.so)" = /userdata/pimprobe/lib/libpimprobeproxyplugin.so
@@ -120,6 +129,7 @@ rm /root/app/libpimprobeproxyplugin.so
 printf '\n: "$OPTIONAL_VENDOR_VARIABLE"\n' >>/etc/profile
 rm -f /tmp/nestpad-restarted
 sh /package.run -y -r
+sha256sum -c /tmp/synced-installation
 test -e /tmp/nestpad-restarted
 test -e /tmp/service-active
 test -z "$(find /userdata -maxdepth 1 -name 'pimprobe-rollback.*')"

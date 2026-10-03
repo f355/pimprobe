@@ -142,6 +142,7 @@ cleanup() {
     fi
     if [ -n "$stage" ]; then rm -rf "$stage"; fi
     if [ -n "$rollback" ]; then rm -rf "$rollback"; fi
+    sync
     exit "$status"
 }
 trap cleanup EXIT
@@ -218,6 +219,7 @@ if [ "$uninstall" = false ]; then
 fi
 if [ -n "$stage" ]; then rm -rf "$stage"; stage=''; fi
 if [ -n "$rollback" ]; then rm -rf "$rollback"; rollback=''; fi
+sync
 trap - EXIT
 if [ "$uninstall" = true ]; then
     echo 'PIMProbe removed; restarting CNC_Lab.'

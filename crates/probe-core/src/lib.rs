@@ -39,6 +39,8 @@ pub type Position = [f64; 4];
 pub enum Error {
     #[error("cancelled; machine stop must be confirmed by the owner")]
     Cancelled,
+    #[error("check stopped")]
+    Stopped,
     #[error("preflight: {0}")]
     Preflight(String),
     #[error("invalid configuration: {0}")]

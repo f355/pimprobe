@@ -242,11 +242,20 @@ async fn actuate<C: RepeatabilityController + ?Sized>(c: &C, extended: bool) -> 
     .map_err(|_| Error::Timeout)?
 }
 
-async fn jog_home<C: Controller + ?Sized>(c: &C) -> Result<(), Error> {
+fn check_stop(stop: &CancellationToken) -> Result<(), Error> {
+    if stop.is_cancelled() {
+        Err(Error::Stopped)
+    } else {
+        Ok(())
+    }
+}
+
+async fn jog_home<C: Controller + ?Sized>(c: &C, stop: &CancellationToken) -> Result<(), Error> {
     for (command, coordinates) in [
         ("G90 G53 G0 Z0", &[(2, 0.0)][..]),
         ("G90 G53 G0 X-20 Y-5", &[(0, -20.0), (1, -5.0)][..]),
     ] {
+        check_stop(stop)?;
         let state = c.state();
         preflight_machine(&state)?;
         let mut target = state.position;
@@ -336,6 +345,7 @@ pub async fn run_repeatability<C: RepeatabilityController + ?Sized>(
     settings: RepeatabilitySettings,
     report: &mut RepeatabilityReport,
     cancel: CancellationToken,
+    stop: CancellationToken,
     observe: impl Fn(RepeatabilityEvent) + Send + Sync,
 ) -> Result<(), Error> {
     check_repeatability(c, options, settings)?;
@@ -346,7 +356,7 @@ pub async fn run_repeatability<C: RepeatabilityController + ?Sized>(
     tokio::select! {
         biased;
         _ = cancel.cancelled() => Err(Error::Cancelled),
-        result = repeat_inner(&c, options, settings, report, &observe) => result,
+        result = repeat_inner(&c, options, settings, report, &stop, &observe) => result,
     }
 }
 
@@ -355,6 +365,7 @@ async fn repeat_inner<C: RepeatabilityController + ?Sized>(
     options: &RepeatabilityOptions,
     settings: RepeatabilitySettings,
     report: &mut RepeatabilityReport,
+    stop: &CancellationToken,
     observe: &(impl Fn(RepeatabilityEvent) + Send + Sync),
 ) -> Result<(), Error> {
     let start = machine.state();
@@ -378,6 +389,7 @@ async fn repeat_inner<C: RepeatabilityController + ?Sized>(
     set_modes(&c, Modes::PROBING).await?;
     let execution = async {
         for repetition in 0..options.repetitions {
+            check_stop(stop)?;
             comment(format!(
                 "Repetition {} of {}",
                 repetition + 1,
@@ -391,16 +403,19 @@ async fn repeat_inner<C: RepeatabilityController + ?Sized>(
                 lateral[1] = target[1];
                 comment("Move probe tip near the L bracket".into());
                 move_to(&c, lateral, settings).await?;
+                check_stop(stop)?;
                 comment("Retract probe".into());
                 actuate(machine, false).await?;
             }
             if options.home || options.jog_home {
                 comment("Jog near home".into());
-                jog_home(&c).await?;
+                jog_home(&c, stop).await?;
+                check_stop(stop)?;
                 if options.home {
                     comment("Home machine".into());
                     home(&c).await?;
                 }
+                check_stop(stop)?;
                 set_modes(&c, Modes::PROBING).await?;
                 comment("Extend probe".into());
                 actuate(machine, true).await?;
@@ -416,15 +431,19 @@ async fn repeat_inner<C: RepeatabilityController + ?Sized>(
             lateral[0] = target[0];
             lateral[1] = target[1];
             comment("Move probe tip near the L bracket".into());
+            check_stop(stop)?;
             move_to(&c, lateral, settings).await?;
+            check_stop(stop)?;
             comment("Lower probe tip near the bed".into());
             move_to(&c, target, settings).await?;
+            check_stop(stop)?;
             if !c.state().probe_extended {
                 comment("Extend probe".into());
                 actuate(machine, true).await?;
             }
             preflight(&c.state())?;
             for axis in [Axis::X, Axis::Y, Axis::Z] {
+                check_stop(stop)?;
                 if !options.axes[axis.index()] {
                     continue;
                 }
@@ -466,17 +485,20 @@ async fn repeat_inner<C: RepeatabilityController + ?Sized>(
                 )
                 .await?;
                 converted.ok_or(Error::NoContact)??;
+                check_stop(stop)?;
                 comment("Return to measurement start".into());
                 move_to(&c, target, settings).await?;
             }
         }
+        check_stop(stop)?;
         Ok(())
     }
     .await;
     if execution.is_ok()
         || matches!(
             execution,
-            Err(Error::CoarseNoContact
+            Err(Error::Stopped
+                | Error::CoarseNoContact
                 | Error::UnexpectedContact {
                     retracted: true,
                     ..
@@ -548,7 +570,10 @@ mod tests {
             state: MockController::new().state(),
             events,
         };
-        assert_eq!(jog_home(&machine).await, Err(Error::Timeout));
+        assert_eq!(
+            jog_home(&machine, &CancellationToken::new()).await,
+            Err(Error::Timeout)
+        );
     }
 
     #[tokio::test]

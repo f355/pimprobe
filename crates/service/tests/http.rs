@@ -227,6 +227,45 @@ async fn repeatability_rejects_empty_axes_and_fractional_repetitions() {
 }
 
 #[tokio::test]
+async fn repeatability_stop_preserves_the_stream_and_records_the_outcome() {
+    let (_temp, _app, router) = repeatability_app();
+    let response = router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/repeatability/run")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({"axes":[true,true,true],"repetitions":5,"home":false,"retract":true})
+                        .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let (status, _) = request(&router, "POST", "/api/v1/repeatability/stop", Value::Null).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let events: Vec<Value> = std::str::from_utf8(&bytes)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    let terminal = events.last().unwrap();
+    assert_eq!(terminal["code"], "stopped");
+    assert!(terminal["result"]["measurements"].is_array());
+    let (_, history) = request(&router, "GET", "/api/v1/logs/history", Value::Null).await;
+    let history: Value = serde_json::from_str(&history).unwrap();
+    assert_eq!(history[0]["status"], "stopped");
+    assert!(history[0]["error"].is_null());
+    let (_, state) = request(&router, "GET", "/api/v1/state", Value::Null).await;
+    let state: Value = serde_json::from_str(&state).unwrap();
+    assert_eq!(state["recoveryFailed"], false);
+    assert_eq!(state["contactActive"], false);
+}
+
+#[tokio::test]
 async fn repeatability_cycles_probe_between_readings_and_before_homing() {
     for home in [false, true] {
         for retract in [false, true] {

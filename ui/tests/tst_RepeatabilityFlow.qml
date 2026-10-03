@@ -44,6 +44,26 @@ TestCase {
             matches = matches.concat(descendants(children[i], type))
         return matches
     }
+    function test_stop_keeps_partial_results() {
+        flow.showCheck()
+        flow.phase = "running"
+        flow.handleEvent({type:"measurement", repetition:1, axis:"X", value:-232.5})
+        var stop = findChild(flow.contentItem, "stopCheck")
+        verify(stop !== null)
+        verify(stop.enabled)
+        flow.stopRequested = true
+        verify(!stop.enabled)
+        flow.handleEvent({type:"error", code:"stopped", message:"check stopped", result:{
+            measurements:[[-232.5,null,null]],
+            statistics:[{count:1,mean:-232.5,median:-232.5,stddev:null,range:0},null,null]
+        }})
+        compare(flow.phase, "result")
+        compare(flow.failure, "")
+        compare(flow.measurements[0][0], -232.5)
+        compare(flow.statistics[0].count, 1)
+        verify(!flow.stopRequested)
+        flow.close()
+    }
     function test_machine_coordinate_instructions_and_readings() {
         flow.showCheck()
         tryCompare(flow, "opened", true)

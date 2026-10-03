@@ -100,6 +100,7 @@ async fn fixed_fixture_can_be_measured_without_setting_work_zero() {
         settings(),
         &mut report,
         CancellationToken::new(),
+        CancellationToken::new(),
         |_| {},
     )
     .await
@@ -130,6 +131,7 @@ async fn coarse_search_covers_fixture_drift_on_all_axes() {
             },
             settings(),
             &mut report,
+            CancellationToken::new(),
             CancellationToken::new(),
             |_| {},
         )
@@ -186,6 +188,7 @@ async fn failure_keeps_the_completed_axes_and_stops_before_next_repetition() {
         settings(),
         &mut report,
         CancellationToken::new(),
+        CancellationToken::new(),
         |event| {
             if matches!(event, RepeatabilityEvent::Measurement { axis: Axis::X, .. }) {
                 machine.set_geometry(MockGeometry::Empty);
@@ -212,6 +215,7 @@ async fn cancellation_after_a_reading_stops_further_commands() {
         settings(),
         &mut report,
         cancel.clone(),
+        CancellationToken::new(),
         |event| {
             if matches!(event, RepeatabilityEvent::Measurement { .. }) {
                 *captured.lock().unwrap() = machine.commands();
@@ -236,6 +240,7 @@ async fn cancellation_before_start_sends_nothing() {
         settings(),
         &mut RepeatabilityReport::default(),
         cancel,
+        CancellationToken::new(),
         |_| {},
     )
     .await;
@@ -266,6 +271,7 @@ async fn unselected_axes_stay_unmeasured_and_tip_returns_to_fifteen_fifteen_five
             &options,
             settings(),
             &mut report,
+            CancellationToken::new(),
             CancellationToken::new(),
             |_| {},
         )
@@ -299,6 +305,7 @@ enum Behaviour {
     HomeReadyOnly,
     HomeUnrelatedMove,
     SlowActuationAndHoming,
+    StopDuringPosition(CancellationToken),
 }
 struct ControllerFixture {
     inner: MockController,
@@ -314,6 +321,12 @@ impl Controller for ControllerFixture {
         self.inner.subscribe()
     }
     async fn send(&self, command: &str) -> Result<(), Error> {
+        if let Behaviour::StopDuringPosition(stop) = &self.behaviour {
+            if command.starts_with("G38.3 X") && command.contains(" Y") {
+                stop.cancel();
+                tokio::task::yield_now().await;
+            }
+        }
         if command == "G90 G53 G0 X-20 Y-5" {
             assert!(self.inner.state().ready);
             assert_eq!(self.inner.state().position[2], 0.0);
@@ -397,6 +410,7 @@ async fn measurements_preserve_surface_coordinates() {
         settings(),
         &mut report,
         CancellationToken::new(),
+        CancellationToken::new(),
         |event| {
             if let RepeatabilityEvent::Measurement {
                 value,
@@ -448,6 +462,7 @@ async fn slow_actuation_and_homing_complete() {
         settings(),
         &mut report,
         CancellationToken::new(),
+        CancellationToken::new(),
         |_| {},
     )
     .await
@@ -463,6 +478,69 @@ fn fixture(behaviour: Behaviour) -> ControllerFixture {
 }
 
 #[tokio::test]
+async fn stop_waits_for_the_positioning_move_and_restores_modes() {
+    let stop = CancellationToken::new();
+    let machine = fixture(Behaviour::StopDuringPosition(stop.clone()));
+    let initial = machine.state();
+    let mut report = RepeatabilityReport::default();
+    let result = run_repeatability(
+        &machine,
+        &RepeatabilityOptions {
+            retract: false,
+            ..Default::default()
+        },
+        settings(),
+        &mut report,
+        CancellationToken::new(),
+        stop,
+        |_| {},
+    )
+    .await;
+    assert_eq!(result, Err(Error::Stopped));
+    let state = machine.state();
+    assert!(state.ready);
+    assert_eq!(state.modes, initial.modes);
+    assert_eq!(state.position[2], initial.position[2]);
+    for (i, reference) in REPEATABILITY_REFERENCE_G53.iter().enumerate().take(2) {
+        assert!((state.position[i] + state.probe_offset[i] - reference - 15.0).abs() < 0.002);
+    }
+    assert!(report.measurements.is_empty());
+}
+
+#[tokio::test]
+async fn stop_after_a_touch_keeps_the_reading_and_finishes_backoff() {
+    let machine = machine();
+    let modes = machine.state().modes;
+    let stop = CancellationToken::new();
+    let mut report = RepeatabilityReport::default();
+    let result = run_repeatability(
+        &machine,
+        &RepeatabilityOptions::default(),
+        settings(),
+        &mut report,
+        CancellationToken::new(),
+        stop.clone(),
+        |event| {
+            if matches!(event, RepeatabilityEvent::Measurement { .. }) {
+                stop.cancel();
+            }
+        },
+    )
+    .await;
+    assert_eq!(result, Err(Error::Stopped));
+    assert_eq!(report.measurements.len(), 1);
+    assert!(report.measurements[0][0].is_some());
+    assert_eq!(report.measurements[0][1..], [None, None]);
+    assert_eq!(report.statistics[0].as_ref().unwrap().count, 1);
+    let state = machine.state();
+    assert!(state.ready);
+    assert_eq!(state.modes, modes);
+    let contact_x =
+        REPEATABILITY_REFERENCE_G53[0] - state.probe_offset[0] + settings().diameter / 2.0;
+    assert!((state.position[0] - contact_x - settings().retract).abs() < 0.002);
+}
+
+#[tokio::test]
 async fn fine_reading_survives_a_failed_backoff() {
     let machine = fixture(Behaviour::FailBackoff);
     let mut report = RepeatabilityReport::default();
@@ -471,6 +549,7 @@ async fn fine_reading_survives_a_failed_backoff() {
         &RepeatabilityOptions::default(),
         settings(),
         &mut report,
+        CancellationToken::new(),
         CancellationToken::new(),
         |_| {},
     )
@@ -496,6 +575,7 @@ async fn homing_implies_retraction_at_the_measuring_point() {
         &options,
         settings(),
         &mut report,
+        CancellationToken::new(),
         CancellationToken::new(),
         |_| {},
     )
@@ -551,6 +631,7 @@ async fn jog_home_uses_the_homing_approach_without_homing() {
         settings(),
         &mut report,
         CancellationToken::new(),
+        CancellationToken::new(),
         |_| {},
     )
     .await
@@ -585,6 +666,7 @@ async fn homing_needs_a_moving_to_ready_transition() {
         settings(),
         &mut report,
         CancellationToken::new(),
+        CancellationToken::new(),
         |_| {},
     )
     .await;
@@ -604,6 +686,7 @@ async fn homing_ignores_an_unrelated_move_to_machine_zero() {
         },
         settings(),
         &mut RepeatabilityReport::default(),
+        CancellationToken::new(),
         CancellationToken::new(),
         |_| {},
     )
@@ -625,6 +708,7 @@ async fn retracted_start_extends_at_the_measuring_point_before_contact() {
         &options,
         settings(),
         &mut RepeatabilityReport::default(),
+        CancellationToken::new(),
         CancellationToken::new(),
         |_| {},
     )

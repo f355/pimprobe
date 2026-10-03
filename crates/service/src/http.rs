@@ -57,6 +57,7 @@ pub struct App {
     action: Arc<Mutex<()>>,
     active: AtomicBool,
     recovery_failed: AtomicBool,
+    repeatability_stop: Mutex<Option<CancellationToken>>,
     shutdown: CancellationToken,
     ready_token: Option<String>,
     updates: UpdateManager,
@@ -77,6 +78,7 @@ impl App {
             action: Arc::new(Mutex::new(())),
             active: AtomicBool::new(false),
             recovery_failed: AtomicBool::new(false),
+            repeatability_stop: Mutex::new(None),
             shutdown: CancellationToken::new(),
             ready_token,
             updates: UpdateManager::production(),
@@ -112,7 +114,8 @@ impl App {
     async fn recover(&self, error: &Error) {
         if matches!(
             error,
-            Error::Preflight(_)
+            Error::Stopped
+                | Error::Preflight(_)
                 | Error::InvalidConfig(_)
                 | Error::MotionBlocked
                 | Error::CoarseNoContact
@@ -153,6 +156,7 @@ pub fn router(app: Arc<App>) -> Router {
         .route("/api/v1/routine/return", post(return_start))
         .route("/api/v1/routine/measured", post(go_to_measured))
         .route("/api/v1/repeatability/run", post(repeatability))
+        .route("/api/v1/repeatability/stop", post(stop_repeatability))
         .route("/api/v1/logs/history", get(history))
         .route("/api/v1/logs/export", post(export_logs))
         .route("/api/v1/logs/clear", post(clear_logs))
@@ -217,6 +221,7 @@ where
 }
 fn error_code(error: &Error) -> &'static str {
     match error {
+        Error::Stopped => "stopped",
         Error::MotionBlocked => "controller_alarm",
         Error::CoarseNoContact | Error::NoContact => "no_contact",
         Error::UnexpectedContact { .. } => "unexpected_contact",
@@ -511,6 +516,13 @@ fn queue_progress(
     }
 }
 
+async fn stop_repeatability(State(app): State<Arc<App>>) -> StatusCode {
+    if let Some(stop) = app.repeatability_stop.lock().await.as_ref() {
+        stop.cancel();
+    }
+    StatusCode::NO_CONTENT
+}
+
 async fn repeatability(
     State(app): State<Arc<App>>,
     ApiJson(options): ApiJson<RepeatabilityOptions>,
@@ -540,6 +552,8 @@ async fn repeatability(
         .map_err(log_error)?;
     let cancel = app.shutdown.child_token();
     let run_cancel = cancel.clone();
+    let stop = CancellationToken::new();
+    *app.repeatability_stop.lock().await = Some(stop.clone());
     let (sender, receiver) = mpsc::channel(256);
     app.active.store(true, Ordering::SeqCst);
     tokio::spawn(async move {
@@ -548,7 +562,7 @@ async fn repeatability(
         let progress_id = run_id.clone();
         let progress_logs = app.logs.clone();
         let result = pimprobe_core::run_repeatability(
-            &app.device, &options, settings, &mut report, run_cancel.clone(), |event| {
+            &app.device, &options, settings, &mut report, run_cancel.clone(), stop, |event| {
                 let event = match event {
                     RepeatabilityEvent::Progress(progress) => json!({"type":"progress", "progress":progress}),
                     RepeatabilityEvent::Measurement { repetition, axis, value, statistics } =>
@@ -580,13 +594,19 @@ async fn repeatability(
                 app.recover(&error).await;
                 log_warning(app.logs.finish(
                     &run_id,
-                    if matches!(error, Error::Cancelled) {
+                    if matches!(error, Error::Stopped) {
+                        "stopped"
+                    } else if matches!(error, Error::Cancelled) {
                         "cancelled"
                     } else {
                         "failed"
                     },
                     Some(json!(report)),
-                    Some(error.to_string()),
+                    if matches!(error, Error::Stopped) {
+                        None
+                    } else {
+                        Some(error.to_string())
+                    },
                 ));
                 json!({"type":"error", "code":error_code(&error), "message":error.to_string(), "result":report})
             }
@@ -596,6 +616,7 @@ async fn repeatability(
                 .trace(&run_id, "end_state", json!(app.device.state())),
         );
         app.active.store(false, Ordering::SeqCst);
+        *app.repeatability_stop.lock().await = None;
         let _ = sender.try_send(encoded(event));
     });
     Ok((

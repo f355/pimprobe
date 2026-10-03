@@ -39,6 +39,8 @@ Popup {
     property var statistics: [null, null, null]
     property var activeRequest: null
     property bool terminalReceived: false
+    property bool stopRequested: false
+    property bool streamStarted: false
     readonly property bool canStart: axes.some(function(a) { return a; }) && repetitions >= 1 && repetitions <= 100
     readonly property bool showingResults: phase === "running" || phase === "result" || phase === "failed"
     NumericEditor { id: editor }
@@ -62,6 +64,8 @@ Popup {
         measurements = [];
         statistics = [null, null, null];
         terminalReceived = false;
+        stopRequested = false;
+        streamStarted = false;
         open();
     }
     function confirmPreparation() { phase = "options"; }
@@ -75,6 +79,7 @@ Popup {
         Qt.callLater(function() { logScroll.contentItem.contentY = Math.max(0, logScroll.contentHeight - logScroll.availableHeight); });
     }
     function handleEvent(event) {
+        streamStarted = true;
         if (event.type === "progress" && event.progress.kind === "script") {
             appendLog(event.progress.message);
         } else if (event.type === "measurement") {
@@ -86,12 +91,14 @@ Popup {
             Qt.callLater(function() { readings.positionViewAtEnd(); });
         } else if (event.type === "result" || event.type === "error") {
             terminalReceived = true;
+            stopRequested = false;
             if (event.result) {
                 measurements = event.result.measurements;
                 statistics = event.result.statistics;
             }
-            phase = event.type === "result" ? "result" : "failed";
-            failure = event.message || "";
+            phase = event.type === "result" || event.code === "stopped" ? "result" : "failed";
+            failure = event.code === "stopped" ? "" : event.message || "";
+            if (event.code === "stopped") appendLog("; Check stopped");
             if (failure) appendLog("; Failed: " + failure);
         }
     }
@@ -101,6 +108,7 @@ Popup {
         if (editor.target) return;
         phase = "running";
         terminalReceived = false;
+        streamStarted = false;
         activeRequest = Api.stream(serviceUrl + "/repeatability/run", {
             axes: axes.slice(), repetitions: repetitions, jogHome: jogHome,
             home: home, retract: retractEachTime
@@ -109,6 +117,16 @@ Popup {
             if (error || !terminalReceived) {
                 failure = error || "Connection ended before the check finished";
                 phase = "failed";
+            }
+        });
+    }
+    function stop() {
+        if (phase !== "running" || !streamStarted || stopRequested) return;
+        stopRequested = true;
+        Api.request(serviceUrl + "/repeatability/stop", "POST", null, function(reply) {
+            if (!reply.ok && phase === "running") {
+                stopRequested = false;
+                failure = reply.error || "Could not stop the check";
             }
         });
     }
@@ -400,13 +418,15 @@ Popup {
                     primary: flow.phase === "options"
                     onClicked: flow.phase === "prepare" ? flow.confirmPreparation() : flow.phase === "options" ? flow.start() : flow.close()
                 }
-                Label {
+                LabButton {
                     visible: flow.phase === "running"
-                    text: "Checking..."
-                    color: Theme.text
+                    objectName: "stopCheck"
+                    text: flow.stopRequested ? "Stopping..." : "Stop"
+                    enabled: flow.streamStarted && !flow.stopRequested
                     font.pixelSize: 20
+                    Layout.preferredWidth: 180
                     Layout.preferredHeight: 50
-                    verticalAlignment: Text.AlignVCenter
+                    onClicked: flow.stop()
                 }
             }
         }

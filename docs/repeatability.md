@@ -32,6 +32,8 @@ The probe moves to the bracket in X/Y, then lowers toward the bed. X probes towa
 
 If a movement or measurement fails, the check stops and keeps the readings collected so far.
 
+Press **Stop** to end the check early. The current positioning move, homing cycle, or probe touch and backoff finishes before the check stops. The readings collected so far remain on the results page.
+
 ## Results
 
 <!-- guide-only -->

@@ -15,10 +15,11 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import QtQuick
+import "../../ui/controls"
 import QtQuick.Controls
 import QtTest
 import "../../ui"
-import "../../ui/Api.js" as Api
+import "../../ui/client/Http.js" as Api
 import "../../ui/tests/Mock.js" as Mock
 
 TestCase {
@@ -34,6 +35,13 @@ TestCase {
     }
 
     function descendants(item, type) {
+        if (item === window.contentItem.parent) {
+            var views = window.page.children.filter(function(child) {
+                return child instanceof PageView && child.opened;
+            }).sort(function(a, b) { return b.z - a.z; });
+            return (views.length ? descendants(views[0], type) : [])
+                .concat(descendants(window.Overlay.overlay, type));
+        }
         var found = []
         var children = item.children || []
         for (var i = 0; i < children.length; ++i) {
@@ -52,12 +60,12 @@ TestCase {
 
     function test_capture() {
         Mock.verifyServer(capture, window.serviceUrl)
-        tryVerify(function() { return window.settings.loaded && window.machineState.connected }, 3000)
+        tryVerify(function() { return window.page.settings.loaded && window.page.machineState.connected }, 3000)
         var reply = null
         Api.request("POST", window.serviceUrl + "/probe-actuator", {extended:true}, function(r) { reply = r })
         tryVerify(function() { return reply !== null }, 3000)
         verify(reply.ok)
-        tryVerify(function() { return window.probeFullyExtended() }, 3000)
+        tryVerify(function() { return window.page.probeFullyExtended() }, 3000)
         var tabs = descendants(window.contentItem, TabBar)[0]
         var names = ["outside", "inside", "center", "rotary", "settings"]
         for (var i = 0; i < names.length; ++i) {
@@ -71,7 +79,7 @@ TestCase {
         mouseClick(button)
         var proceed
         tryVerify(function() {
-            proceed = descendants(window.Overlay.overlay, Button).filter(function(b) {
+            proceed = descendants(window.contentItem.parent, Button).filter(function(b) {
                 return b.visible && b.text === "Proceed" && b.enabled
             })[0]
             return proceed !== undefined
@@ -82,26 +90,26 @@ TestCase {
         save("progress")
         var zero
         tryVerify(function() {
-            zero = descendants(window.Overlay.overlay, Button).filter(function(b) {
+            zero = descendants(window.contentItem.parent, Button).filter(function(b) {
                 return b.visible && b.text === "Set Work Zero" && b.enabled
             })[0]
             return zero !== undefined
         }, 10000)
         save("result")
-        var back = descendants(window.Overlay.overlay, Button).filter(function(b) {
+        var back = descendants(window.contentItem.parent, Button).filter(function(b) {
             return b.visible && b.text === "Go to starting position"
         })[0]
-        var flow = window.contentData.filter(function(item) { return item instanceof ProbeFlow })[0]
+        var flow = window.page.children.filter(function(item) { return item instanceof ProbeFlow })[0]
         verify(flow !== undefined)
         mouseClick(back)
         tryCompare(flow, "phase", "result", 10000)
         verify(flow.returned)
-        var done = descendants(window.Overlay.overlay, Button).filter(function(b) {
+        var done = descendants(window.contentItem.parent, Button).filter(function(b) {
             return b.visible && b.text === "Close"
         })[0]
         mouseClick(done)
         tryCompare(flow, "visible", false)
-        tryVerify(function() { return !window.controlsLocked() }, 3000)
+        tryVerify(function() { return !window.page.controlsLocked() }, 3000)
         mouseClick(tabs.itemAt(2))
         var pocket = descendants(window.contentItem, CenterProbeButton).filter(function(b) {
             return b.feature === "pocket"
@@ -114,9 +122,9 @@ TestCase {
         save("dimensions")
     }
     function test_repeatability() {
-        var routine = window.contentData.filter(function(item) { return item instanceof ProbeFlow })[0]
+        var routine = window.page.children.filter(function(item) { return item instanceof ProbeFlow })[0]
         routine.close()
-        tryVerify(function() { return !window.controlsLocked() }, 3000)
+        tryVerify(function() { return !window.page.controlsLocked() }, 3000)
         var reply = null
         Api.request("POST", window.serviceUrl + "/probe-actuator", {extended:false}, function(r) { reply = r })
         tryVerify(function() { return reply !== null }, 3000)
@@ -128,12 +136,12 @@ TestCase {
         })[0]
         verify(utilities !== undefined)
         mouseClick(utilities)
-        var button = descendants(window.Overlay.overlay, Button).filter(function(b) {
+        var button = descendants(window.contentItem.parent, Button).filter(function(b) {
             return b.visible && b.text === "Probe repeatability"
         })[0]
         verify(button !== undefined)
         mouseClick(button)
-        var flow = window.contentData.filter(function(item) { return item instanceof RepeatabilityFlow })[0]
+        var flow = window.page.children.filter(function(item) { return item instanceof RepeatabilityFlow })[0]
         tryCompare(flow, "opened", true)
         flow.confirmPreparation()
         save("repeatability-options")

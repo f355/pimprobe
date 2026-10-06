@@ -16,6 +16,7 @@
 
 pragma ComponentBehavior: Bound
 import QtQuick
+import "controls"
 import "ProbeDrawing.js" as Draw
 
 ProbeButton {

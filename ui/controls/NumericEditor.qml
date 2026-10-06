@@ -19,6 +19,8 @@ import QtQuick
 QtObject {
     id: editor
     property var target: null
+    property string originalText: ""
+    property real originalValue: 0
     signal accepted
 
     property Connections inputMethodGuard: Connections {
@@ -32,6 +34,10 @@ QtObject {
     function begin(field) {
         if (target && target !== field)
             cancel();
+        if (target !== field) {
+            originalText = field.text;
+            originalValue = field.value;
+        }
         target = field;
         field.selectAll();
         Qt.inputMethod.hide();
@@ -39,7 +45,7 @@ QtObject {
 
     function cancel() {
         if (target) {
-            target.text = String(target.value);
+            target.text = target.value === originalValue ? originalText : String(target.value);
             target.focus = false;
         }
         target = null;

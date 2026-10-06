@@ -17,13 +17,14 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import "controls"
 import QtQuick.Controls
 import QtQuick.Layouts
-import "Api.js" as Api
 
-Popup {
+PageView {
     id: flow
-    property string serviceUrl: "http://127.0.0.1:8137/api/v1"
+    property bool showHeader: true
+    required property var client
     property bool simulated: false
     property string uiFont: "Inter"
     property string codeFont: "monospace"
@@ -34,9 +35,11 @@ Popup {
     property string failure: ""
     readonly property bool reviewing: reviewRequest.pending
     ServiceRequest {
+        client: flow.client
         id: reviewRequest
     }
     ServiceRequest {
+        client: flow.client
         id: zeroRequest
     }
     property var activeRequest: null
@@ -46,6 +49,7 @@ Popup {
     property bool returning: false
     property bool positioning: false
     property real safeZOffset: 40
+    signal alarmRequested()
     signal settingChanged(string key, var value)
     property string completedID: ""
     readonly property bool zeroing: zeroRequest.pending
@@ -81,14 +85,11 @@ Popup {
     }
     readonly property string description: routine.family === "center" ? "Probing " + (routine.z ? "Z surface" : routine.feature.replace("-", " ") + " center") + "." : "Probing " + (routine.family || "outside") + " " + (routine.z ? "Z surface" : routine.x && routine.y ? "X/Y corner" : routine.x ? "X" + (routine.x > 0 ? "+" : "-") + " edge" : "Y" + (routine.y > 0 ? "+" : "-") + " edge") + "."
 
-    parent: Overlay.overlay
     x: 0
     y: 0
     width: parent ? parent.width : 800
     height: parent ? parent.height : 480
     padding: 0
-    modal: true
-    closePolicy: Popup.NoAutoClose
     background: Rectangle {
         color: Theme.page
     }
@@ -115,7 +116,7 @@ Popup {
         reviewRequest.cancel();
         zeroRequest.cancel();
         open();
-        reviewRequest.send("POST", serviceUrl + "/routine/review", value, function (reply) {
+        reviewRequest.send("routine.review", value, function (reply) {
             if (!reply.ok || !reply.data) {
                 failure = reply.error || "Unable to review this routine";
                 return;
@@ -162,6 +163,17 @@ Popup {
         startMotion(id, "measured");
     }
 
+    function acceptResult(measurement, id) {
+        result = measurement.point;
+        machinePoint = measurement.machinePoint;
+        spans = measurement.spans || [null, null, null];
+        zeroed = measurement.zeroed;
+        returned = measurement.returned === true;
+        positioned = measurement.positioned === true;
+        completedID = id;
+        phase = "result";
+    }
+
     function startMotion(id, action) {
         returning = action === "return";
         positioning = action === "measured";
@@ -171,27 +183,25 @@ Popup {
         var terminal = false;
         var body = {id: id};
         if (positioning) body.safeZOffset = safeZOffset;
-        activeRequest = Api.stream(serviceUrl + "/routine/" + action, body, function (event) {
+        activeRequest = client.stream("routine." + action, body, function (event) {
             if (event.type === "progress") {
                 if (event.progress.kind === "script")
                     appendLog(event.progress.message);
             } else if (event.type === "result") {
-                result = event.result.point;
-                machinePoint = event.result.machinePoint;
-                spans = event.result.spans || [null, null, null];
-                zeroed = event.result.zeroed;
-                returned = event.result.returned === true;
-                positioned = event.result.positioned === true;
-                completedID = id;
-                phase = "result";
+                acceptResult(event.result, id);
                 terminal = true;
             } else if (event.type === "error") {
                 terminal = true;
                 failure = event.message;
-                appendLog("; Failed: " + failure);
-                phase = "failed";
+                if (event.code === "log" && event.result) {
+                    acceptResult(event.result, id);
+                    appendLog("; Warning: " + failure);
+                } else {
+                    appendLog("; Failed: " + failure);
+                    phase = "failed";
+                }
                 if (event.code === "controller_alarm")
-                    Qt.quit();
+                    alarmRequested();
             }
         }, function (error) {
             activeRequest = null;
@@ -210,7 +220,7 @@ Popup {
         var id = completedID;
         completedID = "";
         failure = "";
-        zeroRequest.send("POST", serviceUrl + "/routine/zero", {
+        zeroRequest.send("routine.zero", {
             id: id,
             offsets: offsets.slice()
         }, function (reply) {
@@ -228,6 +238,7 @@ Popup {
         });
     }
 
+    Component.onDestruction: if (activeRequest) activeRequest.abort()
     onClosed: {
         resultEditor.cancel();
         reviewRequest.cancel();
@@ -241,13 +252,14 @@ Popup {
         spacing: 0
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 70
+            Layout.preferredHeight: Theme.headerHeight
+            visible: flow.showHeader
             color: Theme.header
             RowLayout {
                 anchors.fill: parent
                 spacing: 8
                 BackButton {
-                    Layout.preferredWidth: 70
+                    Layout.preferredWidth: Theme.headerHeight
                     Layout.fillHeight: true
                     enabled: flow.phase !== "running" && !flow.zeroing
                     onClicked: flow.close()
@@ -264,7 +276,7 @@ Popup {
                     Layout.rightMargin: 18
                     text: flow.simulated ? "Simulation" : ""
                     color: Theme.textMuted
-                    font.pixelSize: 15
+                    font.pixelSize: 18
                 }
             }
         }
@@ -287,16 +299,17 @@ Popup {
             RowLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                spacing: 18
+                spacing: Theme.groupSpacing
 
                 Item {
                     Layout.fillWidth: flow.phase !== "result"
-                    Layout.preferredWidth: flow.phase === "result" ? 340 : -1
+                    Layout.preferredWidth: flow.phase === "result" ? Theme.columnWidth : -1
                     Layout.fillHeight: true
                     ScrollView {
                         id: logScroll
                         anchors.fill: parent
                         clip: true
+                        contentWidth: Math.max(availableWidth, logArea.implicitWidth)
                         onHeightChanged: Qt.callLater(flow.scrollLogToEnd)
                         TextArea {
                             id: logArea
@@ -305,7 +318,8 @@ Popup {
                             selectByMouse: false
                             wrapMode: TextEdit.NoWrap
                             font.family: flow.codeFont
-                            font.pixelSize: 16
+                            font.pixelSize: 18
+                            padding: 8
                             color: Theme.text
                             background: Rectangle { color: Theme.control; radius: 10 }
                         }
@@ -381,7 +395,8 @@ Popup {
                                 Label {
                                     Layout.fillWidth: true
                                     text: "G" + flow.routine.wcs + " zero at G53 " + (flow.measuredPosition(modelData) + flow.offsets[modelData]).toFixed(3)
-                                    font.pixelSize: 17
+                                    font.pixelSize: 18
+                                    wrapMode: Text.WordWrap
                                     color: Theme.textMuted
                                 }
                             }
@@ -438,7 +453,7 @@ Popup {
                     visible: flow.phase === "review"
                     text: "Cancel"
                     Layout.preferredWidth: 140
-                    Layout.preferredHeight: 50
+                    Layout.preferredHeight: 56
                     font.pixelSize: 20
                     onClicked: flow.close()
                 }
@@ -447,7 +462,7 @@ Popup {
                     visible: flow.phase === "result"
                     enabled: !flow.zeroing && !flow.zeroed && flow.completedID.length > 0
                     Layout.preferredWidth: 190
-                    Layout.preferredHeight: 50
+                    Layout.preferredHeight: 56
                     font.pixelSize: 20
                     primary: true
                     onClicked: flow.zeroResult()
@@ -457,7 +472,7 @@ Popup {
                     visible: flow.phase === "result" && (flow.routine.family !== "inside" || flow.routine.z)
                     enabled: !flow.zeroing && !flow.returned && flow.completedID.length > 0
                     Layout.preferredWidth: 280
-                    Layout.preferredHeight: 50
+                    Layout.preferredHeight: 56
                     font.pixelSize: 20
                     onClicked: flow.returnToStart()
                 }
@@ -466,7 +481,7 @@ Popup {
                     visible: flow.phase === "result" && flow.routine.family === "inside" && !flow.routine.z
                     enabled: !flow.zeroing && !flow.positioned && flow.completedID.length > 0
                     Layout.preferredWidth: 240
-                    Layout.preferredHeight: 50
+                    Layout.preferredHeight: 56
                     font.pixelSize: 20
                     onClicked: flow.goToMeasured()
                 }
@@ -475,7 +490,7 @@ Popup {
                     text: flow.phase === "review" ? "Proceed" : "Close"
                     enabled: !flow.zeroing && (flow.phase !== "review" || (flow.reviewID.length > 0 && !flow.reviewing))
                     Layout.preferredWidth: 140
-                    Layout.preferredHeight: 50
+                    Layout.preferredHeight: 56
                     font.pixelSize: 20
                     primary: flow.phase === "review"
                     onClicked: flow.phase === "review" ? flow.proceed() : flow.close()
@@ -485,7 +500,7 @@ Popup {
                     text: flow.returning ? "Returning to starting position..." : flow.positioning ? "Moving to measured point..." : "Probing..."
                     color: Theme.text
                     font.pixelSize: 20
-                    Layout.preferredHeight: 50
+                    Layout.preferredHeight: 56
                     verticalAlignment: Text.AlignVCenter
                 }
             }

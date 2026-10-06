@@ -16,12 +16,15 @@
 
 pragma ComponentBehavior: Bound
 import QtQuick
+import "controls"
 import QtQuick.Layouts
 
 GridLayout {
     id: grid
     signal selected(string feature)
     columns: 3
+    implicitWidth: 340
+    implicitHeight: 340
     rowSpacing: 8
     columnSpacing: 8
     Repeater {
@@ -65,8 +68,10 @@ GridLayout {
         ]
         CenterProbeButton {
             required property var modelData
-            Layout.preferredWidth: 108
-            Layout.preferredHeight: 108
+            Layout.preferredWidth: (grid.width - 2 * grid.columnSpacing) / 3
+            Layout.preferredHeight: (grid.height - 2 * grid.rowSpacing) / 3
+            Layout.minimumWidth: 48
+            Layout.minimumHeight: 48
             feature: modelData.feature
             label: modelData.label
             onClicked: grid.selected(feature)

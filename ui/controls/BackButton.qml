@@ -15,10 +15,11 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 LabButton {
-    implicitWidth: 70
-    implicitHeight: 70
+    implicitWidth: Theme.headerHeight
+    implicitHeight: Theme.headerHeight
     text: "\u2190"
     font.pixelSize: 34
+    padding: 4
     background: null
     textColor: Theme.text
 }

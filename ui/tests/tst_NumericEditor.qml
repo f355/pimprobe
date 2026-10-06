@@ -15,17 +15,20 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import QtQuick
+import "../controls"
 import QtQuick.Controls
 import QtTest
 import ".."
 
 TestCase {
+    id: testCase
     name: "NumericEditor"
     when: windowShown
     width: 400
     height: 200
     visible: true
     NumericEditor { id: editor }
+    property alias fieldEditor: editor
     NumberField {
         id: field
         editor: editor
@@ -37,6 +40,61 @@ TestCase {
     }
     SignalSpy { id: accepted; target: editor; signalName: "accepted" }
     SignalSpy { id: committed; target: field; signalName: "committed" }
+    Component {
+        id: textField
+        NumberField {
+            editor: testCase.fieldEditor
+            minimum: -1000000
+            maximum: 1000000
+            property real requested: 8000
+            text: String(requested)
+        }
+    }
+    Component {
+        id: valueField
+        NumberField {
+            editor: testCase.fieldEditor
+            minimum: -1000000
+            maximum: 1000000
+            value: 12.5
+        }
+    }
+    Component {
+        id: defaultField
+        NumberField { editor: testCase.fieldEditor; minimum: 0.1; maximum: 100 }
+    }
+    function test_initial_text_data() {
+        return [{tag: "speed", requested: 8000}, {tag: "zero", requested: 0}]
+    }
+    function test_initial_text(data) {
+        var item = createTemporaryObject(textField, this, {requested: data.requested})
+        verify(item)
+        compare(item.text, String(data.requested))
+        item.requested = 7500
+        compare(item.text, "7500")
+    }
+    function test_initial_value_and_later_updates() {
+        var item = createTemporaryObject(valueField, this)
+        compare(item.text, "12.5")
+        editor.begin(item)
+        editor.typeKey("3")
+        item.value = 25
+        compare(item.text, "25")
+        editor.cancel()
+        compare(item.text, "25")
+    }
+    function test_initial_minimum() {
+        var item = createTemporaryObject(defaultField, this)
+        compare(item.text, "0.1")
+    }
+    function test_cancel_text_initialized_field() {
+        var item = createTemporaryObject(textField, this)
+        editor.begin(item)
+        editor.typeKey("3")
+        editor.begin(item)
+        editor.cancel()
+        compare(item.text, "8000")
+    }
     function init() {
         field.minimum = 0.1
         field.value = 12.5

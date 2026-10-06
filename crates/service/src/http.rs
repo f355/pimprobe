@@ -16,9 +16,8 @@
 
 use crate::{
     device::Device,
+    host::LocalHost,
     logs::LogStore,
-    reviews::Reviews,
-    settings::{Settings, SettingsError},
     updates::{UpdateError, UpdateManager},
 };
 use axum::{
@@ -29,44 +28,29 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
 };
-use pimprobe_core::{
-    CancellationToken, Controller, Error, RepeatabilityEvent, RepeatabilityOptions,
-    RepeatabilityReport, RepeatabilitySettings, RoutineConfig, TimingPolicy,
+use pimprobe_app::{
+    AppError, ErrorKind, Motion, Operation, ProbeApp, Token, ZeroRequest, history::Records,
+    settings::Settings,
 };
+use pimprobe_core::{Controller, RepeatabilityOptions, RoutineConfig};
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use std::{
     convert::Infallible,
-    fs,
-    path::{Path, PathBuf},
     pin::Pin,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::Arc,
     task::{Context, Poll},
-    time::Instant,
 };
-use tokio::sync::{Mutex, OwnedMutexGuard, mpsc};
 use tokio_stream::Stream;
 
 mod rotary;
 
 pub struct App {
-    pub device: Device,
-    settings: Mutex<Settings>,
-    reviews: Mutex<Reviews>,
-    rotary_reviews: Mutex<Reviews<pimprobe_core::RotaryPlan, pimprobe_core::RotaryResult>>,
-    action: Arc<Mutex<()>>,
-    active: AtomicBool,
-    recovery_failed: AtomicBool,
-    repeatability_stop: Mutex<Option<CancellationToken>>,
-    shutdown: CancellationToken,
+    pub device: Arc<Device>,
+    pub probe: Arc<ProbeApp>,
     ready_token: Option<String>,
     updates: UpdateManager,
-    logs: Arc<LogStore>,
 }
-
 impl App {
     pub fn new(
         device: Device,
@@ -74,76 +58,23 @@ impl App {
         ready_token: Option<String>,
         logs: LogStore,
     ) -> Arc<Self> {
+        let device = Arc::new(device);
+        let logs = Arc::new(logs);
+        let probe = ProbeApp::new(
+            device.clone(),
+            settings,
+            Arc::new(LocalHost::new(logs.clone())),
+            Records::new(logs.clone(), logs),
+        );
         Arc::new(Self {
             device,
-            settings: Mutex::new(settings),
-            reviews: Mutex::new(Reviews::default()),
-            rotary_reviews: Mutex::new(Reviews::default()),
-            action: Arc::new(Mutex::new(())),
-            active: AtomicBool::new(false),
-            recovery_failed: AtomicBool::new(false),
-            repeatability_stop: Mutex::new(None),
-            shutdown: CancellationToken::new(),
+            probe,
             ready_token,
             updates: UpdateManager::production(),
-            logs: Arc::new(logs),
         })
     }
-
-    fn acquire(&self) -> Result<OwnedMutexGuard<()>, ApiError> {
-        if self.shutdown.is_cancelled() {
-            return Err(ApiError::conflict("shutdown", "Service is stopping"));
-        }
-        let guard = self
-            .action
-            .clone()
-            .try_lock_owned()
-            .map_err(|_| ApiError::conflict("busy", "Another action is running"))?;
-        if self.recovery_failed.load(Ordering::SeqCst) {
-            return Err(ApiError::conflict(
-                "recovery",
-                "Waiting for confirmation that motion has stopped",
-            ));
-        }
-        Ok(guard)
-    }
-
     pub async fn shutdown(&self) {
-        self.shutdown.cancel();
-        // Wait for any run to finish its independent stop-confirmation path.
-        let _guard = self.action.lock().await;
-        self.device.shutdown().await;
-    }
-
-    async fn recover(&self, error: &Error) {
-        if matches!(
-            error,
-            Error::Stopped
-                | Error::Preflight(_)
-                | Error::InvalidConfig(_)
-                | Error::MotionBlocked
-                | Error::CoarseNoContact
-                | Error::UnexpectedContact {
-                    retracted: true,
-                    ..
-                }
-        ) {
-            return;
-        }
-        if self.device.state().motion_blocked {
-            return;
-        }
-        loop {
-            if self.device.stop().await.is_ok() {
-                self.recovery_failed.store(false, Ordering::SeqCst);
-                return;
-            }
-            self.recovery_failed.store(true, Ordering::SeqCst);
-            tokio::select! {
-                _ = self.shutdown.cancelled() => return,
-                _ = tokio::time::sleep(std::time::Duration::from_millis(200)) => {},
-            }
-        }
+        self.probe.shutdown().await;
     }
 }
 
@@ -183,9 +114,14 @@ impl ApiError {
         Self(StatusCode::CONFLICT, code, message.into())
     }
 }
-impl From<Error> for ApiError {
-    fn from(error: Error) -> Self {
-        Self::conflict(error_code(&error), error.to_string())
+impl From<AppError> for ApiError {
+    fn from(error: AppError) -> Self {
+        let status = match error.kind {
+            ErrorKind::Invalid => StatusCode::BAD_REQUEST,
+            ErrorKind::Conflict => StatusCode::CONFLICT,
+            ErrorKind::Storage => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+        Self(status, error.code, error.message)
     }
 }
 impl From<UpdateError> for ApiError {
@@ -227,137 +163,35 @@ where
             .map_err(|error| ApiError(StatusCode::BAD_REQUEST, "request", error.body_text()))
     }
 }
-fn error_code(error: &Error) -> &'static str {
-    match error {
-        Error::Stopped => "stopped",
-        Error::MotionBlocked => "controller_alarm",
-        Error::CoarseNoContact | Error::NoContact => "no_contact",
-        Error::UnexpectedContact { .. } => "unexpected_contact",
-        _ => "failed",
-    }
-}
 
-fn log_error(error: std::io::Error) -> ApiError {
-    ApiError(StatusCode::INTERNAL_SERVER_ERROR, "log", error.to_string())
-}
-
-fn log_warning(result: std::io::Result<()>) {
-    if let Err(error) = result {
-        eprintln!("Probing log: {error}");
-    }
-}
-
-fn software_info() -> Value {
-    let root = Path::new("/userdata/pimprobe");
-    let version = fs::read_to_string(root.join("VERSION"))
-        .unwrap_or_else(|_| env!("CARGO_PKG_VERSION").into());
-    let commit = fs::read_to_string(root.join("COMMIT")).unwrap_or_default();
-    json!({"version":version.trim(), "commit":commit.trim()})
-}
-
-fn routine_label(config: &RoutineConfig) -> String {
-    if config.z {
-        return "Z surface".into();
-    }
-    if config.family == "center" {
-        return format!("{} center", config.feature.replace('-', " "));
-    }
-    let feature = match (config.x, config.y) {
-        (0, y) => format!("Y{} edge", if y > 0 { "+" } else { "-" }),
-        (x, 0) => format!("X{} edge", if x > 0 { "+" } else { "-" }),
-        (x, y) => format!(
-            "X{}/Y{} corner",
-            if x > 0 { "+" } else { "-" },
-            if y > 0 { "+" } else { "-" }
-        ),
-    };
-    format!(
-        "{} {feature}",
-        if config.family == "inside" {
-            "Inside"
-        } else {
-            "Outside"
-        }
-    )
-}
-
-async fn history(State(app): State<Arc<App>>) -> Result<Json<Vec<Value>>, ApiError> {
-    let logs = app.logs.clone();
-    let entries = tokio::task::spawn_blocking(move || logs.history())
-        .await
-        .map_err(|e| ApiError::conflict("log", e.to_string()))?
-        .map_err(log_error)?;
-    Ok(Json(entries))
-}
-
-fn usb_mount(mounts: &str) -> Option<PathBuf> {
-    let mut candidates = mounts.lines().filter_map(|line| {
-        let mut fields = line.split_whitespace();
-        let source = fields.next()?;
-        let target = fields.next()?.replace("\\040", " ");
-        (source.starts_with("/dev/")
-            && (target == "/mnt/udisk" || target.starts_with("/run/media/")))
-        .then_some(PathBuf::from(target))
-    });
-    candidates
-        .clone()
-        .find(|path| path == Path::new("/mnt/udisk"))
-        .or_else(|| candidates.next())
-}
-
-async fn export_logs(State(app): State<Arc<App>>) -> Result<Json<Value>, ApiError> {
-    let _guard = app.acquire()?;
-    let mounts = fs::read_to_string("/proc/mounts").map_err(log_error)?;
-    let destination = usb_mount(&mounts)
-        .ok_or_else(|| ApiError::conflict("usb", "Insert a mounted USB drive before exporting"))?;
-    let usb_root = destination.clone();
-    let logs = app.logs.clone();
-    let folder = tokio::task::spawn_blocking(move || logs.export_to(&destination))
-        .await
-        .map_err(|e| ApiError::conflict("log", e.to_string()))?
-        .map_err(log_error)?;
-    let relative = folder
-        .strip_prefix(&usb_root)
-        .map_err(|error| ApiError::conflict("log", error.to_string()))?;
-    Ok(Json(json!({"path":folder,"relativePath":relative})))
-}
-
-async fn clear_logs(State(app): State<Arc<App>>) -> Result<Json<Value>, ApiError> {
-    let _guard = app.acquire()?;
-    let logs = app.logs.clone();
-    tokio::task::spawn_blocking(move || logs.clear())
-        .await
-        .map_err(|e| ApiError::conflict("log", e.to_string()))?
-        .map_err(log_error)?;
-    Ok(Json(json!({"cleared":true})))
-}
-
-async fn state(State(app): State<Arc<App>>) -> Json<Value> {
-    let mut snapshot = app.device.snapshot();
-    snapshot["contactActive"] = json!(app.active.load(Ordering::SeqCst));
-    snapshot["recoveryFailed"] = json!(app.recovery_failed.load(Ordering::SeqCst));
-    Json(snapshot)
+async fn state(State(app): State<Arc<App>>) -> Json<pimprobe_app::AppState> {
+    Json(app.probe.state())
 }
 async fn settings(State(app): State<Arc<App>>) -> Json<Map<String, Value>> {
-    Json(app.settings.lock().await.snapshot())
+    Json(app.probe.settings().await)
 }
 async fn settings_schema() -> Json<Map<String, Value>> {
-    Json(crate::settings::schema())
+    Json(pimprobe_app::settings::schema())
 }
 async fn update_settings(
     State(app): State<Arc<App>>,
     ApiJson(patch): ApiJson<Map<String, Value>>,
 ) -> Result<Json<Map<String, Value>>, ApiError> {
-    let mut store = app.settings.lock().await;
-    store.update(patch).map_err(|e| {
-        let status = if matches!(e, SettingsError::Invalid(_)) {
-            StatusCode::BAD_REQUEST
-        } else {
-            StatusCode::INTERNAL_SERVER_ERROR
-        };
-        ApiError(status, "settings", e.to_string())
-    })?;
-    Ok(Json(store.snapshot()))
+    Ok(Json(app.probe.update_settings(patch).await?))
+}
+async fn history(
+    State(app): State<Arc<App>>,
+) -> Result<Json<Vec<pimprobe_app::history::HistoryEntry>>, ApiError> {
+    Ok(Json(app.probe.history().await?))
+}
+async fn export_logs(
+    State(app): State<Arc<App>>,
+) -> Result<Json<pimprobe_app::host::ExportResult>, ApiError> {
+    Ok(Json(app.probe.export_logs().await?))
+}
+async fn clear_logs(State(app): State<Arc<App>>) -> Result<Json<Value>, ApiError> {
+    app.probe.clear_logs().await?;
+    Ok(Json(json!({"cleared":true})))
 }
 async fn ready(State(app): State<Arc<App>>) -> Response {
     match &app.ready_token {
@@ -389,7 +223,7 @@ async fn install_update(
     State(app): State<Arc<App>>,
     ApiJson(body): ApiJson<InstallUpdateRequest>,
 ) -> Result<Json<crate::updates::InstallStarted>, ApiError> {
-    let _guard = app.acquire()?;
+    let _guard = app.probe.acquire()?;
     let state = app.device.state();
     if !state.connected || !state.ready || !state.spindle_stopped {
         return Err(ApiError::conflict(
@@ -428,16 +262,9 @@ async fn actuator(
     State(app): State<Arc<App>>,
     ApiJson(body): ApiJson<ActuatorRequest>,
 ) -> Result<StatusCode, ApiError> {
-    let guard = app.acquire()?;
-    tokio::spawn(async move {
-        let _guard = guard;
-        app.device.set_extended(body.extended).await
-    })
-    .await
-    .map_err(|e| ApiError::conflict("actuator", e.to_string()))??;
+    app.probe.set_extended(body.extended).await?;
     Ok(StatusCode::NO_CONTENT)
 }
-
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct WcsRequest {
@@ -447,531 +274,80 @@ async fn wcs(
     State(app): State<Arc<App>>,
     ApiJson(body): ApiJson<WcsRequest>,
 ) -> Result<StatusCode, ApiError> {
-    if !(54..=59).contains(&body.wcs) {
-        return Err(ApiError(
-            StatusCode::BAD_REQUEST,
-            "wcs",
-            "Invalid WCS".into(),
-        ));
-    }
-    let guard = app.acquire()?;
-    tokio::spawn(async move {
-        let _guard = guard;
-        app.device.select_wcs(body.wcs).await
-    })
-    .await
-    .map_err(|e| ApiError::conflict("wcs", e.to_string()))??;
+    app.probe.select_wcs(body.wcs).await?;
     Ok(StatusCode::NO_CONTENT)
 }
-
 async fn review(
     State(app): State<Arc<App>>,
     ApiJson(config): ApiJson<RoutineConfig>,
-) -> Result<Json<Value>, ApiError> {
-    let _guard = app.acquire()?;
-    let session = app.device.session_id();
-    app.device.configure(&config)?;
-    let modes = pimprobe_core::query_modes(&app.device).await?;
-    let mut state = app.device.state();
-    state.modes = modes;
-    let plan = pimprobe_core::review(state, config)?;
-    let program = plan.program();
-    if app.device.session_id() != session {
-        return Err(ApiError::conflict(
-            "review",
-            "Controller reconnected; review the routine again",
-        ));
-    }
-    let id = app.reviews.lock().await.put(plan, session);
-    Ok(Json(
-        json!({"id":id,"program":program,"simulated":app.device.is_mock()}),
-    ))
+) -> Result<Json<pimprobe_app::Review>, ApiError> {
+    Ok(Json(app.probe.review(config).await?))
 }
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Token {
-    id: String,
-}
-
-struct RunStream {
-    receiver: mpsc::Receiver<Result<Bytes, Infallible>>,
-    cancel: CancellationToken,
-}
-impl Stream for RunStream {
-    type Item = Result<Bytes, Infallible>;
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        self.receiver.poll_recv(cx)
-    }
-}
-impl Drop for RunStream {
-    fn drop(&mut self) {
-        self.cancel.cancel();
-    }
-}
-fn encoded(value: Value) -> Result<Bytes, Infallible> {
-    Ok(Bytes::from(value.to_string() + "\n"))
-}
-
-fn queue_progress(
-    sender: &mpsc::Sender<Result<Bytes, Infallible>>,
-    cancel: &CancellationToken,
-    event: Value,
-) {
-    // Keep one slot for the terminal event, even if the client stops reading.
-    if sender.capacity() <= 1 || sender.try_send(encoded(event)).is_err() {
-        cancel.cancel();
-    }
-}
-
-async fn stop_repeatability(State(app): State<Arc<App>>) -> StatusCode {
-    if let Some(stop) = app.repeatability_stop.lock().await.as_ref() {
-        stop.cancel();
-    }
-    StatusCode::NO_CONTENT
-}
-
-async fn repeatability(
-    State(app): State<Arc<App>>,
-    ApiJson(options): ApiJson<RepeatabilityOptions>,
-) -> Result<Response, ApiError> {
-    let guard = app.acquire()?;
-    let values = app.settings.lock().await.snapshot();
-    let settings = RepeatabilitySettings {
-        diameter: values["probeDiameter"].as_f64().unwrap(),
-        retract: values["retractDistance"].as_f64().unwrap(),
-        positioning_feed: values["positioningFeed"].as_f64().unwrap(),
-        coarse_feed: values["coarseFeed"].as_f64().unwrap(),
-        fine_feed: values["fineFeed"].as_f64().unwrap(),
-    };
-    options.validate()?;
-    settings.validate()?;
-    pimprobe_core::check_repeatability(&app.device, &options, settings)?;
-    app.device.configure_repeatability(settings.diameter)?;
-    let run_id = uuid::Uuid::new_v4().to_string();
-    app.logs
-        .start(
-            &run_id,
-            "Probe repeatability",
-            "repeatability",
-            json!({"options":options,"settings":values}),
-            json!({"controller":app.device.state(),"software":software_info()}),
-        )
-        .map_err(log_error)?;
-    let cancel = app.shutdown.child_token();
-    let run_cancel = cancel.clone();
-    let stop = CancellationToken::new();
-    *app.repeatability_stop.lock().await = Some(stop.clone());
-    let (sender, receiver) = mpsc::channel(256);
-    app.active.store(true, Ordering::SeqCst);
-    tokio::spawn(async move {
-        let _guard = guard;
-        let mut report = RepeatabilityReport::default();
-        let progress_id = run_id.clone();
-        let progress_logs = app.logs.clone();
-        let result = pimprobe_core::run_repeatability(
-            &app.device, &options, settings, &mut report, run_cancel.clone(), stop, |event| {
-                let event = match event {
-                    RepeatabilityEvent::Progress(progress) => json!({"type":"progress", "progress":progress}),
-                    RepeatabilityEvent::Measurement { repetition, axis, value, statistics } =>
-                        json!({"type":"measurement", "repetition":repetition, "axis":axis, "value":value, "statistics":statistics}),
-                };
-                let name = if event["progress"]["kind"] == "contact" {
-                    "contact"
-                } else {
-                    event["type"].as_str().unwrap_or("progress")
-                };
-                let data = if name == "contact" {
-                    json!({"measurement":event["progress"]["measurement"],"contact":event["progress"]["contact"]})
-                } else {
-                    event.clone()
-                };
-                log_warning(progress_logs.trace(&progress_id, name, data));
-                queue_progress(&sender, &run_cancel, event);
-            },
-        ).await;
-        let event = match result {
-            Ok(()) => {
-                log_warning(
-                    app.logs
-                        .finish(&run_id, "success", Some(json!(report)), None),
-                );
-                json!({"type":"result", "result":report})
-            }
-            Err(error) => {
-                app.recover(&error).await;
-                log_warning(app.logs.finish(
-                    &run_id,
-                    if matches!(error, Error::Stopped) {
-                        "stopped"
-                    } else if matches!(error, Error::Cancelled) {
-                        "cancelled"
-                    } else {
-                        "failed"
-                    },
-                    Some(json!(report)),
-                    if matches!(error, Error::Stopped) {
-                        None
-                    } else {
-                        Some(error.to_string())
-                    },
-                ));
-                json!({"type":"error", "code":error_code(&error), "message":error.to_string(), "result":report})
-            }
-        };
-        log_warning(
-            app.logs
-                .trace(&run_id, "end_state", json!(app.device.state())),
-        );
-        app.active.store(false, Ordering::SeqCst);
-        *app.repeatability_stop.lock().await = None;
-        let _ = sender.try_send(encoded(event));
-    });
-    Ok((
-        [
-            (header::CONTENT_TYPE, "application/x-ndjson"),
-            (header::CACHE_CONTROL, "no-store"),
-        ],
-        Body::from_stream(RunStream { receiver, cancel }),
-    )
-        .into_response())
-}
-
 async fn run(
     State(app): State<Arc<App>>,
     ApiJson(token): ApiJson<Token>,
 ) -> Result<Response, ApiError> {
-    start_motion(app, token, Motion::Run).await
+    Ok(stream(app.probe.start_motion(token, Motion::Run).await?))
 }
-
 async fn return_start(
     State(app): State<Arc<App>>,
     ApiJson(token): ApiJson<Token>,
 ) -> Result<Response, ApiError> {
-    start_motion(app, token, Motion::Return).await
+    Ok(stream(app.probe.start_motion(token, Motion::Return).await?))
 }
-
-#[derive(Clone, Copy)]
-enum Motion {
-    Run,
-    Return,
-    Measured(f64),
-}
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct MeasuredRequest {
     id: String,
     safe_z_offset: f64,
 }
-
 async fn go_to_measured(
     State(app): State<Arc<App>>,
-    ApiJson(request): ApiJson<MeasuredRequest>,
+    ApiJson(body): ApiJson<MeasuredRequest>,
 ) -> Result<Response, ApiError> {
-    start_motion(
-        app,
-        Token { id: request.id },
-        Motion::Measured(request.safe_z_offset),
-    )
-    .await
+    Ok(stream(
+        app.probe
+            .start_motion(Token { id: body.id }, Motion::Measured(body.safe_z_offset))
+            .await?,
+    ))
+}
+async fn zero(
+    State(app): State<Arc<App>>,
+    ApiJson(token): ApiJson<ZeroRequest>,
+) -> Result<Json<pimprobe_core::RoutineResult>, ApiError> {
+    Ok(Json(app.probe.zero(token).await?))
+}
+async fn repeatability(
+    State(app): State<Arc<App>>,
+    ApiJson(options): ApiJson<RepeatabilityOptions>,
+) -> Result<Response, ApiError> {
+    Ok(stream(app.probe.repeatability(options).await?))
+}
+async fn stop_repeatability(State(app): State<Arc<App>>) -> StatusCode {
+    app.probe.stop_repeatability().await;
+    StatusCode::NO_CONTENT
 }
 
-async fn start_motion(app: Arc<App>, token: Token, motion: Motion) -> Result<Response, ApiError> {
-    let guard = app.acquire()?;
-    let session = app.device.session_id();
-    let (plan, completed) = match motion {
-        Motion::Run => (
-            app.reviews
-                .lock()
-                .await
-                .take(&token.id, session)
-                .ok_or_else(|| {
-                    ApiError::conflict("review", "Review expired; review the routine again")
-                })?,
-            None,
-        ),
-        Motion::Return | Motion::Measured(_) => {
-            let (plan, result) = app
-                .reviews
-                .lock()
-                .await
-                .take_completed(&token.id, session)
-                .ok_or_else(|| ApiError::conflict("result", "No completed result available"))?;
-            let already_done = match motion {
-                Motion::Return => result.returned,
-                Motion::Measured(_) => result.positioned,
-                Motion::Run => false,
-            };
-            if already_done {
-                app.reviews
-                    .lock()
-                    .await
-                    .finish(token.id, session, plan, result);
-                return Err(ApiError::conflict(
-                    "result",
-                    "Positioning action already completed",
-                ));
-            }
-            (plan, Some(result))
-        }
-    };
-    if matches!(motion, Motion::Run) {
-        app.logs
-            .start(
-                &token.id,
-                &routine_label(&plan.config),
-                "routine",
-                json!(plan.config),
-                json!({"controller":plan.start,"software":software_info()}),
-            )
-            .map_err(log_error)?;
-    } else {
-        log_warning(app.logs.trace(
-            &token.id,
-            "action_start",
-            json!({"action":match motion { Motion::Return => "return_to_start", Motion::Measured(_) => "go_to_measured", Motion::Run => unreachable!() }}),
-        ));
+struct RunStream(Operation);
+impl Stream for RunStream {
+    type Item = Result<Bytes, Infallible>;
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        self.0.poll_recv(cx).map(|event| {
+            event.map(|value| {
+                Ok(Bytes::from(
+                    serde_json::to_string(&value).expect("operation event") + "\n",
+                ))
+            })
+        })
     }
-    let cancel = app.shutdown.child_token();
-    let run_cancel = cancel.clone();
-    let (sender, receiver) = mpsc::channel(256);
-    app.active.store(true, Ordering::SeqCst);
-    tokio::spawn(async move {
-        let _guard = guard;
-        let started = Instant::now();
-        let run_id = token.id.clone();
-        let progress_sender = sender.clone();
-        let progress_cancel = run_cancel.clone();
-        let progress_logs = app.logs.clone();
-        let progress_id = run_id.clone();
-        let observe = move |progress: pimprobe_core::Progress| {
-            let event = json!({"type":"progress","elapsedMs":started.elapsed().as_millis(),"progress":progress});
-            let name = if event["progress"]["kind"] == "contact" {
-                "contact"
-            } else {
-                "progress"
-            };
-            let data = if name == "contact" {
-                json!({"elapsedMs":event["elapsedMs"],"measurement":progress.measurement,"contact":progress.contact})
-            } else {
-                event.clone()
-            };
-            log_warning(progress_logs.trace(&progress_id, name, data));
-            queue_progress(&progress_sender, &progress_cancel, event);
-        };
-        let result = match (motion, completed) {
-            (Motion::Run, None) => {
-                pimprobe_core::run(
-                    &app.device,
-                    &plan,
-                    TimingPolicy::default(),
-                    run_cancel,
-                    observe,
-                )
-                .await
-            }
-            (Motion::Return, Some(result)) => {
-                pimprobe_core::return_to_start(
-                    &app.device,
-                    &plan,
-                    &result,
-                    TimingPolicy::default(),
-                    run_cancel,
-                    observe,
-                )
-                .await
-            }
-            (Motion::Measured(clearance), Some(result)) => {
-                pimprobe_core::go_to_measured(
-                    &app.device,
-                    &plan,
-                    &result,
-                    clearance,
-                    TimingPolicy::default(),
-                    run_cancel,
-                    observe,
-                )
-                .await
-            }
-            _ => unreachable!(),
-        };
-        let event = match result {
-            Ok(result) => {
-                match motion {
-                    Motion::Run => {
-                        log_warning(
-                            app.logs
-                                .finish(&run_id, "success", Some(json!(result)), None),
-                        )
-                    }
-                    Motion::Return => log_warning(app.logs.action(
-                        &run_id,
-                        "return_to_start",
-                        json!({"result":result}),
-                    )),
-                    Motion::Measured(clearance) => log_warning(app.logs.action(
-                        &run_id,
-                        "go_to_measured",
-                        json!({"safeZOffset":clearance,"result":result}),
-                    )),
-                }
-                app.reviews
-                    .lock()
-                    .await
-                    .finish(token.id, session, plan, result.clone());
-                json!({"type":"result","result":result})
-            }
-            Err(mut error) => {
-                app.recover(&error).await;
-                let state = app.device.state();
-                if matches!(motion, Motion::Measured(_))
-                    && state.connected
-                    && state.ready
-                    && !state.motion_blocked
-                    && state.modes != plan.start.modes
-                    && let Err(recovery) =
-                        pimprobe_core::restore_modes(&app.device, plan.start.modes).await
-                {
-                    error = Error::Recovery {
-                        cause: Box::new(error),
-                        recovery: Box::new(recovery),
-                    };
-                }
-                if matches!(motion, Motion::Run) {
-                    log_warning(app.logs.finish(
-                        &run_id,
-                        if matches!(error, Error::Cancelled) {
-                            "cancelled"
-                        } else {
-                            "failed"
-                        },
-                        None,
-                        Some(error.to_string()),
-                    ));
-                } else {
-                    log_warning(app.logs.action(
-                        &run_id,
-                        "action_failed",
-                        json!({"message":error.to_string()}),
-                    ));
-                }
-                json!({"type":"error","code":error_code(&error),"message":error.to_string()})
-            }
-        };
-        log_warning(
-            app.logs
-                .trace(&run_id, "end_state", json!(app.device.state())),
-        );
-        app.active.store(false, Ordering::SeqCst);
-        let _ = sender.try_send(encoded(event));
-    });
-    Ok((
+}
+fn stream(operation: Operation) -> Response {
+    (
         [
             (header::CONTENT_TYPE, "application/x-ndjson"),
             (header::CACHE_CONTROL, "no-store"),
         ],
-        Body::from_stream(RunStream { receiver, cancel }),
+        Body::from_stream(RunStream(operation)),
     )
-        .into_response())
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct ZeroRequest {
-    id: String,
-    #[serde(default)]
-    offsets: [f64; 3],
-}
-
-async fn zero(
-    State(app): State<Arc<App>>,
-    ApiJson(token): ApiJson<ZeroRequest>,
-) -> Result<Json<Value>, ApiError> {
-    let guard = app.acquire()?;
-    let session = app.device.session_id();
-    let (plan, result) = app
-        .reviews
-        .lock()
-        .await
-        .take_completed(&token.id, session)
-        .ok_or_else(|| ApiError::conflict("zero", "No unzeroed result available"))?;
-    if result.zeroed {
-        app.reviews
-            .lock()
-            .await
-            .finish(token.id, session, plan, result);
-        return Err(ApiError::conflict("zero", "Work zero already set"));
-    }
-    let result = tokio::spawn(async move {
-        let _guard = guard;
-        let updated = pimprobe_core::zero_result(
-            &app.device,
-            &plan,
-            &result,
-            token.offsets,
-            TimingPolicy::default(),
-            app.shutdown.child_token(),
-        )
-        .await;
-        if let Err(error) = &updated {
-            app.recover(error).await;
-            log_warning(app.logs.action(
-                &token.id,
-                "work_zero_failed",
-                json!({"offsets":token.offsets,"message":error.to_string()}),
-            ));
-        } else if let Ok(result) = &updated {
-            log_warning(app.logs.action(
-                &token.id,
-                "work_zero",
-                json!({"offsets":token.offsets,"result":result}),
-            ));
-            app.reviews
-                .lock()
-                .await
-                .finish(token.id, session, plan, result.clone());
-        }
-        updated
-    })
-    .await
-    .map_err(|e| ApiError::conflict("zero", e.to_string()))??;
-    Ok(Json(json!(result)))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn usb_mount_prefers_the_machine_mount_and_requires_a_block_device() {
-        let mounts = "tmpfs /mnt/udisk tmpfs rw 0 0\n/dev/sdb1 /run/media/backup vfat rw 0 0\n/dev/sda1 /mnt/udisk vfat rw 0 0\n";
-        assert_eq!(usb_mount(mounts), Some(PathBuf::from("/mnt/udisk")));
-        assert_eq!(
-            usb_mount("tmpfs /mnt/udisk tmpfs rw 0 0\n/dev/sdb1 /run/media/backup vfat rw 0 0\n"),
-            Some(PathBuf::from("/run/media/backup"))
-        );
-        assert_eq!(usb_mount("tmpfs /mnt/udisk tmpfs rw 0 0\n"), None);
-    }
-
-    #[tokio::test]
-    async fn slow_reader_always_has_room_for_terminal_event() {
-        let (sender, mut receiver) = mpsc::channel(4);
-        let cancel = CancellationToken::new();
-        for _ in 0..10 {
-            queue_progress(&sender, &cancel, json!({"type":"progress"}));
-        }
-        assert!(cancel.is_cancelled());
-        sender.try_send(encoded(json!({"type":"error"}))).unwrap();
-        drop(sender);
-        let mut events = Vec::new();
-        while let Some(event) = receiver.recv().await {
-            events.push(event.unwrap());
-        }
-        assert_eq!(events.len(), 4);
-        assert_eq!(
-            serde_json::from_slice::<Value>(events.last().unwrap()).unwrap()["type"],
-            "error"
-        );
-    }
+        .into_response()
 }

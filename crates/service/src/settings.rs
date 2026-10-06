@@ -14,132 +14,40 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use pimprobe_core::{NumericRange, Parameter};
-use serde_json::{Map, Value, json};
+use pimprobe_app::settings::{ProbeSettings, SettingsStore};
+pub use pimprobe_app::settings::{SettingsError, schema};
+use serde_json::{Map, Value};
 use std::{
     fs,
     io::Write,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
-#[derive(Debug, thiserror::Error)]
-pub enum SettingsError {
-    #[error("invalid setting: {0}")]
-    Invalid(String),
-    #[error("settings file: {0}")]
-    Io(#[from] std::io::Error),
-    #[error("settings JSON: {0}")]
-    Json(#[from] serde_json::Error),
-}
-
-struct Rule {
-    key: &'static str,
-    default: Value,
-    range: NumericRange,
-}
-
-fn rules() -> Vec<Rule> {
-    let mut rules = Vec::new();
-    for (key, value, parameter) in [
-        ("centerXSearchDistance", 20., Parameter::SearchDistance),
-        ("centerYSearchDistance", 20., Parameter::SearchDistance),
-        ("centerDepth", 5., Parameter::Travel),
-        ("probeDiameter", 2., Parameter::Diameter),
-        ("retractDistance", 0.5, Parameter::Retract),
-        ("safeZOffset", 40., Parameter::Travel),
-        ("positioningFeed", 1000., Parameter::PositioningFeed),
-        ("coarseFeed", 300., Parameter::ProbeFeed),
-        ("fineFeed", 50., Parameter::ProbeFeed),
-        ("outsideXSearchDistance", 10., Parameter::SearchDistance),
-        ("outsideYSearchDistance", 10., Parameter::SearchDistance),
-        ("outsideDepth", 5., Parameter::Travel),
-        ("insideDepth", 5., Parameter::Travel),
-        ("insideXSearchDistance", 10., Parameter::SearchDistance),
-        ("insideYSearchDistance", 10., Parameter::SearchDistance),
-    ] {
-        rules.push(Rule {
-            key,
-            default: json!(value),
-            range: parameter.range(),
-        });
-    }
-    for (key, value, minimum, maximum) in [
-        ("rotaryRodDiameter", 10., 3., 100.),
-        ("rotaryXDistance", 30., -200., 200.),
-        ("rotaryFeed", 360., 1., 3600.),
-        ("rotaryYDistance", 10., 0.1, 100.),
-        ("rotaryZDistance", 10., 0.1, 100.),
-    ] {
-        rules.push(Rule {
-            key,
-            default: json!(value),
-            range: NumericRange { minimum, maximum },
-        });
-    }
-    rules
-}
-
-pub fn schema() -> Map<String, Value> {
-    rules()
-        .into_iter()
-        .map(|rule| {
-            let mut entry = serde_json::to_value(rule.range).unwrap();
-            entry["default"] = rule.default;
-            (rule.key.to_owned(), entry)
-        })
-        .collect()
-}
-
-fn valid(rule: &Rule, value: &Value) -> bool {
-    value.as_f64().is_some_and(|n| rule.range.contains(n))
-}
-
-pub struct Settings {
+pub struct JsonSettingsStore {
     path: PathBuf,
-    values: Map<String, Value>,
 }
-
-impl Settings {
-    pub fn open(path: impl AsRef<Path>) -> Result<Self, SettingsError> {
-        let rules = rules();
-        let mut values: Map<_, _> = rules
-            .iter()
-            .map(|r| (r.key.to_owned(), r.default.clone()))
-            .collect();
-        let path = path.as_ref().to_owned();
-        let rewrite = match fs::read(&path) {
-            Ok(data) => {
-                let saved: Map<String, Value> = serde_json::from_slice(&data)?;
-                for rule in &rules {
-                    if let Some(value) = saved.get(rule.key).filter(|v| valid(rule, v)) {
-                        values.insert(rule.key.to_owned(), value.clone());
-                    }
-                }
-                saved != values
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => true,
-            Err(e) => return Err(e.into()),
+impl JsonSettingsStore {
+    pub fn new(path: impl AsRef<Path>) -> Self {
+        Self {
+            path: path.as_ref().to_owned(),
+        }
+    }
+}
+impl SettingsStore for JsonSettingsStore {
+    fn load(&self) -> std::io::Result<ProbeSettings> {
+        let saved: Map<String, Value> = match fs::read(&self.path) {
+            Ok(data) => serde_json::from_slice(&data).map_err(std::io::Error::other)?,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Map::new(),
+            Err(e) => return Err(e),
         };
-        let mut settings = Self { path, values };
-        if rewrite {
-            settings.update(Map::new())?;
+        let values = ProbeSettings::from_saved(saved.clone());
+        if values.snapshot() != saved {
+            self.save(&values)?;
         }
-        Ok(settings)
+        Ok(values)
     }
-
-    pub fn snapshot(&self) -> Map<String, Value> {
-        self.values.clone()
-    }
-
-    pub fn update(&mut self, patch: Map<String, Value>) -> Result<(), SettingsError> {
-        let schema = rules();
-        for (key, value) in &patch {
-            if !schema.iter().any(|r| r.key == key && valid(r, value)) {
-                return Err(SettingsError::Invalid(key.clone()));
-            }
-        }
-        let mut values = self.values.clone();
-        values.extend(patch);
+    fn save(&self, values: &ProbeSettings) -> std::io::Result<()> {
         let parent = self
             .path
             .parent()
@@ -147,26 +55,27 @@ impl Settings {
             .unwrap_or(Path::new("."));
         fs::create_dir_all(parent)?;
         let mut file = tempfile::NamedTempFile::new_in(parent)?;
-        serde_json::to_writer_pretty(&mut file, &values)?;
+        serde_json::to_writer_pretty(&mut file, values).map_err(std::io::Error::other)?;
         file.write_all(b"\n")?;
         file.as_file().sync_all()?;
         file.persist(&self.path).map_err(|e| e.error)?;
-        // Publish only after the replacement has reached disk.
-        fs::File::open(parent)?.sync_all()?;
-        self.values = values;
-        Ok(())
+        fs::File::open(parent)?.sync_all()
     }
 }
 
+pub fn open(path: impl AsRef<Path>) -> Result<pimprobe_app::settings::Settings, SettingsError> {
+    pimprobe_app::settings::Settings::load(Arc::new(JsonSettingsStore::new(path)))
+}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn persists_and_loads_new_defaults() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("settings.json");
-        let mut settings = Settings::open(&path).unwrap();
+        let mut settings = open(&path).unwrap();
         assert_eq!(settings.snapshot()["coarseFeed"], 300.0);
         assert_eq!(settings.snapshot()["fineFeed"], 50.0);
         assert_eq!(settings.snapshot()["probeDiameter"], 2.0);
@@ -184,7 +93,7 @@ mod tests {
                     .clone(),
             )
             .unwrap();
-        let reopened = Settings::open(path).unwrap().snapshot();
+        let reopened = open(path).unwrap().snapshot();
         assert_eq!(reopened["coarseFeed"], 123);
         assert_eq!(reopened["centerXSearchDistance"], 120);
         assert_eq!(reopened["centerYSearchDistance"], 150);
@@ -195,7 +104,7 @@ mod tests {
     #[test]
     fn rejects_entire_invalid_patch() {
         let dir = tempfile::tempdir().unwrap();
-        let mut settings = Settings::open(dir.path().join("settings.json")).unwrap();
+        let mut settings = open(dir.path().join("settings.json")).unwrap();
         let before = settings.snapshot();
         for patch in [
             json!({"coarseFeed":123,"retractDistance":0}),
@@ -216,12 +125,12 @@ mod tests {
             r#"{"oldField":1,"coarseFeed":-1,"centerXSearchDistance":40}"#,
         )
         .unwrap();
-        let saved = Settings::open(&path).unwrap().snapshot();
+        let saved = open(&path).unwrap().snapshot();
         assert_eq!(saved["coarseFeed"], 300.0);
         assert_eq!(saved["centerXSearchDistance"], 40);
         let stored: Map<String, Value> = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
         assert_eq!(stored, saved);
         fs::write(&path, "{").unwrap();
-        assert!(Settings::open(path).is_err());
+        assert!(open(path).is_err());
     }
 }

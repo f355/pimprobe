@@ -16,13 +16,15 @@
 
 pragma ComponentBehavior: Bound
 import QtQuick
+import "controls"
 import QtQuick.Controls
 import QtQuick.Layouts
-import "Api.js" as Api
 
-Popup {
+PageView {
     id: flow
-    property string serviceUrl
+    required property var client
+    property bool showHeader: true
+    signal alarmRequested()
     property string uiFont
     property string codeFont
     property string phase: "review"
@@ -38,17 +40,14 @@ Popup {
     readonly property string zeroAxes: operation === "horizontal" ? "A/Z" : operation === "axis" ? "Y/Z" : "A/Y"
     readonly property string title: operation === "horizontal" ? "Level horizontal surface" : operation === "vertical" ? "Align vertical surface toward Y+" : operation === "verticalNegative" ? "Align vertical surface toward Y−" : "Calibrate rotary axis"
     readonly property bool busy: reviewRequest.pending || actionRequest.pending
-    ServiceRequest { id: reviewRequest }
-    ServiceRequest { id: actionRequest }
+    ServiceRequest { id: reviewRequest; client: flow.client }
+    ServiceRequest { id: actionRequest; client: flow.client }
 
-    parent: Overlay.overlay
     x: 0
     y: 0
     width: parent ? parent.width : 800
     height: parent ? parent.height : 480
     padding: 0
-    modal: true
-    closePolicy: Popup.NoAutoClose
     background: Rectangle { color: Theme.page }
 
     function showCalibration(config) {
@@ -59,7 +58,7 @@ Popup {
         failure = "";
         reviewID = "";
         open();
-        reviewRequest.send("POST", serviceUrl + "/rotary/review", config, function(reply) {
+        reviewRequest.send("rotary.review", config, function(reply) {
             if (!reply.ok || !reply.data) {
                 failure = reply.error || "Could not prepare calibration";
                 return;
@@ -80,7 +79,7 @@ Popup {
         phase = "running";
         text = "";
         var terminal = false;
-        activeRequest = Api.stream(serviceUrl + "/rotary/run", {id: reviewID}, function(event) {
+        activeRequest = client.stream("rotary.run", {id: reviewID}, function(event) {
             if (event.type === "progress") {
                 if (event.progress.kind === "script") append(event.progress.message);
             } else if (event.type === "result") {
@@ -89,10 +88,16 @@ Popup {
                 terminal = true;
             } else if (event.type === "error") {
                 failure = event.message;
-                append("; Failed: " + failure);
-                phase = "failed";
+                if (event.code === "log" && event.result) {
+                    result = event.result;
+                    phase = "result";
+                    append("; Warning: " + failure);
+                } else {
+                    append("; Failed: " + failure);
+                    phase = "failed";
+                }
                 terminal = true;
-                if (event.code === "controller_alarm") Qt.quit();
+                if (event.code === "controller_alarm") alarmRequested();
             }
         }, function(error) {
             activeRequest = null;
@@ -109,7 +114,7 @@ Popup {
     function applyAction() {
         confirmation.close();
         failure = "";
-        actionRequest.send("POST", serviceUrl + "/rotary/" + requestedAction, {id: reviewID}, function(reply) {
+        actionRequest.send("rotary." + requestedAction, {id: reviewID}, function(reply) {
             if (!reply.ok || !reply.data) {
                 failure = reply.error || "Could not save calibration";
                 return;
@@ -119,6 +124,7 @@ Popup {
         });
     }
     onClosed: {
+        confirmation.close();
         reviewRequest.cancel();
         actionRequest.cancel();
         if (activeRequest) activeRequest.abort();
@@ -130,6 +136,7 @@ Popup {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 70
+            visible: flow.showHeader
             color: Theme.header
             RowLayout {
                 anchors.fill: parent
@@ -150,7 +157,7 @@ Popup {
                     Layout.rightMargin: 18
                     text: flow.simulated ? "Simulation" : ""
                     color: Theme.textMuted
-                    font.pixelSize: 15
+                    font.pixelSize: 18
                 }
             }
         }
@@ -184,10 +191,10 @@ Popup {
                         readOnly: true
                         selectByMouse: false
                         font.family: flow.codeFont
-                        font.pixelSize: 16
+                        font.pixelSize: 18
                         color: Theme.text
                         wrapMode: TextEdit.NoWrap
-                        padding: 10
+                        padding: 8
                         background: Rectangle { color: Theme.panel; radius: 12 }
                     }
                 }
@@ -212,7 +219,7 @@ Popup {
                             Label {
                                 text: (flow.leveling ? "Touch " : "Station ") + (parent.index + 1)
                                 color: Theme.textMuted
-                                font.pixelSize: 16
+                                font.pixelSize: 18
                             }
                             Label {
                                 Layout.fillWidth: true
@@ -222,7 +229,7 @@ Popup {
                                 }).join("   ")
                                 color: Theme.text
                                 font.family: flow.codeFont
-                                font.pixelSize: 17
+                                font.pixelSize: 18
                                 wrapMode: Text.WordWrap
                             }
                         }
@@ -245,7 +252,7 @@ Popup {
                               (flow.result.zeroed ? " · Saved" : "") +
                               (flow.result.rotationApplied ? "\nXY alignment saved" : "")
                         color: Theme.textMuted
-                        font.pixelSize: 16
+                        font.pixelSize: 18
                         wrapMode: Text.WordWrap
                     }
                     Item { Layout.fillHeight: true }
@@ -301,7 +308,8 @@ Popup {
     }
     Dialog {
         id: confirmation
-        parent: Overlay.overlay
+        Component.onCompleted: if ("popupType" in confirmation) confirmation.popupType = Popup.Item
+        parent: flow
         anchors.centerIn: parent
         width: 590
         height: 220

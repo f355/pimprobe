@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import QtQuick
+import "controls"
 import QtQuick.Controls
 import "ProbeDrawing.js" as Draw
 
@@ -38,7 +39,8 @@ ProbeButton {
                 var round = f === "boss" || f === "hole";
                 var onlyX = f.indexOf("x-") === 0, onlyY = f.indexOf("y-") === 0;
                 var z = f === "z";
-                var left = cx - 23, right = cx + 23, top = cy - 23, bottom = cy + 23;
+                var radius = Math.min(23, width * 0.3, height * 0.35);
+                var left = cx - radius, right = cx + radius, top = cy - radius, bottom = cy + radius;
                 if (onlyX) {
                     left = cx - 17;
                     right = cx + 17;
@@ -58,7 +60,7 @@ ProbeButton {
                 c.lineWidth = 1;
                 c.beginPath();
                 if (round)
-                    c.arc(cx, cy, 23, 0, Math.PI * 2);
+                    c.arc(cx, cy, radius, 0, Math.PI * 2);
                 else
                     c.rect(left, top, right - left, bottom - top);
                 c.fill();
@@ -99,7 +101,7 @@ ProbeButton {
             anchors.horizontalCenter: parent.horizontalCenter
             text: control.label
             color: Theme.text
-            font.pixelSize: 13
+            font.pixelSize: 16
         }
     }
 }

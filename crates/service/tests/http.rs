@@ -25,7 +25,7 @@ use pimprobe_service::{
     device::Device,
     http::{App, router},
     logs::LogStore,
-    settings::Settings,
+    settings,
 };
 use serde_json::{Value, json};
 use tower::ServiceExt;
@@ -127,7 +127,7 @@ fn app() -> (tempfile::TempDir, std::sync::Arc<App>, Router) {
     mock.set_extended(true).unwrap();
     let app = App::new(
         Device::Mock(Box::new(mock)),
-        Settings::open(temp.path().join("settings.json")).unwrap(),
+        settings::open(temp.path().join("settings.json")).unwrap(),
         Some("test-token".into()),
         LogStore::open(temp.path().join("logs")).unwrap(),
     );
@@ -209,7 +209,7 @@ async fn update_install_requires_an_idle_stopped_machine() {
         state.spindle_stopped = spindle_stopped;
         let app = App::new(
             Device::Mock(Box::new(MockController::with_state(state))),
-            Settings::open(temp.path().join("settings.json")).unwrap(),
+            settings::open(temp.path().join("settings.json")).unwrap(),
             Some("test-token".into()),
             LogStore::open(temp.path().join("logs")).unwrap(),
         );
@@ -366,7 +366,7 @@ async fn repeatability_cycles_probe_between_readings_and_before_homing() {
             let last: Value = serde_json::from_str(body.lines().last().unwrap()).unwrap();
             assert_eq!(last["type"], "result", "{body}");
             assert!(last["result"]["statistics"][1].is_null());
-            let Device::Mock(mock) = &app.device else {
+            let Device::Mock(mock) = &*app.device else {
                 unreachable!()
             };
             let commands = mock.commands();
@@ -408,7 +408,7 @@ fn repeatability_app() -> (tempfile::TempDir, std::sync::Arc<App>, Router) {
     state.work_position = [70.0, 20.0, 15.0, 0.0];
     let app = App::new(
         Device::Mock(Box::new(MockController::with_state(state))),
-        Settings::open(temp.path().join("settings.json")).unwrap(),
+        settings::open(temp.path().join("settings.json")).unwrap(),
         None,
         LogStore::open(temp.path().join("logs")).unwrap(),
     );
@@ -513,6 +513,17 @@ async fn state_actuator_and_wcs_contract() {
     assert_eq!(snapshot["status"]["probeActuator"], 0);
     assert_eq!(snapshot["contactActive"], false);
     assert_eq!(snapshot["connected"], true);
+    let state = app.device.state();
+    assert_eq!(snapshot["firmwareVersion"], state.firmware_version);
+    assert_eq!(snapshot["plane"], state.plane);
+    assert_eq!(snapshot["coordinateOffset"], json!(state.coordinate_offset));
+    assert_eq!(snapshot["toolLengthOffset"], state.tool_length_offset);
+    assert_eq!(
+        snapshot["wcsOrigins"]["59"],
+        json!(state.wcs_origin.unwrap())
+    );
+    assert_eq!(snapshot["wcsRotations"]["59"], state.wcs_rotation.unwrap());
+    assert_eq!(snapshot["status"]["complete"], true);
 }
 
 #[tokio::test]
@@ -625,7 +636,7 @@ async fn failed_probe_keeps_its_context_and_error() {
     let (_temp, app, router) = app();
     let (_, body) = request(&router, "POST", "/api/v1/routine/review", config()).await;
     let review: Value = serde_json::from_str(&body).unwrap();
-    let Device::Mock(mock) = &app.device else {
+    let Device::Mock(mock) = &*app.device else {
         unreachable!()
     };
     mock.set_geometry(MockGeometry::Empty);
@@ -857,7 +868,7 @@ async fn cancelled_result_move_restores_parser_modes_after_stopping() {
     mock.set_extended(true).unwrap();
     let app = App::new(
         Device::Mock(Box::new(mock)),
-        Settings::open(temp.path().join("settings.json")).unwrap(),
+        settings::open(temp.path().join("settings.json")).unwrap(),
         Some("test-token".into()),
         LogStore::open(temp.path().join("logs")).unwrap(),
     );

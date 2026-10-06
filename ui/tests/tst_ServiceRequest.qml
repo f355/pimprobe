@@ -15,14 +15,21 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import QtQuick
+import "../controls"
 import QtTest
 import ".."
-import "../Api.js" as Api
+
 
 TestCase {
     name: "ServiceRequest"
-    ServiceRequest { id: operation }
-    property var originalRequest
+    ServiceRequest { id: operation; client: fakeClient }
+    QtObject {
+        id: fakeClient
+        function request(name, body, done) {
+            callbacks.push(done);
+            return {abort:function(){ ++aborts }};
+        }
+    }
     property var callbacks
     property int aborts: 0
     property int completions: 0
@@ -31,29 +38,23 @@ TestCase {
         callbacks = []
         aborts = 0
         completions = 0
-        originalRequest = Api.request
-        Api.request = function(method, url, body, done) {
-            callbacks.push(done)
-            return {abort: function() { ++aborts }}
-        }
     }
     function cleanup() {
         operation.cancel()
-        Api.request = originalRequest
     }
     function test_one_pending_request() {
-        verify(operation.send("POST", "/wcs", {wcs: 54}, function() { ++completions }))
-        verify(!operation.send("POST", "/wcs", {wcs: 55}, function() { ++completions }))
+        verify(operation.send("wcs.select", {wcs: 54}, function() { ++completions }))
+        verify(!operation.send("wcs.select", {wcs: 55}, function() { ++completions }))
         compare(callbacks.length, 1)
         callbacks[0]({ok: true})
         compare(completions, 1)
         verify(!operation.pending)
     }
     function test_cancelled_callback_cannot_finish_new_request() {
-        operation.send("GET", "/review", null, function() { fail("Stale callback") })
+        operation.send("routine.review", null, function() { fail("Stale callback") })
         operation.cancel()
         compare(aborts, 1)
-        operation.send("GET", "/review", null, function() { ++completions })
+        operation.send("routine.review", null, function() { ++completions })
         callbacks[0]({ok: true})
         verify(operation.pending)
         compare(completions, 0)

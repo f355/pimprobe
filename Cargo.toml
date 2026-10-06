@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 [workspace]
-members = ["crates/probe-core", "crates/controller", "crates/service"]
+members = ["crates/probe-core", "crates/probe-app", "crates/controller", "crates/service"]
 resolver = "2"
 
 [workspace.package]

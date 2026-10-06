@@ -16,13 +16,14 @@
 
 pragma ComponentBehavior: Bound
 import QtQuick
+import "controls"
 import QtQuick.Controls
 import QtQuick.Layouts
-import "Api.js" as Api
 
-Popup {
+PageView {
     id: flow
-    property string serviceUrl: "http://127.0.0.1:8137/api/v1"
+    property bool showHeader: true
+    required property var client
     property string uiFont: "sans-serif"
     property string codeFont: "monospace"
     property string phase: "prepare"
@@ -45,14 +46,11 @@ Popup {
     readonly property bool showingResults: phase === "running" || phase === "result" || phase === "failed"
     NumericEditor { id: editor }
 
-    parent: Overlay.overlay
     x: 0
     y: 0
     width: parent ? parent.width : 800
     height: parent ? parent.height : 480
     padding: 0
-    modal: true
-    closePolicy: Popup.NoAutoClose
     font.family: uiFont
     background: Rectangle { color: Theme.page }
 
@@ -109,7 +107,7 @@ Popup {
         phase = "running";
         terminalReceived = false;
         streamStarted = false;
-        activeRequest = Api.stream(serviceUrl + "/repeatability/run", {
+        activeRequest = client.stream("repeatability.run", {
             axes: axes.slice(), repetitions: repetitions, jogHome: jogHome,
             home: home, retract: retractEachTime
         }, handleEvent, function(error) {
@@ -123,13 +121,14 @@ Popup {
     function stop() {
         if (phase !== "running" || !streamStarted || stopRequested) return;
         stopRequested = true;
-        Api.request(serviceUrl + "/repeatability/stop", "POST", null, function(reply) {
+        client.request("repeatability.stop", null, function(reply) {
             if (!reply.ok && phase === "running") {
                 stopRequested = false;
                 failure = reply.error || "Could not stop the check";
             }
         });
     }
+    Component.onDestruction: if (activeRequest) activeRequest.abort()
     onClosed: {
         editor.cancel();
         if (activeRequest && phase === "running") activeRequest.abort();
@@ -140,12 +139,13 @@ Popup {
         spacing: 0
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 70
+            Layout.preferredHeight: Theme.headerHeight
+            visible: flow.showHeader
             color: Theme.header
             RowLayout {
                 anchors.fill: parent
                 BackButton {
-                    Layout.preferredWidth: 70
+                    Layout.preferredWidth: Theme.headerHeight
                     Layout.fillHeight: true
                     enabled: flow.phase !== "running"
                     onClicked: flow.close()
@@ -179,13 +179,13 @@ Popup {
                 visible: flow.phase === "options"
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                spacing: 18
+                spacing: Theme.groupSpacing
                 Item {
-                    Layout.preferredWidth: 340
+                    Layout.preferredWidth: Theme.columnWidth
                     Layout.fillHeight: true
                     Label {
                         anchors.fill: parent
-                        anchors.margins: 14
+                        anchors.margins: Theme.margin
                         text: "The probe tip approaches about 15 mm from the bracket walls and 5 mm above the bed, then measures the selected surfaces.\n\n" +
                             (flow.home ? "The machine jogs near home and homes before each repetition." :
                              flow.jogHome ? "The machine jogs near home before each repetition." :

@@ -16,6 +16,7 @@
 
 pragma ComponentBehavior: Bound
 import QtQuick
+import "controls"
 import QtQuick.Controls
 import QtQuick.Layouts
 
@@ -26,22 +27,23 @@ Item {
     required property var parameters
     property bool roomy: false
     property bool setup: false
+    property bool compact: false
     property Component footer
     default property alias workContent: workArea.data
 
     property Item layout: RowLayout {
         parent: panel
         anchors.fill: parent
-        anchors.margins: 14
-        spacing: 18
+        anchors.margins: Theme.margin
+        spacing: Theme.groupSpacing
         Item {
             id: workArea
-            Layout.preferredWidth: 340
+            Layout.preferredWidth: Theme.columnWidth
             Layout.fillHeight: true
             Rectangle {
                 anchors.fill: parent
                 color: Theme.panel
-                radius: 12
+                radius: Theme.radius
                 z: -1
             }
         }
@@ -51,7 +53,7 @@ Item {
             Rectangle {
                 anchors.fill: parent
                 color: Theme.panel
-                radius: 12
+                radius: Theme.radius
             }
             Flickable {
                 id: parameterScroll
@@ -62,12 +64,15 @@ Item {
                 contentHeight: Math.max(height, parameterRows.implicitHeight)
                 flickableDirection: Flickable.VerticalFlick
                 boundsBehavior: Flickable.StopAtBounds
-                ScrollBar.vertical: ScrollBar {}
+                ScrollBar.vertical: ScrollBar {
+                    id: parameterBar
+                    policy: parameterScroll.contentHeight > parameterScroll.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+                }
                 ColumnLayout {
                     id: parameterRows
-                    width: parameterScroll.width
+                    width: parameterScroll.width - (parameterBar.visible ? 12 : 0)
                     height: parameterScroll.contentHeight
-                    spacing: panel.roomy ? 14 : panel.setup ? 8 : 6
+                    spacing: panel.compact ? 8 : panel.roomy ? 14 : panel.setup ? 8 : 6
                     Repeater {
                         model: panel.parameters
                         ParameterRow {
@@ -76,14 +81,15 @@ Item {
                             settings: panel.settings
                             editor: panel.editor
                             definition: modelData
-                            fieldHeight: panel.roomy ? 62 : panel.setup ? 48 : 50
+                            fieldHeight: panel.compact || panel.setup ? 56 : panel.roomy ? 62 : 50
                             fieldWidth: panel.setup ? 100 : 130
-                            labelSize: panel.roomy || panel.setup ? 18 : 17
+                            labelSize: panel.compact ? 20 : panel.roomy || panel.setup ? 18 : 17
                             numberSize: panel.roomy ? 24 : panel.setup ? 23 : 22
                         }
                     }
                     Item {
                         Layout.fillHeight: true
+                        visible: !panel.compact && !panel.setup
                     }
                     Loader {
                         Layout.fillWidth: true

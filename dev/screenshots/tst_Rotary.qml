@@ -18,7 +18,7 @@ import QtQuick
 import QtQuick.Controls
 import QtTest
 import "../../ui"
-import "../../ui/Api.js" as Api
+import "../../ui/client/Http.js" as Api
 import "../../ui/tests/Mock.js" as Mock
 
 TestCase {
@@ -46,18 +46,18 @@ TestCase {
     }
     function test_capture() {
         Mock.verifyServer(capture,window.serviceUrl);
-        tryVerify(function() { return window.settings.loaded && window.machineState.connected; },3000);
+        tryVerify(function() { return window.page.settings.loaded && window.page.machineState.connected; },3000);
         var reply = null;
         Api.request("POST",window.serviceUrl+"/probe-actuator",{extended:true},function(r) { reply=r; });
         tryVerify(function() { return reply !== null; },3000);
         verify(reply.ok);
-        tryVerify(function() { return window.probeFullyExtended(); },3000);
+        tryVerify(function() { return window.page.probeFullyExtended(); },3000);
         var tabs = descendants(window.contentItem,TabBar)[0];
         mouseClick(tabs.itemAt(3));
         save("rotary");
         var button = findChild(window.contentItem, "rotaryCalibrationButton");
         mouseClick(button);
-        var flow = window.contentData.filter(function(item) { return item instanceof RotaryFlow; })[0];
+        var flow = window.page.children.filter(function(item) { return item instanceof RotaryFlow; })[0];
         tryVerify(function() { return !flow.busy && flow.reviewID.length > 0; },3000);
         save("rotary-review");
         flow.proceed();

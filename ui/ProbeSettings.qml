@@ -15,10 +15,11 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import QtQuick
+import "controls"
 
 Item {
     id: store
-    required property string serviceUrl
+    required property var client
     property var values: ({})
     property var schema: ({})
     property bool loaded: false
@@ -27,21 +28,23 @@ Item {
     property string error: ""
 
     ServiceRequest {
+        client: store.client
         id: loadRequest
     }
     ServiceRequest {
+        client: store.client
         id: saveRequest
     }
 
     function load() {
         loadRequest.cancel();
-        loadRequest.send("GET", serviceUrl + "/settings/schema", null, function (reply) {
+        loadRequest.send("settings.schema", null, function (reply) {
             if (!reply.ok || !reply.data) {
                 error = reply.error || "Could not load parameter limits";
                 return;
             }
             schema = reply.data;
-            loadRequest.send("GET", serviceUrl + "/settings", null, function (reply) {
+            loadRequest.send("settings.get", null, function (reply) {
                 if (!reply.ok || !reply.data) {
                     error = reply.error || "Could not load probing settings";
                     return;
@@ -67,7 +70,7 @@ Item {
         if (!loaded || saveRequest.pending)
             return;
         dirty = false;
-        saveRequest.send("PATCH", serviceUrl + "/settings", values, function (reply) {
+        saveRequest.send("settings.update", values, function (reply) {
             error = reply.ok ? "" : reply.error;
             if (reply.ok && dirty)
                 save();

@@ -15,34 +15,33 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import QtQuick
+import "../controls"
 import QtTest
 import ".."
-import "../Api.js" as Api
+
 
 TestCase {
     name: "ProbeSettings"
-    ProbeSettings { id: settings; serviceUrl: "http://unused/api/v1" }
-    property var originalRequest
+    ProbeSettings { id: settings; client: fakeClient }
+    QtObject {
+        id: fakeClient
+        function request(operation, body, done) {
+            requests.push({operation:operation, body:body, done:done});
+            return {abort:function(){}};
+        }
+    }
     property var requests
 
     function init() {
         requests = []
-        originalRequest = Api.request
-        Api.request = function(method, url, body, done) {
-            requests.push({method: method, url: url, body: body, done: done})
-            return {abort: function() {}}
-        }
         settings.loaded = false
         settings.load()
-        compare(requests[0].url, settings.serviceUrl + "/settings/schema")
+        compare(requests[0].operation, "settings.schema")
         requests[0].done({ok: true, data: {centerXSearchDistance: {minimum: 0.1, maximum: 1000, default: 20}}})
-        compare(requests[1].url, settings.serviceUrl + "/settings")
+        compare(requests[1].operation, "settings.get")
         requests[1].done({ok: true, data: {centerXSearchDistance: 20}})
         verify(settings.loaded)
         requests = []
-    }
-    function cleanup() {
-        Api.request = originalRequest
     }
     function test_edits_during_save_are_serialized_without_overwriting_new_values() {
         settings.setValue("centerXSearchDistance", 120)

@@ -14,13 +14,20 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use pimprobe_app::history::Records;
 use pimprobe_service::logs::LogStore;
+use std::sync::Arc;
+
+fn open(path: impl AsRef<std::path::Path>) -> Records {
+    let store = Arc::new(LogStore::open(path).unwrap());
+    Records::new(store.clone(), store)
+}
 use serde_json::{Value, json};
 
 #[test]
 fn completed_run_and_work_zero_survive_reopening() {
     let temp = tempfile::tempdir().unwrap();
-    let logs = LogStore::open(temp.path().join("logs")).unwrap();
+    let logs = open(temp.path().join("logs"));
     logs.start(
         "run-1",
         "Outside X+ edge",
@@ -42,8 +49,13 @@ fn completed_run_and_work_zero_survive_reopening() {
         .unwrap();
     drop(logs);
 
-    let reopened = LogStore::open(temp.path().join("logs")).unwrap();
-    let entries = reopened.history().unwrap();
+    let reopened = open(temp.path().join("logs"));
+    let entries: Vec<Value> = reopened
+        .history()
+        .unwrap()
+        .iter()
+        .map(|v| json!(v))
+        .collect();
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0]["label"], "Outside X+ edge");
     assert_eq!(entries[0]["status"], "success");
@@ -66,7 +78,7 @@ fn completed_run_and_work_zero_survive_reopening() {
 #[test]
 fn unfinished_run_appears_as_interrupted_after_restart() {
     let temp = tempfile::tempdir().unwrap();
-    let logs = LogStore::open(temp.path()).unwrap();
+    let logs = open(temp.path());
     logs.start(
         "run-2",
         "Inside X/Y corner",
@@ -77,8 +89,13 @@ fn unfinished_run_appears_as_interrupted_after_restart() {
     .unwrap();
     drop(logs);
 
-    let reopened = LogStore::open(temp.path()).unwrap();
-    let entries = reopened.history().unwrap();
+    let reopened = open(temp.path());
+    let entries: Vec<Value> = reopened
+        .history()
+        .unwrap()
+        .iter()
+        .map(|v| json!(v))
+        .collect();
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0]["status"], "interrupted");
 }
@@ -87,13 +104,17 @@ fn unfinished_run_appears_as_interrupted_after_restart() {
 fn export_copies_history_and_diagnostics_then_clear_empties_both() {
     let temp = tempfile::tempdir().unwrap();
     let usb = tempfile::tempdir().unwrap();
-    let logs = LogStore::open(temp.path().join("logs")).unwrap();
+    let logs = open(temp.path().join("logs"));
     logs.start("run-3", "Z surface", "routine", json!({}), json!({}))
         .unwrap();
     logs.finish("run-3", "failed", None, Some("No contact".into()))
         .unwrap();
 
-    let exported = logs.export_to(usb.path()).unwrap();
+    let store = LogStore::open(temp.path().join("logs")).unwrap();
+    let export = pimprobe_service::host::export_to(&store, usb.path()).unwrap();
+    let exported = std::path::PathBuf::from(&export.path);
+    assert_eq!(usb.path().join(&export.relative_path), exported);
+    assert!(pimprobe_service::host::export_to(&store, &usb.path().join("missing")).is_err());
     assert!(exported.join("history.jsonl").is_file());
     assert!(exported.join("diagnostics.jsonl").is_file());
     logs.clear().unwrap();
@@ -113,7 +134,7 @@ fn export_copies_history_and_diagnostics_then_clear_empties_both() {
 #[test]
 fn diagnostic_trace_rotates_while_history_remains_available() {
     let temp = tempfile::tempdir().unwrap();
-    let logs = LogStore::open(temp.path()).unwrap();
+    let logs = open(temp.path());
     logs.start("run-4", "Z surface", "routine", json!({}), json!({}))
         .unwrap();
     std::fs::write(
@@ -129,5 +150,5 @@ fn diagnostic_trace_rotates_while_history_remains_available() {
             .unwrap()
             .contains("G38.2 Z-1")
     );
-    assert_eq!(logs.history().unwrap()[0]["label"], "Z surface");
+    assert_eq!(logs.history().unwrap()[0].label, "Z surface");
 }

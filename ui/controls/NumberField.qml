@@ -23,13 +23,16 @@ TextField {
     required property real minimum
     required property real maximum
     property real value: minimum
+    property bool initialized: false
     signal committed(real value)
     text: String(value)
     color: Theme.text
     selectedTextColor: Theme.text
     selectionColor: Theme.accent
     padding: 10
-    onValueChanged: text = String(value)
+    // Let callers finish initializing value or text before synchronizing edits.
+    Component.onCompleted: initialized = true
+    onValueChanged: if (initialized) text = String(value)
 
     function commit() {
         if (!acceptableInput)
@@ -50,7 +53,7 @@ TextField {
         color: Theme.field
         border.color: field.activeFocus ? Theme.accentBright : Theme.fieldBorder
         border.width: field.activeFocus ? 2 : 1
-        radius: 8
+        radius: Theme.radius
     }
     onActiveFocusChanged: {
         if (activeFocus)

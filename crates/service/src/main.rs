@@ -21,7 +21,7 @@ use pimprobe_service::{
     device::Device,
     http::{App, router},
     logs::LogStore,
-    settings::Settings,
+    settings,
 };
 
 #[tokio::main]
@@ -39,7 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         "/userdata/pimprobe-data".into()
     };
-    let settings = Settings::open(options.settings)?;
+    let settings = settings::open(options.settings)?;
     let logs = LogStore::open(log_dir)?;
     let device = if options.mock {
         Device::Mock(Box::new(MockController::new()))

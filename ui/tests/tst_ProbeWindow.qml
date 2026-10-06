@@ -15,11 +15,12 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import QtQuick
+import "../controls"
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtTest
 import ".."
-import "../Api.js" as Api
+import "../client/Http.js" as Api
 import "../ProbePages.js" as Pages
 import "Mock.js" as Mock
 
@@ -36,6 +37,7 @@ TestCase {
     Component {
         id: updateFlowFixture
         UpdateFlow {
+            client: probeWindow.page.client
             width: 800
             height: 480
         }
@@ -48,6 +50,13 @@ TestCase {
         return reply.data
     }
     function descendants(item, type) {
+        if (item === probeWindow.contentItem.parent) {
+            var views = probeWindow.page.children.filter(function(child) {
+                return child instanceof PageView && child.opened;
+            }).sort(function(a, b) { return b.z - a.z; });
+            return (views.length ? descendants(views[0], type) : [])
+                .concat(descendants(probeWindow.Overlay.overlay, type));
+        }
         var matches = []
         var children = item.children || []
         for (var i = 0; i < children.length; ++i) {
@@ -57,7 +66,7 @@ TestCase {
         return matches
     }
     function contentObject(type) {
-        var items = probeWindow.contentData
+        var items = probeWindow.page.children.concat(probeWindow.contentData)
         for (var i = 0; i < items.length; ++i) {
             if (items[i] instanceof type) return items[i]
         }
@@ -65,11 +74,11 @@ TestCase {
     }
     function initTestCase() {
         Mock.verifyServer(test, probeWindow.serviceUrl)
-        tryVerify(function() { return probeWindow.settings.loaded && probeWindow.machineState.connected }, 3000)
+        tryVerify(function() { return probeWindow.page.settings.loaded && probeWindow.page.machineState.connected }, 3000)
     }
     function test_tabs_remain_switchable_with_retracted_probe() {
         callApi("POST", "/probe-actuator", {extended: false})
-        tryVerify(function() { return !probeWindow.probeFullyExtended() }, 3000)
+        tryVerify(function() { return !probeWindow.page.probeFullyExtended() }, 3000)
         var tabs = descendants(probeWindow.contentItem, TabBar)[0]
         verify(tabs.enabled)
         mouseClick(tabs.itemAt(1))
@@ -81,7 +90,7 @@ TestCase {
     function test_center_review_uses_latest_saved_distance() {
         var tabs = descendants(probeWindow.contentItem, TabBar)[0]
         callApi("POST", "/probe-actuator", {extended: true})
-        tryVerify(function() { return probeWindow.probeFullyExtended() }, 3000)
+        tryVerify(function() { return probeWindow.page.probeFullyExtended() }, 3000)
         probeWindow.requestActivate()
         mouseClick(tabs.itemAt(2))
 		waitForRendering(probeWindow.contentItem)
@@ -99,15 +108,15 @@ TestCase {
         tapKey("0")
         tapKey("\u21B5")
         compare(centerField.editor.target, null)
-        tryVerify(function() { return !probeWindow.settings.saving }, 3000)
+        tryVerify(function() { return !probeWindow.page.settings.saving }, 3000)
 		var ridge = descendants(center, CenterProbeButton).filter(function(b) { return b.feature === "x-ridge" })[0]
 		mouseClick(ridge)
 		tryVerify(function() {
-			return descendants(probeWindow.Overlay.overlay, TextArea).some(function(a) {
+			return descendants(probeWindow.contentItem.parent, TextArea).some(function(a) {
 				return a.visible && a.text.indexOf("contact_x_low") !== -1
 			})
 		}, 3000)
-        var cancel = descendants(probeWindow.Overlay.overlay, Button).filter(function(b) {
+        var cancel = descendants(probeWindow.contentItem.parent, Button).filter(function(b) {
             return b.visible && b.text === "Cancel"
         })[0]
         mouseClick(cancel)
@@ -115,10 +124,10 @@ TestCase {
         tapKey("5")
         tapKey("0")
         tapKey("\u21B5")
-        tryVerify(function() { return !probeWindow.settings.saving }, 3000)
+        tryVerify(function() { return !probeWindow.page.settings.saving }, 3000)
         mouseClick(ridge)
         tryVerify(function() {
-            return descendants(probeWindow.Overlay.overlay, TextArea).some(function(a) {
+            return descendants(probeWindow.contentItem.parent, TextArea).some(function(a) {
                 return a.visible && a.text.indexOf("G38.3 X-50 ") !== -1
             })
         }, 3000)
@@ -126,13 +135,13 @@ TestCase {
         centerField.editor.begin(centerField)
         String(originalDistance).split("").forEach(function(key) { centerField.editor.typeKey(key) })
         centerField.editor.accept()
-        tryVerify(function() { return !probeWindow.settings.saving }, 3000)
+        tryVerify(function() { return !probeWindow.page.settings.saving }, 3000)
     }
 
     function test_all_tabs_commit_values_on_enter() {
         probeWindow.requestActivate()
         callApi("POST", "/probe-actuator", {extended: true})
-        tryVerify(function() { return probeWindow.probeFullyExtended() }, 3000)
+        tryVerify(function() { return probeWindow.page.probeFullyExtended() }, 3000)
         var tabs = descendants(probeWindow.contentItem, TabBar)[0]
         var keys = ["outsideXSearchDistance", "insideXSearchDistance", "centerXSearchDistance", "rotaryRodDiameter", "probeDiameter"]
         for (var tab = 0; tab < keys.length; ++tab) {
@@ -147,12 +156,12 @@ TestCase {
             tryVerify(function() { return field.editor.target === field })
             field.editor.typeKey("6")
             field.editor.accept()
-            compare(probeWindow.settings.values[keys[tab]], 6)
-            tryVerify(function() { return !probeWindow.settings.saving }, 3000)
+            compare(probeWindow.page.settings.values[keys[tab]], 6)
+            tryVerify(function() { return !probeWindow.page.settings.saving }, 3000)
             field.editor.begin(field)
             String(oldValue).split("").forEach(function(key) { field.editor.typeKey(key) })
             field.editor.accept()
-            tryVerify(function() { return !probeWindow.settings.saving }, 3000)
+            tryVerify(function() { return !probeWindow.page.settings.saving }, 3000)
         }
     }
 
@@ -173,19 +182,19 @@ TestCase {
         field.editor.typeKey("2")
         field.editor.typeKey("0")
         field.editor.accept()
-        compare(probeWindow.settings.values.rotaryFeed, 420)
-        tryVerify(function() { return !probeWindow.settings.saving }, 3000)
+        compare(probeWindow.page.settings.values.rotaryFeed, 420)
+        tryVerify(function() { return !probeWindow.page.settings.saving }, 3000)
         field.editor.begin(field)
         String(original).split("").forEach(function(key) { field.editor.typeKey(key) })
         field.editor.accept()
-        tryVerify(function() { return !probeWindow.settings.saving }, 3000)
+        tryVerify(function() { return !probeWindow.page.settings.saving }, 3000)
         scroll.contentY = 0
     }
 
     function test_switching_tabs_discards_uncommitted_edit() {
         probeWindow.requestActivate()
         callApi("POST", "/probe-actuator", {extended: true})
-        tryVerify(function() { return probeWindow.probeFullyExtended() }, 3000)
+        tryVerify(function() { return probeWindow.page.probeFullyExtended() }, 3000)
         var tabs = descendants(probeWindow.contentItem, TabBar)[0]
         mouseClick(tabs.itemAt(0))
         var field = descendants(probeWindow.contentItem, NumberField).filter(function(f) { return f.visible })[0]
@@ -195,30 +204,31 @@ TestCase {
         mouseClick(tabs.itemAt(1))
         compare(field.editor.target, null)
         compare(Number(field.text), saved)
-        compare(probeWindow.settings.values.outsideXSearchDistance, saved)
+        compare(probeWindow.page.settings.values.outsideXSearchDistance, saved)
     }
 
     function test_disconnect_discards_uncommitted_edit() {
         probeWindow.requestActivate()
         callApi("POST", "/probe-actuator", {extended: true})
-        tryVerify(function() { return probeWindow.probeFullyExtended() }, 3000)
+        tryVerify(function() { return probeWindow.page.probeFullyExtended() }, 3000)
         var tabs = descendants(probeWindow.contentItem, TabBar)[0]
         mouseClick(tabs.itemAt(0))
         var field = descendants(probeWindow.contentItem, NumberField).filter(function(f) { return f.visible })[0]
         var previous = field.value
         field.forceActiveFocus()
         field.editor.typeKey("7")
-        probeWindow.requestFailed("Disconnected")
+        probeWindow.page.client.error = "Disconnected"
+        probeWindow.page.client.state = {connected: false}
         compare(field.editor.target, null)
         compare(Number(field.text), previous)
-        probeWindow.refreshState()
-        tryVerify(function() { return probeWindow.machineState.connected }, 3000)
+        probeWindow.page.refreshState()
+        tryVerify(function() { return probeWindow.page.machineState.connected }, 3000)
     }
 
     function test_disconnected_status_discards_draft_even_if_probe_is_extended() {
         probeWindow.requestActivate()
         callApi("POST", "/probe-actuator", {extended: true})
-        tryVerify(function() { return probeWindow.probeAvailable() }, 3000)
+        tryVerify(function() { return probeWindow.page.probeAvailable() }, 3000)
         var tabs = descendants(probeWindow.contentItem, TabBar)[0]
         mouseClick(tabs.itemAt(0))
         var field = descendants(probeWindow.contentItem, NumberField).filter(function(f) { return f.visible })[0]
@@ -234,15 +244,15 @@ TestCase {
             })
         }
         try {
-            probeWindow.refreshState()
-            tryVerify(function() { return probeWindow.machineState.connected === false }, 3000)
-            verify(probeWindow.probeFullyExtended())
+            probeWindow.page.refreshState()
+            tryVerify(function() { return probeWindow.page.machineState.connected === false }, 3000)
+            verify(probeWindow.page.probeFullyExtended())
             compare(field.editor.target, null)
             compare(Number(field.text), previous)
         } finally {
             Api.request = original
-            probeWindow.refreshState()
-            tryVerify(function() { return probeWindow.probeAvailable() }, 3000)
+            probeWindow.page.refreshState()
+            tryVerify(function() { return probeWindow.page.probeAvailable() }, 3000)
         }
     }
 
@@ -257,24 +267,24 @@ TestCase {
             })
         }
         try {
-            probeWindow.refreshState()
-            tryVerify(function() { return probeWindow.machineState.recoveryFailed === true }, 3000)
-            verify(probeWindow.controlsLocked())
+            probeWindow.page.refreshState()
+            tryVerify(function() { return probeWindow.page.machineState.recoveryFailed === true }, 3000)
+            verify(probeWindow.page.controlsLocked())
             waiting = false
-            probeWindow.refreshState()
-            tryVerify(function() { return probeWindow.machineState.recoveryFailed === false }, 3000)
-            verify(!probeWindow.controlsLocked())
+            probeWindow.page.refreshState()
+            tryVerify(function() { return probeWindow.page.machineState.recoveryFailed === false }, 3000)
+            verify(!probeWindow.page.controlsLocked())
         } finally {
             Api.request = original
-            probeWindow.refreshState()
+            probeWindow.page.refreshState()
         }
     }
 
     function test_wcs_requests_are_guarded_and_scoped_to_popup() {
         var original = Api.request
         var replies = []
-        var opener = descendants(probeWindow.header, Button).filter(function(b) { return /^G5[4-9]$/.test(b.text) })[0]
-        var overlay = probeWindow.Overlay.overlay
+        var opener = descendants(probeWindow.page.headerBar, Button).filter(function(b) { return /^G5[4-9]$/.test(b.text) })[0]
+        var overlay = probeWindow.contentItem.parent
         function back() {
             return descendants(overlay, Button).filter(function(b) { return b.visible && b.text === "\u2190" })[0]
         }
@@ -287,13 +297,13 @@ TestCase {
         }
         try {
             mouseClick(opener)
-            probeWindow.chooseWcs(55)
-            probeWindow.chooseWcs(56)
+            probeWindow.page.chooseWcs(55)
+            probeWindow.page.chooseWcs(56)
             compare(replies.length, 1)
             mouseClick(back())
             tryVerify(function() { return back() === undefined })
             mouseClick(opener)
-            probeWindow.chooseWcs(57)
+            probeWindow.page.chooseWcs(57)
             compare(replies.length, 2)
             replies[0]({ok: true})
             verify(back() !== undefined, "Old response cannot close reopened selector")
@@ -307,9 +317,9 @@ TestCase {
 
     function test_exit_dialog_actions_and_centering() {
         callApi("POST", "/probe-actuator", {extended: true})
-        tryVerify(function() { return probeWindow.probeFullyExtended() }, 3000)
-        probeWindow.requestExit()
-        var overlay = probeWindow.Overlay.overlay
+        tryVerify(function() { return probeWindow.page.probeFullyExtended() }, 3000)
+        probeWindow.page.requestExit()
+        var overlay = probeWindow.contentItem.parent
         var prompt
         tryVerify(function() {
             prompt = descendants(overlay, Label).filter(function(label) {
@@ -344,20 +354,20 @@ TestCase {
 
     function test_contextual_help() {
         var tabs = descendants(probeWindow.contentItem, TabBar)[0]
-        var help = descendants(probeWindow.header, Button).filter(function(b) { return b.text === "?" })[0]
+        var help = descendants(probeWindow.page.headerBar, Button).filter(function(b) { return b.text === "?" })[0]
         var pages = []
         for (var i = 0; i < tabs.count; ++i) {
             mouseClick(tabs.itemAt(i))
             mouseClick(help)
             var body
             tryVerify(function() {
-                body = descendants(probeWindow.Overlay.overlay, TextArea).filter(function(a) {
+                body = descendants(probeWindow.contentItem.parent, TextArea).filter(function(a) {
                     return a.visible && a.text.length > 0
                 })[0]
                 return body !== undefined
             })
             pages.push(body.text)
-            var back = descendants(probeWindow.Overlay.overlay, Button).filter(function(b) {
+            var back = descendants(probeWindow.contentItem.parent, Button).filter(function(b) {
                 return b.visible && b.text === "\u2190"
             })[0]
             mouseClick(back)
@@ -379,11 +389,11 @@ TestCase {
         verify(utilities !== undefined)
         mouseClick(utilities)
 
-        var utilitiesPanel = descendants(probeWindow.Overlay.overlay, UtilitiesPanel).filter(function(panel) {
+        var utilitiesPanel = descendants(probeWindow.contentItem.parent, UtilitiesPanel).filter(function(panel) {
             return panel.visible
         })[0]
         verify(utilitiesPanel !== undefined)
-        var overlay = probeWindow.Overlay.overlay
+        var overlay = probeWindow.contentItem.parent
         var panelPosition = utilitiesPanel.mapToItem(overlay, 0, 0)
         compare(panelPosition.x, 0)
         compare(panelPosition.y, 0)
@@ -420,7 +430,7 @@ TestCase {
         callApi("POST", "/logs/clear", null)
         callApi("POST", "/wcs", {wcs:54})
         callApi("POST", "/probe-actuator", {extended:true})
-        var routine = Pages.routine(probeWindow.settings.values, "outside", {x:0, y:0, z:true}, 54)
+        var routine = Pages.routine(probeWindow.page.settings.values, "outside", {x:0, y:0, z:true}, 54)
         var review = callApi("POST", "/routine/review", routine)
         var terminal = null
         Api.stream(probeWindow.serviceUrl + "/routine/run", {id:review.id}, function(event) {
@@ -430,7 +440,7 @@ TestCase {
         compare(terminal.type, "result")
 
         var tabs = descendants(probeWindow.contentItem, TabBar)[0]
-        tryVerify(function() { return tabs.enabled && !probeWindow.controlsLocked() }, 3000)
+        tryVerify(function() { return tabs.enabled && !probeWindow.page.controlsLocked() }, 3000)
         mouseClick(tabs.itemAt(4))
         tryCompare(tabs, "currentIndex", 4)
         var utilities = descendants(probeWindow.contentItem, Button).filter(function(button) {
@@ -438,7 +448,7 @@ TestCase {
         })[0]
         verify(utilities !== undefined)
         mouseClick(utilities)
-        var panel = descendants(probeWindow.Overlay.overlay, UtilitiesPanel).filter(function(item) {
+        var panel = descendants(probeWindow.contentItem.parent, UtilitiesPanel).filter(function(item) {
             return item.visible
         })[0]
         var historyButton = descendants(panel, Button).filter(function(button) {
@@ -494,7 +504,7 @@ TestCase {
             verify(checkButton !== undefined)
             mouseClick(checkButton)
             tryCompare(checks, "length", 1)
-            var overlay = probeWindow.Overlay.overlay
+            var overlay = probeWindow.contentItem.parent
             tryVerify(function() {
                 return descendants(overlay, TextArea).some(function(area) {
                     return area.visible && area.text.indexOf("Stable feature") !== -1
@@ -530,7 +540,7 @@ TestCase {
             }, 3000)
         } finally {
             Api.request = original
-            var back = descendants(probeWindow.Overlay.overlay, Button).filter(function(button) {
+            var back = descendants(probeWindow.contentItem.parent, Button).filter(function(button) {
                 return button.visible && button.text === "\u2190"
             })[0]
             if (back && back.enabled) mouseClick(back)

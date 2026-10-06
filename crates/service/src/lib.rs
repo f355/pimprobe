@@ -16,8 +16,8 @@
 
 pub mod config;
 pub mod device;
+pub mod host;
 pub mod http;
 pub mod logs;
-pub mod reviews;
 pub mod settings;
 pub mod updates;

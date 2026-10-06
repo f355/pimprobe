@@ -16,12 +16,13 @@
 
 pragma ComponentBehavior: Bound
 import QtQuick
+import "controls"
 import QtQuick.Controls
 import QtQuick.Layouts
 
 Popup {
     id: flow
-    property string serviceUrl: "http://127.0.0.1:8137/api/v1"
+    required property var client
     property string uiFont: "sans-serif"
     property string phase: "loading"
     property bool development: false
@@ -42,9 +43,9 @@ Popup {
     font.family: uiFont
     background: Rectangle { color: Theme.page }
 
-    ServiceRequest { id: checkRequest }
-    ServiceRequest { id: installRequest }
-    ServiceRequest { id: statusRequest }
+    ServiceRequest { client: flow.client; id: checkRequest }
+    ServiceRequest { client: flow.client; id: installRequest }
+    ServiceRequest { client: flow.client; id: statusRequest }
     Timer {
         id: statusTimer
         interval: 1000
@@ -63,7 +64,7 @@ Popup {
         errorText = "";
         available = null;
         operationId = "";
-        checkRequest.send("GET", serviceUrl + "/updates/check?development=" + (development ? "true" : "false"), null, function(reply) {
+        checkRequest.send("updates.check", {development:development}, function(reply) {
             if (!reply.ok || !reply.data) {
                 phase = "error";
                 errorText = reply.error || "Invalid update response";
@@ -79,7 +80,7 @@ Popup {
         phase = "installing";
         errorText = "";
         statusTicks = 0;
-        installRequest.send("POST", serviceUrl + "/updates/install", { token: available.token }, function(reply) {
+        installRequest.send("updates.install", { token: available.token }, function(reply) {
             if (!reply.ok || !reply.data || !reply.data.operationId) {
                 phase = "error";
                 errorText = reply.error || "The updater did not return an operation ID";
@@ -99,7 +100,7 @@ Popup {
             return;
         }
         if (statusRequest.pending) return;
-        statusRequest.send("GET", serviceUrl + "/updates/status?id=" + operationId, null, function(reply) {
+        statusRequest.send("updates.status", {id:operationId}, function(reply) {
             if (!reply.ok || !reply.data) return;
             if (reply.data.state === "failed") {
                 statusTimer.stop();
@@ -120,12 +121,12 @@ Popup {
         spacing: 0
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 70
+            Layout.preferredHeight: Theme.headerHeight
             color: Theme.header
             RowLayout {
                 anchors.fill: parent
                 BackButton {
-                    Layout.preferredWidth: 70
+                    Layout.preferredWidth: Theme.headerHeight
                     Layout.fillHeight: true
                     enabled: flow.phase !== "installing"
                     onClicked: flow.close()

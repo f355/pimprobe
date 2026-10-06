@@ -23,9 +23,9 @@ Button {
     property bool selected: false
     property color textColor: selected ? Theme.accentBright : Theme.text
 
-    implicitHeight: 48
+    implicitHeight: Theme.buttonHeight
     padding: 8
-    font.pixelSize: 20
+    font.pixelSize: Theme.textSize
     font.weight: Font.Normal
 
     contentItem: Label {
@@ -44,7 +44,7 @@ Button {
             : control.primary ? Theme.accent : Theme.control
         border.width: control.selected ? 2 : 0
         border.color: Theme.accentBright
-        radius: 10
+        radius: Theme.radius
         opacity: control.enabled ? 1 : 0.55
     }
 }

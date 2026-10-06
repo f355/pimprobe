@@ -14,12 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use pimprobe_app::device::{ControllerError, DeviceSnapshot, DeviceStatus};
 use pimprobe_controller::SocketController;
 use pimprobe_core::{
     Controller, Error, Event, MockController, MockGeometry, RepeatabilityController, RoutineConfig,
     State, async_trait,
 };
-use serde_json::{Value, json};
 use tokio::sync::broadcast;
 
 pub enum Device {
@@ -102,33 +102,88 @@ impl Device {
         Ok(())
     }
 
-    pub fn snapshot(&self) -> Value {
+    pub fn snapshot(&self) -> DeviceSnapshot {
         match self {
             Self::Machine(controller) => {
-                let mut snapshot = serde_json::to_value(controller.snapshot())
-                    .expect("finite controller snapshot");
-                if let Some(code) = snapshot["lastError"].as_i64() {
-                    snapshot["lastError"] = json!({"code":code});
+                let snapshot = controller.snapshot();
+                DeviceSnapshot {
+                    firmware_version: snapshot.firmware_version,
+                    plane: snapshot.plane,
+                    wcs_rotations: snapshot.wcs_rotations,
+                    wcs_origins: snapshot.wcs_origins,
+                    coordinate_offset: snapshot.coordinate_offset,
+                    tool_length_offset: snapshot.tool_length_offset,
+                    connected: controller.state().connected,
+                    session_id: snapshot.session_id,
+                    connection_error: snapshot.connection_error,
+                    status: snapshot.status.map(|s| DeviceStatus {
+                        complete: s.complete,
+                        homed: s.homed,
+                        mode: s.mode,
+                        machine_position: s.m_pos,
+                        work_position: s.w_pos,
+                        wcs: s.wcs,
+                        tool: s.tool,
+                        spindle_mode: s.spindle_mode,
+                        probe_actuator: s.probe_actuator,
+                        probe_actuator_known: s.probe_actuator_known,
+                        probe_trigger_known: s.probe_trigger_known,
+                        probe_triggered: s.probe_triggered,
+                        door_open: s.door_open,
+                        motion_blocked: s.motion_blocked,
+                    }),
+                    settings: snapshot.settings,
+                    last_probe: snapshot.last_probe,
+                    last_error: snapshot.last_error.map(|code| ControllerError { code }),
+                    modes: snapshot.modes,
+                    status_fresh: snapshot.status_fresh,
+                    actuator_pending: snapshot.actuator_pending,
                 }
-                // Machine actions require fresh telemetry.
-                snapshot["connected"] = json!(controller.state().connected);
-                snapshot
             }
             Self::Mock(mock) => {
                 let state = mock.state();
-                json!({
-                    "connected":state.connected,
-                    "status":{
-                        "mode":if state.ready {"Ready"} else {"Run"},
-                        "machinePosition":state.position,"workPosition":state.work_position,
-                        "wcs":state.wcs,"tool":state.tool,"spindleMode":if state.spindle_stopped {5} else {3},
-                        "probeActuator":if state.probe_extended {1} else {0},"probeActuatorKnown":true,
-                        "probeTriggerKnown":state.probe_trigger_known,"probeTriggered":state.probe_triggered,
-                        "doorOpen":false,"motionBlocked":state.motion_blocked
-                    },
-                    "settings":{"33":state.probe_offset[0],"34":state.probe_offset[1],"35":state.probe_offset[2]},
-                    "actuatorPending":false
-                })
+                DeviceSnapshot {
+                    firmware_version: state.firmware_version.clone(),
+                    plane: state.plane,
+                    wcs_rotations: state
+                        .wcs_rotation
+                        .map(|angle| (state.wcs, angle))
+                        .into_iter()
+                        .collect(),
+                    wcs_origins: state
+                        .wcs_origin
+                        .map(|origin| (state.wcs, origin))
+                        .into_iter()
+                        .collect(),
+                    coordinate_offset: state.coordinate_offset,
+                    tool_length_offset: state.tool_length_offset,
+                    connected: state.connected,
+                    status_fresh: true,
+                    modes: state.modes,
+                    status: Some(DeviceStatus {
+                        complete: true,
+                        homed: state.homed,
+                        mode: if state.ready { "Ready" } else { "Run" }.into(),
+                        machine_position: state.position,
+                        work_position: state.work_position,
+                        wcs: state.wcs,
+                        tool: state.tool,
+                        spindle_mode: if state.spindle_stopped { 5 } else { 3 },
+                        probe_actuator: if state.probe_extended { 1 } else { 0 },
+                        probe_actuator_known: true,
+                        probe_trigger_known: state.probe_trigger_known,
+                        probe_triggered: state.probe_triggered,
+                        door_open: false,
+                        motion_blocked: state.motion_blocked,
+                    }),
+                    settings: [
+                        (33, state.probe_offset[0]),
+                        (34, state.probe_offset[1]),
+                        (35, state.probe_offset[2]),
+                    ]
+                    .into(),
+                    ..DeviceSnapshot::default()
+                }
             }
         }
     }
@@ -160,6 +215,38 @@ impl Device {
         if let Self::Machine(controller) = self {
             controller.shutdown().await;
         }
+    }
+}
+
+#[async_trait]
+impl pimprobe_app::device::ProbeDevice for Device {
+    fn configure_rotary(&self, config: &pimprobe_core::RotaryConfig) -> Result<(), Error> {
+        self.configure_rotary(config);
+        Ok(())
+    }
+    fn session_id(&self) -> u64 {
+        self.session_id()
+    }
+    fn is_mock(&self) -> bool {
+        self.is_mock()
+    }
+    fn configure(&self, config: &RoutineConfig) -> Result<(), Error> {
+        self.configure(config)
+    }
+    fn configure_repeatability(&self, diameter: f64) -> Result<(), Error> {
+        self.configure_repeatability(diameter)
+    }
+    fn snapshot(&self) -> pimprobe_app::device::DeviceSnapshot {
+        self.snapshot()
+    }
+    async fn select_wcs(&self, wcs: i32) -> Result<(), Error> {
+        self.select_wcs(wcs).await
+    }
+    async fn stop(&self) -> Result<(), Error> {
+        self.stop().await
+    }
+    async fn shutdown(&self) {
+        self.shutdown().await;
     }
 }
 

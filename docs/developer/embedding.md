@@ -1,0 +1,83 @@
+# Embedding PIMProbe
+
+## Application
+
+`pimprobe-app` owns settings validation, reviews, running operations and result
+actions. Construct `ProbeApp` with a device, settings, host actions and records.
+The host supplies these interfaces:
+
+- `ProbeDevice`: controller events, commands, current state, probe actuation
+  and an exclusive machine guard. Keep that guard shared with other machine
+  operations in the host.
+- `SettingsStore`: load and save `ProbeSettings`.
+- `HistoryStore`: append, read and clear `HistoryRecord` values.
+- `Diagnostics`: record diagnostic events and clear diagnostic storage.
+- `HostActions`: identify the installed software and export logs.
+
+The standalone service implements these interfaces with its controller socket
+and local files. Another host can call the application directly and provide its
+own storage and device implementations.
+
+Running an operation returns an `Operation` with typed progress, measurement,
+result and error events. Dropping it requests cancellation. The machine guard
+stays held until the operation has stopped. A storage error after measurement
+can include the measured result in the error event.
+
+## QML Page
+
+Create `ProbePage` inside the host window and supply its `client`. Keep the page
+alive when navigating away: hiding it preserves an active run and its results.
+Destroying it cancels its requests.
+
+Set `showHeader: false` when the host supplies the header. The page exposes:
+
+- `headerControls`: a component containing the probe deploy switch.
+- `pageTitle`, `busy` and `subpageOpen`: current navigation and operation state.
+- `requestBack()`, `openHelp()` and `openWcs()`: header actions.
+- `leaveRequested` and `alarmRequested`: requests for host navigation.
+- `settingsContribution`: optional host controls for the Settings page.
+
+Pass `uiFontFamily` and `monoFontFamily` for text. A `controls/Style.qml` object
+sets colors, control sizes and layout spacing through the page's `style`
+property. The controls share that style within the QML engine.
+
+`ProbeWindow` supplies the standalone window, HTTP client, fonts, update page
+and application exit handling.
+
+## Client
+
+The client exposes `state`, `error`, their change signals and `refresh()`.
+`state` has the same fields as the standalone `/api/v1/state` response.
+
+`request(operation, arguments, callback)` calls back with
+`{ok: true, data: ...}` or `{ok: false, error: "..."}`. It returns an object with
+an `abort()` method. Callbacks may complete synchronously.
+
+`stream(operation, arguments, onEvent, onFinished)` delivers application
+operation events and returns the same kind of abort handle. `onFinished`
+receives an error string, or an empty string after normal completion.
+
+The page uses these operation names:
+
+| Operations | Purpose |
+| --- | --- |
+| `settings.get`, `settings.schema`, `settings.update` | Parameters and validation ranges |
+| `probe.set`, `wcs.select` | Probe actuator and active work coordinates |
+| `routine.review`, `routine.run` | Review and execute a measurement |
+| `routine.zero`, `routine.return`, `routine.measured` | Actions on a completed result |
+| `rotary.review`, `rotary.run` | Review and execute rotary calibration or surface alignment |
+| `rotary.zero`, `rotary.rotation` | Save rotary zeros or XY alignment |
+| `repeatability.run` | Repeated measurements |
+| `repeatability.stop` | End the repeatability check after the current movement or touch finishes |
+| `history.get`, `history.export`, `history.clear` | Measurement records and logs |
+
+`client/HttpClient.qml` maps these calls to the standalone HTTP API. The update
+page additionally uses `updates.check`, `updates.install` and `updates.status`.
+
+## Assets
+
+Include the `ui` QML files, `controls` and `client` directories. Generate
+`HelpPages.js` and the help images with `buildHelp(outputDirectoryURL)` from
+`dev/build-help.mjs`. The output directory contains the staged QML files.
+Hosts supply their own fonts; the standalone build fetches its fonts with
+`dev/fetch-fonts.mjs`.

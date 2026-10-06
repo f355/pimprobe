@@ -16,12 +16,14 @@
 
 pragma ComponentBehavior: Bound
 import QtQuick
+import "controls"
 import QtQuick.Controls
 import QtQuick.Layouts
 
-Popup {
+PageView {
     id: flow
-    property string serviceUrl: "http://127.0.0.1:8137/api/v1"
+    property bool showHeader: true
+    required property var client
     property string uiFont: "sans-serif"
     property var entries: []
     property int selectedIndex: -1
@@ -29,30 +31,30 @@ Popup {
     readonly property var selected: selectedIndex >= 0 && selectedIndex < entries.length
         ? entries[selectedIndex] : null
 
-    parent: Overlay.overlay
     x: 0
     y: 0
     width: parent ? parent.width : 800
     height: parent ? parent.height : 480
     padding: 0
-    modal: true
-    closePolicy: Popup.NoAutoClose
     font.family: uiFont
     background: Rectangle { color: Theme.page }
 
-    ServiceRequest { id: loadRequest }
+    ServiceRequest { client: flow.client; id: loadRequest }
 
     function showHistory() {
         entries = [];
         selectedIndex = -1;
         errorText = "";
         open();
-        loadRequest.send("GET", serviceUrl + "/logs/history", null, function(reply) {
-            if (!reply.ok || !Array.isArray(reply.data)) {
+        loadRequest.send("history.get", null, function(reply) {
+            var data = reply.data;
+            if (!reply.ok || data === null || typeof data !== "object"
+                    || typeof data.length !== "number") {
                 errorText = reply.error || "Could not read probing history";
                 return;
             }
-            entries = reply.data;
+            // Native clients supply Qt list wrappers rather than JavaScript arrays.
+            entries = Array.prototype.slice.call(data);
             selectedIndex = entries.length ? 0 : -1;
         });
     }
@@ -172,12 +174,13 @@ Popup {
         spacing: 0
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 70
+            Layout.preferredHeight: Theme.headerHeight
+            visible: flow.showHeader
             color: Theme.header
             RowLayout {
                 anchors.fill: parent
                 BackButton {
-                    Layout.preferredWidth: 70
+                    Layout.preferredWidth: Theme.headerHeight
                     Layout.fillHeight: true
                     onClicked: flow.close()
                 }
@@ -215,7 +218,7 @@ Popup {
                     required property var modelData
                     required property int index
                     width: historyList.width
-                    height: 70
+                    height: 80
                     color: flow.selectedIndex === entryRow.index ? Theme.panel : Theme.control
                     Column {
                         anchors.fill: parent
@@ -233,7 +236,7 @@ Popup {
                             text: flow.dateText(entryRow.modelData.timestampMs) + "  " + entryRow.modelData.status
                             color: entryRow.modelData.status === "success" ? Theme.accentBright
                                 : entryRow.modelData.status === "failed" ? Theme.danger : Theme.warning
-                            font.pixelSize: 14
+                            font.pixelSize: 18
                             elide: Text.ElideRight
                         }
                     }

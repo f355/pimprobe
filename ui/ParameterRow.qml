@@ -16,6 +16,7 @@
 
 pragma ComponentBehavior: Bound
 import QtQuick
+import "controls"
 import QtQuick.Controls
 import QtQuick.Layouts
 
@@ -35,6 +36,7 @@ RowLayout {
         text: row.definition.label
         color: Theme.text
         font.pixelSize: row.labelSize
+        wrapMode: Text.WordWrap
     }
     Item {
         Layout.preferredWidth: 180

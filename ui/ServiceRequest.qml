@@ -15,25 +15,27 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import QtQuick
-import "Api.js" as Api
+import "controls"
 
 QtObject {
+    required property var client
     property bool pending: false
     property int generation: 0
     property var request: null
 
-    function send(method, url, body, done) {
+    function send(operation, body, done) {
         if (pending)
             return false;
         pending = true;
         var serial = ++generation;
-        request = Api.request(method, url, body, function (reply) {
+        var handle = client.request(operation, body, function (reply) {
             if (serial !== generation)
                 return;
             pending = false;
             request = null;
             done(reply);
         });
+        if (pending && serial === generation) request = handle;
         return true;
     }
 

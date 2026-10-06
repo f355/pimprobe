@@ -63,8 +63,9 @@ ctest --test-dir build/plugins --output-on-failure
   compensation, review scripts and execution.
 - `crates/controller`: Unix socket protocol, GRBL records, connection and
   machine state.
-- `crates/service`: HTTP API, persistent settings, exclusive actions,
-  review tokens and streamed execution.
+- `crates/probe-app`: application operations, settings, history, review tokens
+  and exclusive access to the machine.
+- `crates/service`: standalone HTTP API, file storage and software updates.
 - `plugins`: C++ controller proxy and launcher.
 - `ui`: QML interface.
 - `docs`: operator guide and contextual help sources.
@@ -75,6 +76,9 @@ controller objects. The launcher adds a button that opens the QML UI.
 The service runs independently and reconnects when the proxy becomes available.
 The socket framing is documented in
 [`docs/developer/controller-bridge.md`](docs/developer/controller-bridge.md).
+
+See [embedding](docs/developer/embedding.md) for the Rust host interfaces and
+the reusable QML page.
 
 Parameter ranges are defined in `crates/probe-core/src/parameters.rs` and
 exposed at `/api/v1/settings/schema`. Deploy the UI and service together

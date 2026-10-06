@@ -15,23 +15,26 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import QtQuick
+import "../controls"
 import QtQuick.Controls
 import QtTest
 import ".."
+import "../client"
 import "Mock.js" as Mock
-import "../Api.js" as Api
+import "../client/Http.js" as Api
 
 TestCase {
     id: test
     name: "RoutineFlow"
     when: windowShown
+    HttpClient { id: http; serviceUrl:"http://127.0.0.1:18137/api/v1"; polling:false }
 
     ApplicationWindow {
         id: view
         visible: true
         width: 800
         height: 480
-        ProbeFlow { id: flow; serviceUrl: "http://127.0.0.1:18137/api/v1" }
+        ProbeFlow { id: flow; client: http }
     }
 
     function descendants(item, type) {
@@ -45,7 +48,7 @@ TestCase {
     }
 
     function initTestCase() {
-        Mock.verifyServer(test, flow.serviceUrl)
+        Mock.verifyServer(test, http.serviceUrl)
         var done = false
         var status = 0
         var request = new XMLHttpRequest()
@@ -61,7 +64,7 @@ TestCase {
 
     function test_review_run_result() {
         var snapshot = null
-        Api.request("GET", flow.serviceUrl + "/state", null, function(reply) { snapshot = reply.data })
+        Api.request("GET", http.serviceUrl + "/state", null, function(reply) { snapshot = reply.data })
         tryVerify(function() { return snapshot !== null }, 3000)
         var expectedX = snapshot.status.workPosition[0] + snapshot.settings["33"] - 2
         var expectedY = snapshot.status.workPosition[1] + snapshot.settings["34"] - 2
@@ -108,7 +111,7 @@ TestCase {
 		verify(flow.zeroed)
 		verify(flow.completedID.length > 0)
 		var after = null
-		Api.request("GET", flow.serviceUrl + "/state", null, function(reply) { after = reply.data })
+		Api.request("GET", http.serviceUrl + "/state", null, function(reply) { after = reply.data })
 		tryVerify(function() { return after !== null }, 3000)
 		verify(Math.abs(after.status.machinePosition[0] - after.status.workPosition[0] - measuredX - 1.25) < 0.002)
 		verify(Math.abs(after.status.machinePosition[1] - after.status.workPosition[1] - measuredY + 2) < 0.002)
@@ -128,7 +131,7 @@ TestCase {
 
     function test_inside_result_starts_at_entry_and_can_move_over_measurement() {
         var before = null
-        Api.request("GET", flow.serviceUrl + "/state", null, function(reply) { before = reply.data })
+        Api.request("GET", http.serviceUrl + "/state", null, function(reply) { before = reply.data })
         tryVerify(function() { return before !== null }, 3000)
         flow.showRoutine({family:"inside",x:1,y:-1,z:false,wcs:54,zero:false,safeZOffset:40,
                           depth:5,xSearchDistance:10,ySearchDistance:10,retract:0.5,diameter:4,
@@ -138,7 +141,7 @@ TestCase {
         flow.proceed()
         tryCompare(flow, "phase", "result", 10000)
         var atStart = null
-        Api.request("GET", flow.serviceUrl + "/state", null, function(reply) { atStart = reply.data })
+        Api.request("GET", http.serviceUrl + "/state", null, function(reply) { atStart = reply.data })
         tryVerify(function() { return atStart !== null }, 3000)
         for (var i = 0; i < 3; ++i)
             verify(Math.abs(atStart.status.machinePosition[i] - before.status.machinePosition[i]) < 0.002)
@@ -155,7 +158,7 @@ TestCase {
         compare(flow.failure, "")
         verify(flow.positioned)
         var positioned = null
-        Api.request("GET", flow.serviceUrl + "/state", null, function(reply) { positioned = reply.data })
+        Api.request("GET", http.serviceUrl + "/state", null, function(reply) { positioned = reply.data })
         tryVerify(function() { return positioned !== null }, 3000)
         verify(Math.abs(positioned.status.machinePosition[2] - before.status.machinePosition[2] - 25) < 0.002)
         verify(Math.abs(positioned.status.machinePosition[0] - before.status.machinePosition[0]) > 0.1)

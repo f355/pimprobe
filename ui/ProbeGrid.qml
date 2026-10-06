@@ -14,9 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-pragma ComponentBehavior: Bound
-
 import QtQuick
+import "controls"
 import QtQuick.Layouts
 
 GridLayout {
@@ -24,6 +23,8 @@ GridLayout {
     required property bool inside
     signal selected(var routine)
     columns: 3
+    implicitWidth: 340
+    implicitHeight: 340
     rowSpacing: 8
     columnSpacing: 8
 
@@ -32,8 +33,10 @@ GridLayout {
         Loader {
             id: cell
             required property int index
-            Layout.preferredWidth: 108
-            Layout.preferredHeight: 108
+            Layout.preferredWidth: (grid.width - 2 * grid.columnSpacing) / 3
+            Layout.preferredHeight: (grid.height - 2 * grid.rowSpacing) / 3
+            Layout.minimumWidth: 48
+            Layout.minimumHeight: 48
             readonly property int direction: grid.inside ? 1 : -1
             readonly property var routine: ({
                     x: (index % 3 - 1) * direction,

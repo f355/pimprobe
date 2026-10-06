@@ -20,6 +20,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+pimprobe-app = { path = "../probe-app" }
 pimprobe-core = { path = "../probe-core" }
 pimprobe-controller = { path = "../controller" }
 serde.workspace = true

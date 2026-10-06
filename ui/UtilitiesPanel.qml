@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import QtQuick
+import "controls"
 import QtQuick.Controls
 import QtQuick.Layouts
 
@@ -22,20 +23,21 @@ Item {
     id: utilitiesPanel
 
     property string uiFont: "sans-serif"
-    property string serviceUrl: "http://127.0.0.1:8137/api/v1"
+    required property var client
+    property bool showHeader: true
     property string message: ""
     signal closed
     signal repeatabilityRequested
     signal historyRequested
 
-    ServiceRequest { id: exportRequest }
-    ServiceRequest { id: clearRequest }
+    ServiceRequest { client: utilitiesPanel.client; id: exportRequest }
+    ServiceRequest { client: utilitiesPanel.client; id: clearRequest }
 
     function exportLogs() {
         message = "";
-        exportRequest.send("POST", serviceUrl + "/logs/export", null, function(reply) {
+        exportRequest.send("history.export", null, function(reply) {
             message = reply.ok && reply.data && reply.data.relativePath
-                ? "Saved to USB: /" + reply.data.relativePath
+                ? "Saved: " + reply.data.relativePath
                 : reply.error || "Could not export logs";
         });
     }
@@ -43,12 +45,13 @@ Item {
     function clearLogs() {
         clearConfirmation.close();
         message = "";
-        clearRequest.send("POST", serviceUrl + "/logs/clear", null, function(reply) {
+        clearRequest.send("history.clear", null, function(reply) {
             message = reply.ok ? "Logs cleared" : reply.error || "Could not clear logs";
         });
     }
 
     onVisibleChanged: if (!visible) {
+        clearConfirmation.close();
         exportRequest.cancel();
         clearRequest.cancel();
     }
@@ -58,11 +61,12 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: repeatabilityButton.top
-        anchors.margins: 14
+        anchors.margins: Theme.margin
         spacing: 14
         clip: true
 
         RowLayout {
+            visible: utilitiesPanel.showHeader
             width: parent.width
             height: 56
             spacing: 12
@@ -112,7 +116,7 @@ Item {
         Label {
             width: parent.width
             text: utilitiesPanel.message
-            color: utilitiesPanel.message.indexOf("Saved to USB:") === 0 || utilitiesPanel.message === "Logs cleared"
+            color: utilitiesPanel.message.indexOf("Saved:") === 0 || utilitiesPanel.message === "Logs cleared"
                 ? Theme.accentBright : Theme.warning
             font.pixelSize: 17
             wrapMode: Text.WordWrap
@@ -124,7 +128,7 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
-        anchors.margins: 14
+        anchors.margins: Theme.margin
         height: 64
         text: "Probe repeatability"
         font.family: utilitiesPanel.uiFont
@@ -134,6 +138,7 @@ Item {
 
     Popup {
         id: clearConfirmation
+        Component.onCompleted: if ("popupType" in clearConfirmation) clearConfirmation.popupType = Popup.Item
         parent: Overlay.overlay
         anchors.centerIn: parent
         width: 540

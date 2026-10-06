@@ -14,9 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use serde_json::{Value, json};
+use serde_json::Value;
 use std::{
-    collections::HashMap,
     fs::{self, File, OpenOptions},
     io::{self, BufRead, BufReader, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
@@ -48,109 +47,6 @@ impl LogStore {
         })
     }
 
-    pub fn start(
-        &self,
-        id: &str,
-        label: &str,
-        category: &str,
-        config: Value,
-        state: Value,
-    ) -> io::Result<()> {
-        let _guard = self.lock.lock().unwrap();
-        let timestamp = timestamp_ms();
-        self.append_history(&json!({
-            "schema":1, "event":"start", "id":id, "timestampMs":timestamp,
-            "label":label, "category":category, "config":config
-        }))?;
-        self.append_trace(&json!({
-            "schema":1, "event":"start", "id":id, "timestampMs":timestamp,
-            "label":label, "category":category, "config":config, "state":state
-        }))
-    }
-
-    pub fn trace(&self, id: &str, event: &str, data: Value) -> io::Result<()> {
-        let _guard = self.lock.lock().unwrap();
-        self.append_trace(&json!({
-            "schema":1, "event":event, "id":id, "timestampMs":timestamp_ms(), "data":data
-        }))
-    }
-
-    pub fn finish(
-        &self,
-        id: &str,
-        status: &str,
-        result: Option<Value>,
-        error: Option<String>,
-    ) -> io::Result<()> {
-        let _guard = self.lock.lock().unwrap();
-        let event = json!({
-            "schema":1, "event":"finish", "id":id, "timestampMs":timestamp_ms(),
-            "status":status, "result":result, "error":error
-        });
-        self.append_history(&event)?;
-        self.append_trace(&event)
-    }
-
-    pub fn action(&self, id: &str, action: &str, data: Value) -> io::Result<()> {
-        let _guard = self.lock.lock().unwrap();
-        let event = json!({
-            "schema":1, "event":"action", "id":id, "timestampMs":timestamp_ms(),
-            "action":action, "data":data
-        });
-        self.append_history(&event)?;
-        self.append_trace(&event)
-    }
-
-    pub fn history(&self) -> io::Result<Vec<Value>> {
-        let _guard = self.lock.lock().unwrap();
-        let file = File::open(self.root.join("history.jsonl"))?;
-        let mut entries = Vec::<Value>::new();
-        let mut indices = HashMap::<String, usize>::new();
-        for line in BufReader::new(file).lines() {
-            let line = line?;
-            let Ok(event) = serde_json::from_str::<Value>(&line) else {
-                continue;
-            };
-            let Some(id) = event["id"].as_str() else {
-                continue;
-            };
-            match event["event"].as_str() {
-                Some("start") => {
-                    indices.insert(id.to_owned(), entries.len());
-                    entries.push(json!({
-                        "id":id, "timestampMs":event["timestampMs"],
-                        "label":event["label"], "category":event["category"],
-                        "config":event["config"], "status":"interrupted"
-                    }));
-                }
-                Some("finish") => {
-                    if let Some(&index) = indices.get(id) {
-                        entries[index]["status"] = event["status"].clone();
-                        entries[index]["result"] = event["result"].clone();
-                        entries[index]["error"] = event["error"].clone();
-                    }
-                }
-                Some("action") => {
-                    if let Some(&index) = indices.get(id) {
-                        let actions = entries[index]["actions"].as_array_mut();
-                        if let Some(actions) = actions {
-                            actions.push(event.clone());
-                        } else {
-                            entries[index]["actions"] = json!([event]);
-                        }
-                        if event["action"] == "work_zero" {
-                            entries[index]["workZero"] = event["data"].clone();
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
-        entries.reverse();
-        entries.truncate(100);
-        Ok(entries)
-    }
-
     pub fn export_to(&self, destination: &Path) -> io::Result<PathBuf> {
         let _guard = self.lock.lock().unwrap();
         let stamp = timestamp_ms() / 1000;
@@ -172,20 +68,6 @@ impl LogStore {
             }
         }
         Ok(folder)
-    }
-
-    pub fn clear(&self) -> io::Result<()> {
-        let _guard = self.lock.lock().unwrap();
-        for name in ["history.jsonl", "diagnostics.jsonl"] {
-            File::create(self.root.join(name))?;
-        }
-        for index in 1..TRACE_FILES {
-            let path = self.root.join(format!("diagnostics.jsonl.{index}"));
-            if path.exists() {
-                fs::remove_file(path)?;
-            }
-        }
-        Ok(())
     }
 
     fn append_history(&self, event: &Value) -> io::Result<()> {
@@ -243,4 +125,44 @@ fn timestamp_ms() -> u128 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis()
+}
+
+impl pimprobe_app::history::HistoryStore for LogStore {
+    fn append(&self, record: &pimprobe_app::history::HistoryRecord) -> io::Result<()> {
+        let _guard = self.lock.lock().unwrap();
+        self.append_history(&serde_json::to_value(record).map_err(io::Error::other)?)
+    }
+    fn read(&self) -> io::Result<Vec<pimprobe_app::history::HistoryRecord>> {
+        let _guard = self.lock.lock().unwrap();
+        let file = File::open(self.root.join("history.jsonl"))?;
+        let mut records = Vec::new();
+        for line in BufReader::new(file).lines() {
+            if let Ok(record) = serde_json::from_str(&line?) {
+                records.push(record);
+            }
+        }
+        Ok(records)
+    }
+    fn clear(&self) -> io::Result<()> {
+        let _guard = self.lock.lock().unwrap();
+        File::create(self.root.join("history.jsonl"))?;
+        Ok(())
+    }
+}
+impl pimprobe_app::history::Diagnostics for LogStore {
+    fn record(&self, event: &pimprobe_app::history::DiagnosticEvent) -> io::Result<()> {
+        let _guard = self.lock.lock().unwrap();
+        self.append_trace(&serde_json::to_value(event).map_err(io::Error::other)?)
+    }
+    fn clear(&self) -> io::Result<()> {
+        let _guard = self.lock.lock().unwrap();
+        File::create(self.root.join("diagnostics.jsonl"))?;
+        for index in 1..TRACE_FILES {
+            let path = self.root.join(format!("diagnostics.jsonl.{index}"));
+            if path.exists() {
+                fs::remove_file(path)?;
+            }
+        }
+        Ok(())
+    }
 }

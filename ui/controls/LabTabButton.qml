@@ -19,7 +19,7 @@ import QtQuick.Controls
 
 TabButton {
     id: control
-    font.pixelSize: 20
+    font.pixelSize: Theme.textSize
     padding: 6
 
     contentItem: Label {
@@ -35,7 +35,7 @@ TabButton {
             anchors.fill: parent
             visible: control.checked
             color: Theme.panelRaised
-            radius: 10
+            radius: Theme.radius
         }
         Rectangle {
             anchors.left: parent.left

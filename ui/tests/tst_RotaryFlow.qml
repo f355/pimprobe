@@ -15,22 +15,25 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import QtQuick
+import "../controls"
+import "../client"
 import QtQuick.Controls
 import QtTest
 import ".."
 import "Mock.js" as Mock
-import "../Api.js" as Api
+import "../client/Http.js" as Api
 
 TestCase {
     id: test
     name: "RotaryFlow"
     when: windowShown
+    HttpClient { id: http; serviceUrl: "http://127.0.0.1:18137/api/v1"; polling: false }
     ApplicationWindow {
         id: view
         visible: true
         width: 800
         height: 480
-        RotaryFlow { id: flow; serviceUrl: "http://127.0.0.1:18137/api/v1"; uiFont: "DejaVu Sans"; codeFont: "DejaVu Sans Mono" }
+        RotaryFlow { id: flow; client: http; uiFont: "DejaVu Sans"; codeFont: "DejaVu Sans Mono" }
     }
     function descendants(item, type) {
         var result = [];
@@ -41,9 +44,9 @@ TestCase {
         return result;
     }
     function initTestCase() {
-        Mock.verifyServer(test, flow.serviceUrl);
+        Mock.verifyServer(test, http.serviceUrl);
         var reply = null;
-        Api.request("POST", flow.serviceUrl + "/probe-actuator", {extended:true}, function(r) { reply = r; });
+        Api.request("POST", http.serviceUrl + "/probe-actuator", {extended:true}, function(r) { reply = r; });
         tryVerify(function() { return reply !== null; }, 3000);
         verify(reply.ok, reply.error);
     }

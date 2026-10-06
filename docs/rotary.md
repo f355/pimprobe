@@ -48,6 +48,8 @@ as it turns. Check clearance for the whole shaft down both sides.
 
 ### How it measures
 
+![Two measuring stations and rotated crest touches](images/rotary-axis.svg)
+
 At each place, the probe finds an initial top height, measures the Y midpoint
 and touches the crest above that midpoint. The chuck then turns 90° each way
 while the probe follows the crest, so both side measurements touch the same
@@ -94,6 +96,8 @@ a starting Z that clears the workpiece as it rotates.
   must lie on the flat face, at the same X.
 - **Z distance:** the maximum downward search from the starting Z at each point.
 
+![Horizontal leveling: touch two points, rotate and check again](images/rotary-horizontal.svg)
+
 The probe measures the first point, returns to the starting Z, moves Y+ and
 measures the second point. It returns to the starting Z and Y before rotating
 A to level the face, then measures both points again. Small remaining angles
@@ -122,6 +126,8 @@ to rotate the workpiece with the probe at this starting position.
 - **Y distance:** the maximum search toward the face from the starting Y.
 - **Z distance:** the downward move from the first touch height to the second.
   Both heights must lie on the flat face, clear of its edges and fixtures.
+
+![Vertical alignment toward Y+ or Y−, with clearance for the probe shaft](images/rotary-vertical.svg)
 
 The probe measures the upper point, returns to the starting Y, moves down and
 measures the lower point. It returns to the starting Y and Z before rotating

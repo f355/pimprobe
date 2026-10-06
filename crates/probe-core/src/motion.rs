@@ -56,6 +56,7 @@ pub enum StageKind {
     GuardedMove,
     ContactRelease,
     PositionMove,
+    ArcMove,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Stage {
@@ -85,12 +86,17 @@ impl Stage {
             .filter(|a| delta[a.index()] != 0.0)
             .map(|a| format!("{a}{:.3}", delta[a.index()]))
             .collect::<Vec<_>>();
-        let command = format!("{code} {} F{feed:.3}", words.join(" "));
+        let rotary = if delta[3] != 0.0 {
+            format!(" A{:.3}", delta[3])
+        } else {
+            String::new()
+        };
+        let command = format!("{code} {}{rotary} F{feed:.3}", words.join(" "));
         Self {
             kind,
             command,
             delta,
-            distance: delta[0].hypot(delta[1]).hypot(delta[2]),
+            distance: delta[0].hypot(delta[1]).hypot(delta[2]).hypot(delta[3]),
             feed,
             no_error: matches!(kind, StageKind::CoarseProbe | StageKind::GuardedMove),
         }
@@ -259,7 +265,7 @@ pub(crate) fn segment(s: &Stage, start: Position, p: Position) -> Result<(), Err
         return Err(Error::Position("non-finite report".into()));
     }
     let distance = s.distance;
-    let along = (0..3)
+    let along = (0..4)
         .map(|i| (p[i] - start[i]) * s.delta[i] / distance)
         .sum::<f64>();
     if along < -0.05
@@ -539,7 +545,9 @@ pub(crate) async fn run_position_stage<C: Controller + ?Sized>(
             }
             let release = Stage::movement(
                 StageKind::ContactRelease,
-                stage.delta.map(|v| -v / stage.distance * distance),
+                stage.delta.map(|v| {
+                    -v / stage.delta[0].hypot(stage.delta[1]).hypot(stage.delta[2]) * distance
+                }),
                 stage.feed,
             );
             match execute(c, &release, t, true).await {

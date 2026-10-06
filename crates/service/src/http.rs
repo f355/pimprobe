@@ -50,10 +50,13 @@ use std::{
 use tokio::sync::{Mutex, OwnedMutexGuard, mpsc};
 use tokio_stream::Stream;
 
+mod rotary;
+
 pub struct App {
     pub device: Device,
     settings: Mutex<Settings>,
     reviews: Mutex<Reviews>,
+    rotary_reviews: Mutex<Reviews<pimprobe_core::RotaryPlan, pimprobe_core::RotaryResult>>,
     action: Arc<Mutex<()>>,
     active: AtomicBool,
     recovery_failed: AtomicBool,
@@ -75,6 +78,7 @@ impl App {
             device,
             settings: Mutex::new(settings),
             reviews: Mutex::new(Reviews::default()),
+            rotary_reviews: Mutex::new(Reviews::default()),
             action: Arc::new(Mutex::new(())),
             active: AtomicBool::new(false),
             recovery_failed: AtomicBool::new(false),
@@ -155,6 +159,10 @@ pub fn router(app: Arc<App>) -> Router {
         .route("/api/v1/routine/zero", post(zero))
         .route("/api/v1/routine/return", post(return_start))
         .route("/api/v1/routine/measured", post(go_to_measured))
+        .route("/api/v1/rotary/review", post(rotary::review))
+        .route("/api/v1/rotary/run", post(rotary::run))
+        .route("/api/v1/rotary/zero", post(rotary::zero))
+        .route("/api/v1/rotary/rotation", post(rotary::rotation))
         .route("/api/v1/repeatability/run", post(repeatability))
         .route("/api/v1/repeatability/stop", post(stop_repeatability))
         .route("/api/v1/logs/history", get(history))

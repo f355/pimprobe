@@ -6,7 +6,7 @@
 
 [Editing values](editing.md)
 
-Distances are in millimeters and feeds are in millimeters per minute, even if the machine was in inch mode before probing.
+Distances are in millimeters and linear feeds are in millimeters per minute, even if the machine was in inch mode before probing.
 
 ## Probe ball diameter
 
@@ -24,7 +24,7 @@ It must be enough for the probe to release. The fine stroke searches back to the
 
 Speed for moves between touches and for backing off after a touch. Keep it low enough for the probe and the available clearance.
 
-Upward Z moves and releases from a measured surface use G1. Other positioning moves use G38.3 and fail the routine if contact occurs.
+Upward Z moves and releases from a measured surface use G1. Positioning along a vertical face uses G38.3 in both Z directions. Other positioning moves also use G38.3 and fail the routine if contact occurs.
 
 ## Coarse feed
 
@@ -33,6 +33,10 @@ Speed of the first search for each surface. It finds an approximate contact posi
 ## Fine feed
 
 Speed of the second touch. This touch supplies the measurement. A slower feed reduces the effect of deflection and stopping delay. If the fine touch fails, the firmware can raise an alarm that must be cleared on the main screen.
+
+## Rotary feed
+
+Maximum chuck rotation speed in degrees per minute during rotary operations. XYZ movement uses the positioning feed.
 
 [Clearance and failed probing](safety.md)
 

@@ -21,6 +21,7 @@ Use the probe to find an edge, corner, surface or center, then set work zero fro
 | [Outside](outside.md) | A side or corner of stock, or its top surface |
 | [Inside](inside.md) | A wall or corner inside an opening, or its bottom |
 | [Center](center.md) | The center of a boss, block, hole, pocket, ridge or valley |
+| [Rotary](rotary.md) | The rotary axis Y/Z center and its alignment with X travel |
 | [Settings](settings.md) | Ball diameter, backoff and feeds |
 
 In the button pictures, the crosshair is the starting position of the probe ball, the arrows point towards the surfaces to touch, and the green dot is the point being measured. Z measures straight down. Distances are in mm and feeds in mm/min.

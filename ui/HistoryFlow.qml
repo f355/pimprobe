@@ -89,6 +89,47 @@ Popup {
                     + "   median " + number(stats[j].median)
                     + "   SD " + (stats[j].stddev === null ? "-" : number(stats[j].stddev)));
             }
+        } else if (entry.category === "rotary") {
+            var calibration = entry.result || {};
+            (entry.actions || []).forEach(function(action) {
+                if (action.data && action.data.result) calibration = action.data.result;
+            });
+            var setup = entry.config || {};
+            if (calibration.level || setup.operation === "horizontal" || setup.operation === "vertical" || setup.operation === "verticalNegative") {
+                var level = calibration.level || {};
+                var axes = (level.operation || setup.operation) === "horizontal" ? "A/Z" : "A/Y";
+                ["initialTouches", "touches"].forEach(function(key) {
+                    lines.push("", key === "touches" ? "Verified touches · G53" : "Initial touches · G53");
+                    (level[key] || []).forEach(function(point, index) {
+                        lines.push("Touch " + (index + 1) + ": " + ["X", "Y", "Z"].map(function(axis, i) {
+                            return axis + " " + number(point[i]);
+                        }).join("   "));
+                    });
+                });
+                if (calibration.level) {
+                    lines.push("A correction " + Number(level.correction).toFixed(4) + "°",
+                        "Remaining tilt " + Number(level.residual).toFixed(4) + "°",
+                        axes + " zero: " + (calibration.zeroed ? "saved" : "unchanged"));
+                }
+                lines.push("", "G" + setup.wcs + "   Y distance " + number(setup.yDistance) + " mm",
+                    "Z distance " + number(setup.zDistance) + " mm");
+            } else {
+                lines.push("", "Axis centers · G53 (mm)");
+                (calibration.stations || []).forEach(function(station, index) {
+                    lines.push("Station " + (index + 1) + ": " + ["X", "Y", "Z"].map(function(axis, i) {
+                        return axis + " " + number(station.center[i]);
+                    }).join("   "));
+                });
+                if ((calibration.stations || []).length === 2) {
+                    lines.push("XY alignment " + Number(calibration.xyAngle).toFixed(4) + "°",
+                        "XZ slope " + Number(calibration.xzAngle).toFixed(4) + "°",
+                        "Y/Z zero: " + (calibration.zeroed ? "saved" : "unchanged"),
+                        "XY rotation: " + (calibration.rotationApplied ? "saved" : "unchanged"));
+                }
+                lines.push("", "G" + setup.wcs + "   rod " + number(setup.rodDiameter) + " mm",
+                    "X distance " + number(setup.xDistance) + " mm");
+            }
+            lines.push("Rotary feed " + number(setup.rotaryFeed) + "°/min");
         } else {
             var result = entry.result || {};
             var config = entry.config || {};

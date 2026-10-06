@@ -16,21 +16,29 @@
 
 use pimprobe_core::{RoutinePlan, RoutineResult};
 
-#[derive(Default)]
-pub struct Reviews {
-    pending: Option<(String, u64, RoutinePlan)>,
-    completed: Option<(String, u64, RoutinePlan, RoutineResult)>,
+pub struct Reviews<P = RoutinePlan, R = RoutineResult> {
+    pending: Option<(String, u64, P)>,
+    completed: Option<(String, u64, P, R)>,
 }
 
-impl Reviews {
-    pub fn put(&mut self, plan: RoutinePlan, session: u64) -> String {
+impl<P, R> Default for Reviews<P, R> {
+    fn default() -> Self {
+        Self {
+            pending: None,
+            completed: None,
+        }
+    }
+}
+
+impl<P, R> Reviews<P, R> {
+    pub fn put(&mut self, plan: P, session: u64) -> String {
         let id = uuid::Uuid::new_v4().to_string();
         self.pending = Some((id.clone(), session, plan));
         self.completed = None;
         id
     }
 
-    pub fn take(&mut self, id: &str, session: u64) -> Option<RoutinePlan> {
+    pub fn take(&mut self, id: &str, session: u64) -> Option<P> {
         if self
             .pending
             .as_ref()
@@ -42,17 +50,11 @@ impl Reviews {
         }
     }
 
-    pub fn finish(&mut self, id: String, session: u64, plan: RoutinePlan, result: RoutineResult) {
-        if result.settled {
-            self.completed = Some((id, session, plan, result));
-        }
+    pub fn finish(&mut self, id: String, session: u64, plan: P, result: R) {
+        self.completed = Some((id, session, plan, result));
     }
 
-    pub fn take_completed(
-        &mut self,
-        id: &str,
-        session: u64,
-    ) -> Option<(RoutinePlan, RoutineResult)> {
+    pub fn take_completed(&mut self, id: &str, session: u64) -> Option<(P, R)> {
         if self
             .completed
             .as_ref()

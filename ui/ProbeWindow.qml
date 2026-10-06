@@ -91,7 +91,7 @@ ApplicationWindow {
     }
 
     function activePageAvailable() {
-        return tabs.currentIndex === 3 ? machineState.connected === true : probeAvailable();
+        return tabs.currentIndex === 4 ? machineState.connected === true : probeAvailable();
     }
 
     function probeLabelColor() {
@@ -145,7 +145,7 @@ ApplicationWindow {
     }
 
     function interactionLocked() {
-        return controlsLocked() || confirmDialog.phase === "running" || repeatabilityDialog.phase === "running";
+        return controlsLocked() || confirmDialog.phase === "running" || repeatabilityDialog.phase === "running" || rotaryDialog.phase === "running";
     }
 
     function requestFailed(message) {
@@ -413,7 +413,7 @@ ApplicationWindow {
 
                 Label {
                     anchors.centerIn: parent
-                    text: ["Outside", "Inside", "Center", "Settings"][tabs.currentIndex] + " help"
+                    text: ["Outside", "Inside", "Center", "Rotary", "Settings"][tabs.currentIndex] + " help"
                     color: Theme.text
                     font.family: window.uiFontFamily
                     font.pixelSize: 24
@@ -460,6 +460,13 @@ ApplicationWindow {
 
     RepeatabilityFlow {
         id: repeatabilityDialog
+        serviceUrl: window.serviceUrl
+        uiFont: window.uiFontFamily
+        codeFont: window.monoFontFamily
+    }
+
+    RotaryFlow {
+        id: rotaryDialog
         serviceUrl: window.serviceUrl
         uiFont: window.uiFontFamily
         codeFont: window.monoFontFamily
@@ -624,7 +631,7 @@ ApplicationWindow {
             background: Rectangle { color: Theme.page }
 
             Repeater {
-                model: ["Outside", "Inside", "Center", "Settings"]
+                model: ["Outside", "Inside", "Center", "Rotary", "Settings"]
                 LabTabButton {
                     id: tabButton
                     required property string modelData
@@ -680,6 +687,64 @@ ApplicationWindow {
                         anchors.centerIn: parent
                         onSelected: function (feature) {
                             window.openRoutineReview("center", feature);
+                        }
+                    }
+                }
+                ProbePanel {
+                    settings: window.settings
+                    editor: numericEditor
+                    parameters: Pages.rotary
+                    roomy: true
+                    GridLayout {
+                        anchors.fill: parent
+                        columns: 2
+                        rowSpacing: 8
+                        columnSpacing: 8
+                        RotaryDiagram {
+                            objectName: "rotaryCalibrationButton"
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            Layout.preferredHeight: 162
+                            onClicked: {
+                                numericEditor.cancel();
+                                rotaryDialog.showCalibration(Pages.rotaryConfig(window.settings.values));
+                            }
+                        }
+                        RotaryLevelButton {
+                            objectName: "verticalLevelButton"
+                            vertical: true
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            Layout.preferredWidth: 166
+                            Layout.preferredHeight: 162
+                            onClicked: {
+                                numericEditor.cancel();
+                                rotaryDialog.showCalibration(Pages.rotaryConfig(window.settings.values, "vertical"));
+                            }
+                        }
+                        RotaryLevelButton {
+                            objectName: "horizontalLevelButton"
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            Layout.preferredWidth: 166
+                            Layout.preferredHeight: 162
+                            onClicked: {
+                                numericEditor.cancel();
+                                rotaryDialog.showCalibration(Pages.rotaryConfig(window.settings.values, "horizontal"));
+                            }
+                        }
+                        RotaryLevelButton {
+                            objectName: "verticalNegativeLevelButton"
+                            vertical: true
+                            negativeY: true
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            Layout.preferredWidth: 166
+                            Layout.preferredHeight: 162
+                            onClicked: {
+                                numericEditor.cancel();
+                                rotaryDialog.showCalibration(Pages.rotaryConfig(window.settings.values, "verticalNegative"));
+                            }
                         }
                     }
                 }

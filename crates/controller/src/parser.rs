@@ -63,7 +63,12 @@ pub enum Record {
     Error(i32),
     Status(MachineStatus),
     Probe(Contact),
-    Modes(Modes),
+    Modes(Modes, i32),
+    Version(String),
+    Rotation(i32, f64),
+    Origin(i32, Position),
+    CoordinateOffset(Position),
+    ToolLength(f64),
     Setting(i32, f64),
 }
 
@@ -101,15 +106,47 @@ pub fn parse_line(line: &str) -> Result<Option<Record>, String> {
     if let Some(s) = line.strip_prefix("[GC:") {
         let s = s.strip_suffix(']').ok_or("missing closing bracket")?;
         let mut modes = Modes::default();
+        let mut plane = 0;
         for word in s.split_whitespace() {
             match word {
                 "G20" | "G21" => modes.units = number(&word[1..])?,
                 "G90" | "G91" => modes.distance = number(&word[1..])?,
                 "G93" | "G94" => modes.feed = number(&word[1..])?,
+                "G17" | "G18" | "G19" => plane = number(&word[1..])?,
                 _ => (),
             }
         }
-        return Ok(Some(Record::Modes(modes)));
+        return Ok(Some(Record::Modes(modes, plane)));
+    }
+    if let Some(s) = line.strip_prefix("[main-version:") {
+        return Ok(Some(Record::Version(
+            s.split([',', ']']).next().unwrap_or("").to_owned(),
+        )));
+    }
+    if let Some(s) = line.strip_prefix("[WCS-R:") {
+        let (wcs, angle) = s
+            .strip_suffix(']')
+            .ok_or("missing closing bracket")?
+            .split_once(',')
+            .ok_or("missing rotation angle")?;
+        return Ok(Some(Record::Rotation(number(wcs)?, finite(angle)?)));
+    }
+    if let Some(s) = line.strip_prefix("[G92:") {
+        return Ok(Some(Record::CoordinateOffset(position(
+            s.strip_suffix(']').ok_or("missing closing bracket")?,
+        )?)));
+    }
+    if let Some(s) = line.strip_prefix("[TLO:") {
+        return Ok(Some(Record::ToolLength(finite(
+            s.strip_suffix(']').ok_or("missing closing bracket")?,
+        )?)));
+    }
+    if let Some(s) = line.strip_prefix("[G") {
+        if let Some((wcs, values)) = s.strip_suffix(']').and_then(|s| s.split_once(':')) {
+            if let Ok(wcs @ 54..=59) = wcs.parse::<i32>() {
+                return Ok(Some(Record::Origin(wcs, position(values)?)));
+            }
+        }
     }
     if let Some(s) = line
         .strip_prefix("[PRB:")
@@ -313,7 +350,7 @@ mod tests {
                 (20, 91, 93),
             ),
         ] {
-            let Some(Record::Modes(m)) = parse_line(line).unwrap() else {
+            let Some(Record::Modes(m, _)) = parse_line(line).unwrap() else {
                 panic!()
             };
             assert_eq!((m.units, m.distance, m.feed), expected);
@@ -340,12 +377,36 @@ mod tests {
             parse_line("$33=1.5").unwrap(),
             Some(Record::Setting(33, 1.5))
         ));
-        let Some(Record::Modes(m)) = parse_line("[GC:G21 G91 G94]").unwrap() else {
+        let Some(Record::Modes(m, _)) = parse_line("[GC:G21 G91 G94]").unwrap() else {
             panic!()
         };
         assert_eq!((m.units, m.distance, m.feed), (21, 91, 94));
         assert!(parse_line("banner").unwrap().is_none());
     }
+    #[test]
+    fn parses_rotary_capability_and_plane_reports() {
+        assert!(
+            matches!(parse_line("[G54:1,2,3,4]").unwrap(), Some(Record::Origin(54, p)) if p == [1.,2.,3.,4.])
+        );
+        assert!(
+            matches!(parse_line("[G92:1,2,3,4]").unwrap(), Some(Record::CoordinateOffset(p)) if p == [1.,2.,3.,4.])
+        );
+        assert!(
+            matches!(parse_line("[TLO:7.25]").unwrap(), Some(Record::ToolLength(length)) if length == 7.25)
+        );
+        assert!(
+            matches!(parse_line("[main-version:1.0.35+c0.abcdef01-b,main-hwd:1]").unwrap(),
+            Some(Record::Version(version)) if version == "1.0.35+c0.abcdef01-b")
+        );
+        assert!(
+            matches!(parse_line("[WCS-R:55,-1.2500]").unwrap(), Some(Record::Rotation(55, angle)) if angle == -1.25)
+        );
+        assert!(matches!(
+            parse_line("[GC:G21 G91 G94 G19]").unwrap(),
+            Some(Record::Modes(_, 19))
+        ));
+    }
+
     #[test]
     fn rejects_malformed() {
         for s in [

@@ -63,6 +63,19 @@ fn rules() -> Vec<Rule> {
             range: parameter.range(),
         });
     }
+    for (key, value, minimum, maximum) in [
+        ("rotaryRodDiameter", 10., 3., 100.),
+        ("rotaryXDistance", 30., -200., 200.),
+        ("rotaryFeed", 360., 1., 3600.),
+        ("rotaryYDistance", 10., 0.1, 100.),
+        ("rotaryZDistance", 10., 0.1, 100.),
+    ] {
+        rules.push(Rule {
+            key,
+            default: json!(value),
+            range: NumericRange { minimum, maximum },
+        });
+    }
     rules
 }
 

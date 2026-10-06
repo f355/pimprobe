@@ -59,7 +59,7 @@ TestCase {
         verify(reply.ok)
         tryVerify(function() { return window.probeFullyExtended() }, 3000)
         var tabs = descendants(window.contentItem, TabBar)[0]
-        var names = ["outside", "inside", "center", "settings"]
+        var names = ["outside", "inside", "center", "rotary", "settings"]
         for (var i = 0; i < names.length; ++i) {
             mouseClick(tabs.itemAt(i))
             save(names[i])
@@ -122,7 +122,7 @@ TestCase {
         tryVerify(function() { return reply !== null }, 3000)
         verify(reply.ok)
         var tabs = descendants(window.contentItem, TabBar)[0]
-        mouseClick(tabs.itemAt(3))
+        mouseClick(tabs.itemAt(4))
         var utilities = descendants(window.contentItem, Button).filter(function(b) {
             return b.visible && b.text === "Utilities"
         })[0]

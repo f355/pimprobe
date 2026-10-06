@@ -20,6 +20,8 @@ mod parameters;
 mod plan;
 pub use parameters::*;
 mod repeatability;
+mod rotary;
+pub use rotary::*;
 mod runtime;
 pub use repeatability::*;
 mod script;
@@ -115,6 +117,18 @@ pub struct State {
     pub work_position: Position,
     pub probe_offset: Position,
     pub tool: i32,
+    #[serde(default)]
+    pub firmware_version: String,
+    #[serde(default)]
+    pub plane: i32,
+    #[serde(default)]
+    pub wcs_rotation: Option<f64>,
+    #[serde(default)]
+    pub wcs_origin: Option<Position>,
+    #[serde(default)]
+    pub coordinate_offset: Position,
+    #[serde(default)]
+    pub tool_length_offset: f64,
 }
 pub type ControllerState = State;
 
@@ -142,6 +156,12 @@ pub struct MotionStatus {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Event {
+    pub firmware_version: Option<String>,
+    pub plane: Option<i32>,
+    pub wcs_rotation: Option<(i32, f64)>,
+    pub wcs_origin: Option<(i32, Position)>,
+    pub coordinate_offset: Option<Position>,
+    pub tool_length_offset: Option<f64>,
     pub setting: Option<(i32, f64)>,
     pub modes: Option<Modes>,
     pub acknowledged: bool,

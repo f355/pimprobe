@@ -26,12 +26,19 @@ function searchFields(family) {
 var outside = searchFields("outside");
 var inside = searchFields("inside");
 var center = searchFields("center");
+var rotary = [
+    {key: "rotaryRodDiameter", label: "Rod diameter"},
+    {key: "rotaryXDistance", label: "X distance"},
+    {key: "rotaryYDistance", label: "Y distance"},
+    {key: "rotaryZDistance", label: "Z distance"}
+];
 var setup = [
     {key: "probeDiameter", label: "Probe ball diameter"},
     {key: "retractDistance", label: "Retract distance"},
     {key: "positioningFeed", label: "Positioning feed", unit: "mm/min"},
     {key: "coarseFeed", label: "Coarse feed", unit: "mm/min"},
-    {key: "fineFeed", label: "Fine feed", unit: "mm/min"}
+    {key: "fineFeed", label: "Fine feed", unit: "mm/min"},
+    {key: "rotaryFeed", label: "Rotary feed", unit: "°/min"}
 ];
 
 function routine(settings, family, selection, wcs) {
@@ -60,4 +67,20 @@ function routine(settings, family, selection, wcs) {
         config.z = selection.z;
     }
     return config;
+}
+
+function rotaryConfig(settings, operation) {
+    return {
+        operation: operation || "axis",
+        yDistance: settings.rotaryYDistance,
+        zDistance: settings.rotaryZDistance,
+        rodDiameter: settings.rotaryRodDiameter,
+        xDistance: settings.rotaryXDistance,
+        rotaryFeed: settings.rotaryFeed,
+        diameter: settings.probeDiameter,
+        retract: settings.retractDistance,
+        positioningFeed: settings.positioningFeed,
+        coarseFeed: settings.coarseFeed,
+        fineFeed: settings.fineFeed
+    };
 }

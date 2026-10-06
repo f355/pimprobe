@@ -84,6 +84,7 @@ TestCase {
         tryVerify(function() { return probeWindow.probeFullyExtended() }, 3000)
         probeWindow.requestActivate()
         mouseClick(tabs.itemAt(2))
+		waitForRendering(probeWindow.contentItem)
 		var center = descendants(probeWindow.contentItem, ProbePanel)[2]
 		var centerField = descendants(center, NumberField)[0]
 		var originalDistance = centerField.value
@@ -133,9 +134,12 @@ TestCase {
         callApi("POST", "/probe-actuator", {extended: true})
         tryVerify(function() { return probeWindow.probeFullyExtended() }, 3000)
         var tabs = descendants(probeWindow.contentItem, TabBar)[0]
-        var keys = ["outsideXSearchDistance", "insideXSearchDistance", "centerXSearchDistance", "probeDiameter"]
+        var keys = ["outsideXSearchDistance", "insideXSearchDistance", "centerXSearchDistance", "rotaryRodDiameter", "probeDiameter"]
         for (var tab = 0; tab < keys.length; ++tab) {
+            waitForPolish(probeWindow.contentItem)
             mouseClick(tabs.itemAt(tab))
+            compare(tabs.currentIndex, tab)
+            waitForRendering(probeWindow.contentItem)
             var field = descendants(probeWindow.contentItem, NumberField).filter(function(f) { return f.visible })[0]
             var oldValue = field.value
             mouseClick(field)
@@ -150,6 +154,32 @@ TestCase {
             field.editor.accept()
             tryVerify(function() { return !probeWindow.settings.saving }, 3000)
         }
+    }
+
+    function test_settings_scroll_to_rotary_feed() {
+        probeWindow.requestActivate()
+        var tabs = descendants(probeWindow.contentItem, TabBar)[0]
+        mouseClick(tabs.itemAt(4))
+        var panel = descendants(probeWindow.contentItem, ProbePanel)[4]
+        var scroll = descendants(panel, Flickable)[0]
+        tryVerify(function() { return scroll.contentHeight > scroll.height })
+        scroll.contentY = scroll.contentHeight - scroll.height
+        var fields = descendants(panel, NumberField)
+        var field = fields[fields.length - 1]
+        var original = field.value
+        mouseClick(field)
+        tryVerify(function() { return field.editor.target === field })
+        field.editor.typeKey("4")
+        field.editor.typeKey("2")
+        field.editor.typeKey("0")
+        field.editor.accept()
+        compare(probeWindow.settings.values.rotaryFeed, 420)
+        tryVerify(function() { return !probeWindow.settings.saving }, 3000)
+        field.editor.begin(field)
+        String(original).split("").forEach(function(key) { field.editor.typeKey(key) })
+        field.editor.accept()
+        tryVerify(function() { return !probeWindow.settings.saving }, 3000)
+        scroll.contentY = 0
     }
 
     function test_switching_tabs_discards_uncommitted_edit() {
@@ -316,7 +346,7 @@ TestCase {
         var tabs = descendants(probeWindow.contentItem, TabBar)[0]
         var help = descendants(probeWindow.header, Button).filter(function(b) { return b.text === "?" })[0]
         var pages = []
-        for (var i = 0; i < 4; ++i) {
+        for (var i = 0; i < tabs.count; ++i) {
             mouseClick(tabs.itemAt(i))
             mouseClick(help)
             var body
@@ -332,12 +362,12 @@ TestCase {
             })[0]
             mouseClick(back)
         }
-        compare(new Set(pages).size, 4)
+        compare(new Set(pages).size, tabs.count)
     }
 
     function test_utilities_pane_contains_repeatability() {
         var tabs = descendants(probeWindow.contentItem, TabBar)[0]
-        mouseClick(tabs.itemAt(3))
+        mouseClick(tabs.itemAt(4))
 
         function visibleContentButton(text) {
             return descendants(probeWindow.contentItem, Button).filter(function(button) {
@@ -401,8 +431,8 @@ TestCase {
 
         var tabs = descendants(probeWindow.contentItem, TabBar)[0]
         tryVerify(function() { return tabs.enabled && !probeWindow.controlsLocked() }, 3000)
-        mouseClick(tabs.itemAt(3))
-        tryCompare(tabs, "currentIndex", 3)
+        mouseClick(tabs.itemAt(4))
+        tryCompare(tabs, "currentIndex", 4)
         var utilities = descendants(probeWindow.contentItem, Button).filter(function(button) {
             return button.visible && button.text === "Utilities"
         })[0]
@@ -427,7 +457,7 @@ TestCase {
 
     function test_update_page_checks_release_channel_and_installs_selected_build() {
         var tabs = descendants(probeWindow.contentItem, TabBar)[0]
-        mouseClick(tabs.itemAt(3))
+        mouseClick(tabs.itemAt(4))
         var keypad = descendants(probeWindow.contentItem, NumericKeypad)[0]
         verify(!keypad.visible)
         var original = Api.request

@@ -38,6 +38,12 @@ const IO_TIMEOUT: Duration = Duration::from_secs(3);
 #[derive(Clone, Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
+    pub firmware_version: String,
+    pub plane: i32,
+    pub wcs_rotations: BTreeMap<i32, f64>,
+    pub wcs_origins: BTreeMap<i32, Position>,
+    pub coordinate_offset: Position,
+    pub tool_length_offset: f64,
     pub connected: bool,
     pub session_id: u64,
     pub connection_error: String,
@@ -144,6 +150,10 @@ impl SocketController {
         let mut state = State {
             connected: s.connected && s.status_fresh,
             modes: s.modes,
+            firmware_version: s.firmware_version.clone(),
+            plane: s.plane,
+            coordinate_offset: s.coordinate_offset,
+            tool_length_offset: s.tool_length_offset,
             travel_limits: self.inner.travel_limits,
             ..Default::default()
         };
@@ -168,6 +178,8 @@ impl SocketController {
             state.position = status.m_pos;
             state.work_position = status.w_pos;
             state.wcs = status.wcs;
+            state.wcs_rotation = s.wcs_rotations.get(&status.wcs).copied();
+            state.wcs_origin = s.wcs_origins.get(&status.wcs).copied();
             state.tool = status.tool;
             state.probe_offset = [
                 *s.settings.get(&33).unwrap_or(&0.0),
@@ -457,9 +469,31 @@ fn apply(inner: &Inner, record: Record) {
             stored.snapshot.last_error = Some(code);
             event.controller_error = Some(code);
         }
-        Record::Modes(modes) => {
+        Record::Modes(modes, plane) => {
             stored.snapshot.modes = modes;
+            stored.snapshot.plane = plane;
             event.modes = Some(modes);
+            event.plane = Some(plane);
+        }
+        Record::Version(version) => {
+            stored.snapshot.firmware_version = version.clone();
+            event.firmware_version = Some(version);
+        }
+        Record::Rotation(wcs, angle) => {
+            stored.snapshot.wcs_rotations.insert(wcs, angle);
+            event.wcs_rotation = Some((wcs, angle));
+        }
+        Record::Origin(wcs, position) => {
+            stored.snapshot.wcs_origins.insert(wcs, position);
+            event.wcs_origin = Some((wcs, position));
+        }
+        Record::CoordinateOffset(position) => {
+            stored.snapshot.coordinate_offset = position;
+            event.coordinate_offset = Some(position);
+        }
+        Record::ToolLength(length) => {
+            stored.snapshot.tool_length_offset = length;
+            event.tool_length_offset = Some(length);
         }
         Record::Setting(key, value) => {
             stored.snapshot.settings.insert(key, value);

@@ -45,6 +45,42 @@ impl Device {
         Ok(())
     }
 
+    pub fn configure_rotary(&self, config: &pimprobe_core::RotaryConfig) {
+        if let Self::Mock(mock) = self {
+            if config.operation == pimprobe_core::RotaryOperation::Axis {
+                mock.set_rotary_geometry(config, [-0.2, 0.3], [0.003, -0.002]);
+            } else {
+                let state = mock.state();
+                let vertical = config.operation != pimprobe_core::RotaryOperation::Horizontal;
+                let mirrored = config.operation == pimprobe_core::RotaryOperation::VerticalNegative;
+                let y = state.position[1] + state.probe_offset[1];
+                let z = state.position[2] - state.probe_offset[2];
+                mock.set_geometry(MockGeometry::RotatingPlane {
+                    pivot: if vertical {
+                        [
+                            y + if mirrored { -8. } else { 8. },
+                            z - config.z_distance / 2. + config.diameter / 2.,
+                        ]
+                    } else {
+                        [y + config.y_distance / 2., z - 8.]
+                    },
+                    distance: 5. * 8_f64.to_radians().cos(),
+                    angle: if mirrored {
+                        172.
+                    } else if vertical {
+                        -8.
+                    } else {
+                        8.
+                    },
+                    a_start: state.position[3],
+                    vertical,
+                    ball_radius: config.diameter / 2.,
+                    offset: state.probe_offset,
+                });
+            }
+        }
+    }
+
     pub fn configure_repeatability(&self, diameter: f64) -> Result<(), Error> {
         if let Self::Mock(mock) = self {
             let state = mock.state();

@@ -21,6 +21,24 @@ use tokio::sync::broadcast;
 /// Stock geometry expressed as the probe-ball-center collision envelope.
 #[derive(Debug, Clone)]
 pub enum MockGeometry {
+    RotatingPlane {
+        pivot: [f64; 2],
+        distance: f64,
+        angle: f64,
+        a_start: f64,
+        vertical: bool,
+        ball_radius: f64,
+        offset: Position,
+    },
+    Rotary {
+        center: [f64; 3],
+        slope: [f64; 2],
+        eccentric: [f64; 2],
+        a_start: f64,
+        radius: f64,
+        ball_radius: f64,
+        offset: Position,
+    },
     Empty,
     Plane {
         axis: Axis,
@@ -48,6 +66,68 @@ impl MockGeometry {
     pub fn intersect(&self, axis: Axis, position: Position, delta: f64) -> Option<f64> {
         let i = axis.index();
         match self {
+            Self::RotatingPlane {
+                pivot,
+                distance,
+                angle,
+                a_start,
+                vertical,
+                ball_radius,
+                offset,
+            } => {
+                if axis == Axis::X {
+                    return None;
+                }
+                let theta = (angle + position[3] - a_start).to_radians();
+                let normal = if *vertical {
+                    [-theta.cos(), -theta.sin()]
+                } else {
+                    [-theta.sin(), theta.cos()]
+                };
+                let ball = [
+                    position[1] + offset[1],
+                    position[2] - offset[2] + ball_radius,
+                ];
+                let j = i - 1;
+                if normal[j].abs() < 1e-9 {
+                    return None;
+                }
+                let signed = (0..2)
+                    .map(|k| normal[k] * (ball[k] - pivot[k]))
+                    .sum::<f64>();
+                Some(position[i] + (distance + ball_radius - signed) / normal[j])
+            }
+            Self::Rotary {
+                center,
+                slope,
+                eccentric,
+                a_start,
+                radius,
+                ball_radius,
+                offset,
+            } => {
+                if axis == Axis::X {
+                    return None;
+                }
+                let dx = position[0] + offset[0] - center[0];
+                let a = (position[3] - a_start).to_radians();
+                let cy = center[1] + slope[0] * dx + eccentric[0] * a.cos()
+                    - eccentric[1] * a.sin()
+                    - offset[1];
+                let cz = center[2]
+                    + slope[1] * dx
+                    + eccentric[0] * a.sin()
+                    + eccentric[1] * a.cos()
+                    + offset[2]
+                    - ball_radius;
+                let (coordinate, other) = if axis == Axis::Y {
+                    (cy, position[2] - cz)
+                } else {
+                    (cz, position[1] - cy)
+                };
+                let square = (radius + ball_radius).powi(2) - other.powi(2);
+                (square >= 0.0).then(|| coordinate - delta.signum() * square.sqrt())
+            }
             Self::Empty => None,
             Self::Plane {
                 axis: a,
@@ -142,6 +222,22 @@ impl Default for MockController {
     }
 }
 impl MockController {
+    pub fn set_rotary_geometry(&self, config: &RotaryConfig, eccentric: [f64; 2], slope: [f64; 2]) {
+        let s = self.state();
+        self.set_geometry(MockGeometry::Rotary {
+            center: [
+                s.position[0] + s.probe_offset[0],
+                s.position[1] + s.probe_offset[1],
+                s.position[2] - s.probe_offset[2] - 3.0 - config.rod_diameter / 2.0,
+            ],
+            slope,
+            eccentric,
+            a_start: s.position[3],
+            radius: config.rod_diameter / 2.0,
+            ball_radius: config.diameter / 2.0,
+            offset: s.probe_offset,
+        });
+    }
     pub fn new() -> Self {
         Self::with_state(State {
             homed: true,
@@ -165,9 +261,29 @@ impl MockController {
             work_position: [35.0, 20.0, -8.0, 0.0],
             probe_offset: [-55.872, -5.362, -49.98, 0.0],
             tool: 3,
+            firmware_version: "1.0.35+c0.mock".into(),
+            plane: 17,
+            wcs_rotation: Some(0.0),
+            wcs_origin: None,
+            coordinate_offset: [0.0; 4],
+            tool_length_offset: 0.0,
         })
     }
-    pub fn with_state(state: State) -> Self {
+    pub fn with_state(mut state: State) -> Self {
+        if state.wcs_origin.is_none() {
+            let angle = state.wcs_rotation.unwrap_or(0.).to_radians();
+            let x = state.work_position[0] + state.coordinate_offset[0];
+            let y = state.work_position[1] + state.coordinate_offset[1];
+            state.wcs_origin = Some([
+                state.position[0] - angle.cos() * x + angle.sin() * y,
+                state.position[1] - angle.sin() * x - angle.cos() * y,
+                state.position[2]
+                    - state.work_position[2]
+                    - state.coordinate_offset[2]
+                    - state.tool_length_offset,
+                state.position[3] - state.work_position[3] - state.coordinate_offset[3],
+            ]);
+        }
         let (events, _) = broadcast::channel(256);
         Self {
             inner: Mutex::new(Inner {
@@ -268,6 +384,7 @@ impl MockController {
         inner.offsets.insert(old, offset);
         let new = *inner.offsets.entry(wcs).or_insert([0.0; 4]);
         inner.state.wcs = wcs;
+        inner.state.wcs_origin = Some(new);
         for (i, off) in new.iter().enumerate() {
             inner.state.work_position[i] = inner.state.position[i] - off;
         }
@@ -314,11 +431,48 @@ impl Controller for MockController {
         if command == "$G" {
             let _ = self.events.send(Event {
                 modes: Some(inner.state.modes),
+                plane: Some(inner.state.plane),
                 ..Event::default()
             });
             return Ok(());
         }
-        let words: Vec<_> = command.split_whitespace().collect();
+        if command == "$V" {
+            let _ = self.events.send(Event {
+                firmware_version: Some(inner.state.firmware_version.clone()),
+                ..Event::default()
+            });
+            return Ok(());
+        }
+        if command == "$#" {
+            let _ = self.events.send(Event {
+                wcs_origin: Some((inner.state.wcs, inner.state.wcs_origin.unwrap())),
+                ..Event::default()
+            });
+            let _ = self.events.send(Event {
+                wcs_rotation: Some((inner.state.wcs, inner.state.wcs_rotation.unwrap_or(0.0))),
+                coordinate_offset: Some(inner.state.coordinate_offset),
+                tool_length_offset: Some(inner.state.tool_length_offset),
+                ..Event::default()
+            });
+            return Ok(());
+        }
+        if matches!(command, "G17" | "G18" | "G19") {
+            inner.state.plane = command[1..].parse().unwrap();
+            let _ = self.events.send(Event {
+                acknowledged: true,
+                ..Event::default()
+            });
+            return Ok(());
+        }
+        let mut words: Vec<_> = command.split_whitespace().collect();
+        if words.first() == Some(&"G19") && words.len() > 1 {
+            inner.state.plane = 19;
+            words.remove(0);
+        }
+        let a_delta = words
+            .iter()
+            .find_map(|w| w.strip_prefix('A').and_then(|v| v.parse::<f64>().ok()))
+            .unwrap_or(0.0);
         if words.len() == 3 && matches!(words[0], "G20" | "G21") {
             let parse = |w: &str| {
                 w.strip_prefix('G')
@@ -387,6 +541,40 @@ impl Controller for MockController {
             return Ok(());
         }
         if words.first() == Some(&"G10") {
+            if words.get(1) == Some(&"L2") {
+                if let Some(angle) = words
+                    .iter()
+                    .find_map(|w| w.strip_prefix('R').and_then(|v| v.parse::<f64>().ok()))
+                {
+                    inner.state.wcs_rotation = Some(angle);
+                }
+                let mut origin = inner.state.wcs_origin.unwrap();
+                for (axis, value) in axes {
+                    origin[axis.index()] = value;
+                }
+                if words.iter().any(|word| word.starts_with('A')) {
+                    origin[3] = a_delta;
+                }
+                inner.state.wcs_origin = Some(origin);
+                let angle = inner.state.wcs_rotation.unwrap_or(0.).to_radians();
+                let x = inner.state.position[0] - origin[0];
+                let y = inner.state.position[1] - origin[1];
+                inner.state.work_position = [
+                    angle.cos() * x + angle.sin() * y - inner.state.coordinate_offset[0],
+                    angle.cos() * y - angle.sin() * x - inner.state.coordinate_offset[1],
+                    inner.state.position[2]
+                        - origin[2]
+                        - inner.state.coordinate_offset[2]
+                        - inner.state.tool_length_offset,
+                    inner.state.position[3] - origin[3] - inner.state.coordinate_offset[3],
+                ];
+                self.publish(&inner.state);
+                let _ = self.events.send(Event {
+                    acknowledged: true,
+                    ..Event::default()
+                });
+                return Ok(());
+            }
             if words.get(1) != Some(&"L20")
                 || words.get(2).copied() != Some(format!("P{}", inner.state.wcs - 53).as_str())
                 || inner.state.modes.units != 21
@@ -397,13 +585,16 @@ impl Controller for MockController {
             for (a, v) in axes {
                 inner.state.work_position[a.index()] = v;
             }
+            inner.state.wcs_origin = Some(std::array::from_fn(|i| {
+                inner.state.position[i] - inner.state.work_position[i]
+            }));
             self.publish(&inner.state);
             return Ok(());
         }
-        if axes.is_empty()
+        if (axes.is_empty() && a_delta == 0.)
             || !matches!(
                 words.first().copied(),
-                Some("G38.2" | "G38.3" | "G1" | "G0")
+                Some("G38.2" | "G38.3" | "G1" | "G0" | "G2" | "G3")
             )
             || inner.state.modes != Modes::PROBING
         {
@@ -434,6 +625,8 @@ impl Controller for MockController {
             inner.state.position[i] = start[i] + delta * fraction;
             inner.state.work_position[i] += delta * fraction;
         }
+        inner.state.position[3] += a_delta * fraction;
+        inner.state.work_position[3] += a_delta * fraction;
         if probe {
             let _ = self.events.send(Event {
                 probe: Some(Contact {

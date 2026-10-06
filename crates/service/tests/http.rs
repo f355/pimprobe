@@ -36,6 +36,91 @@ fn config() -> Value {
         "retract":0.5,"diameter":4,"positioningFeed":1000,"coarseFeed":30,"fineFeed":10})
 }
 
+#[tokio::test]
+async fn rotary_surfaces_are_aligned_rechecked_and_zeroed() {
+    for operation in ["horizontal", "vertical", "verticalNegative"] {
+        let (_temp, app, router) = app();
+        let (_, body) = request(
+            &router,
+            "POST",
+            "/api/v1/rotary/review",
+            json!({"operation":operation,"yDistance":10,"zDistance":10}),
+        )
+        .await;
+        let review: Value = serde_json::from_str(&body).unwrap();
+        assert!(review["id"].is_string(), "{body}");
+        let token = json!({"id":review["id"]});
+        let (_, body) = request(&router, "POST", "/api/v1/rotary/run", token.clone()).await;
+        let last: Value = serde_json::from_str(body.lines().last().unwrap()).unwrap();
+        assert_eq!(last["type"], "result", "{body}");
+        let level = &last["result"]["level"];
+        assert!(
+            (level["correction"].as_f64().unwrap().abs() - 8.0).abs() < 0.02,
+            "{last}"
+        );
+        assert!(level["residual"].as_f64().unwrap().abs() < 0.02, "{last}");
+        assert_eq!(level["touches"].as_array().unwrap().len(), 2);
+        let (_, body) = request(&router, "POST", "/api/v1/rotary/zero", token).await;
+        let result: Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(result["zeroed"], true, "{body}");
+        assert!(app.device.state().work_position[3].abs() < 0.001);
+    }
+}
+
+#[tokio::test]
+async fn rotary_calibration_streams_and_saves_each_result_action() {
+    let (temp, app, router) = app();
+    let before = app.device.state();
+    let (_, body) = request(
+        &router,
+        "POST",
+        "/api/v1/rotary/review",
+        json!({"xDistance":-30}),
+    )
+    .await;
+    let review: Value = serde_json::from_str(&body).unwrap();
+    assert!(review["id"].is_string(), "{body}");
+    assert!(review["program"].as_str().unwrap().contains("G19 G3"));
+    let token = json!({"id":review["id"]});
+    let (_, body) = request(&router, "POST", "/api/v1/rotary/run", token.clone()).await;
+    let events: Vec<Value> = body
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    let last = events.last().unwrap();
+    assert_eq!(last["type"], "result", "{body}");
+    assert_eq!(last["result"]["stations"].as_array().unwrap().len(), 2);
+    assert!(
+        events
+            .iter()
+            .any(|event| event["progress"]["kind"] == "contact")
+    );
+    assert_eq!(app.device.state().modes, before.modes);
+    request(&router, "POST", "/api/v1/wcs", json!({"wcs":55})).await;
+    assert_api_error(
+        &router,
+        "POST",
+        "/api/v1/rotary/zero",
+        token.clone(),
+        StatusCode::CONFLICT,
+        "matching completed rotary calibration",
+    )
+    .await;
+    request(&router, "POST", "/api/v1/wcs", json!({"wcs":54})).await;
+    let (_, body) = request(&router, "POST", "/api/v1/rotary/zero", token.clone()).await;
+    let result: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(result["zeroed"], true, "{body}");
+    let (_, body) = request(&router, "POST", "/api/v1/rotary/rotation", token).await;
+    let result: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(result["rotationApplied"], true, "{body}");
+    assert_eq!(result["zeroed"], true);
+    let state = app.device.state();
+    assert_eq!(state.wcs_origin.unwrap()[0], before.wcs_origin.unwrap()[0]);
+    assert!((state.wcs_rotation.unwrap() - result["xyAngle"].as_f64().unwrap()).abs() < 0.000001);
+    let history = std::fs::read_to_string(temp.path().join("logs/history.jsonl")).unwrap();
+    assert!(history.contains("Rotary axis calibration"), "{history}");
+}
+
 fn app() -> (tempfile::TempDir, std::sync::Arc<App>, Router) {
     let temp = tempfile::tempdir().unwrap();
     let mock = MockController::new();

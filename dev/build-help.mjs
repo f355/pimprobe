@@ -18,7 +18,7 @@ import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const docs = new URL("../docs/", import.meta.url);
-const pageNames = ["outside", "inside", "center", "settings"];
+const pageNames = ["outside", "inside", "center", "rotary", "settings"];
 
 // Standalone page links expand into their contents in contextual help.
 export function renderPage(name, parents = [], source = docs) {

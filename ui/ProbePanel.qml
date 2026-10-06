@@ -16,6 +16,7 @@
 
 pragma ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Layouts
 
 Item {
@@ -52,31 +53,43 @@ Item {
                 color: Theme.panel
                 radius: 12
             }
-            ColumnLayout {
+            Flickable {
+                id: parameterScroll
                 anchors.fill: parent
                 anchors.margins: 14
-                spacing: panel.roomy ? 14 : panel.setup ? 8 : 6
-                Repeater {
-                    model: panel.parameters
-                    ParameterRow {
-                        required property var modelData
-                        Layout.fillWidth: true
-                        settings: panel.settings
-                        editor: panel.editor
-                        definition: modelData
-                        fieldHeight: panel.roomy ? 62 : panel.setup ? 48 : 50
-                        fieldWidth: panel.setup ? 100 : 130
-                        labelSize: panel.roomy || panel.setup ? 18 : 17
-                        numberSize: panel.roomy ? 24 : panel.setup ? 23 : 22
+                clip: true
+                contentWidth: width
+                contentHeight: Math.max(height, parameterRows.implicitHeight)
+                flickableDirection: Flickable.VerticalFlick
+                boundsBehavior: Flickable.StopAtBounds
+                ScrollBar.vertical: ScrollBar {}
+                ColumnLayout {
+                    id: parameterRows
+                    width: parameterScroll.width
+                    height: parameterScroll.contentHeight
+                    spacing: panel.roomy ? 14 : panel.setup ? 8 : 6
+                    Repeater {
+                        model: panel.parameters
+                        ParameterRow {
+                            required property var modelData
+                            Layout.fillWidth: true
+                            settings: panel.settings
+                            editor: panel.editor
+                            definition: modelData
+                            fieldHeight: panel.roomy ? 62 : panel.setup ? 48 : 50
+                            fieldWidth: panel.setup ? 100 : 130
+                            labelSize: panel.roomy || panel.setup ? 18 : 17
+                            numberSize: panel.roomy ? 24 : panel.setup ? 23 : 22
+                        }
                     }
-                }
-                Item {
-                    Layout.fillHeight: true
-                }
-                Loader {
-                    Layout.fillWidth: true
-                    sourceComponent: panel.footer
-                    visible: item !== null
+                    Item {
+                        Layout.fillHeight: true
+                    }
+                    Loader {
+                        Layout.fillWidth: true
+                        sourceComponent: panel.footer
+                        visible: item !== null
+                    }
                 }
             }
         }

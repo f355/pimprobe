@@ -33,10 +33,12 @@ TestCase {
     }
     function descendants(item, type) {
         var found = [];
-        (item.children || []).forEach(function(child) {
+        var children = item.children || [];
+        for (var i = 0; i < children.length; ++i) {
+            var child = children[i];
             if (child instanceof type) found.push(child);
             found = found.concat(descendants(child,type));
-        });
+        }
         return found;
     }
     function save(name) {
@@ -57,7 +59,7 @@ TestCase {
         save("rotary");
         var button = findChild(window.contentItem, "rotaryCalibrationButton");
         mouseClick(button);
-        var flow = window.page.children.filter(function(item) { return item instanceof RotaryFlow; })[0];
+        var flow = Array.prototype.filter.call(window.page.children, function(item) { return item instanceof RotaryFlow; })[0];
         tryVerify(function() { return !flow.busy && flow.reviewID.length > 0; },3000);
         save("rotary-review");
         flow.proceed();

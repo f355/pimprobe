@@ -51,7 +51,7 @@ TestCase {
     }
     function descendants(item, type) {
         if (item === probeWindow.contentItem.parent) {
-            var views = probeWindow.page.children.filter(function(child) {
+            var views = Array.prototype.filter.call(probeWindow.page.children, function(child) {
                 return child instanceof PageView && child.opened;
             }).sort(function(a, b) { return b.z - a.z; });
             return (views.length ? descendants(views[0], type) : [])
@@ -66,7 +66,8 @@ TestCase {
         return matches
     }
     function contentObject(type) {
-        var items = probeWindow.page.children.concat(probeWindow.contentData)
+        var items = Array.prototype.slice.call(probeWindow.page.children)
+            .concat(Array.prototype.slice.call(probeWindow.contentData))
         for (var i = 0; i < items.length; ++i) {
             if (items[i] instanceof type) return items[i]
         }
@@ -145,7 +146,6 @@ TestCase {
         var tabs = descendants(probeWindow.contentItem, TabBar)[0]
         var keys = ["outsideXSearchDistance", "insideXSearchDistance", "centerXSearchDistance", "rotaryRodDiameter", "probeDiameter"]
         for (var tab = 0; tab < keys.length; ++tab) {
-            waitForPolish(probeWindow.contentItem)
             mouseClick(tabs.itemAt(tab))
             compare(tabs.currentIndex, tab)
             waitForRendering(probeWindow.contentItem)

@@ -37,10 +37,12 @@ TestCase {
     }
     function descendants(item, type) {
         var result = [];
-        (item.children || []).forEach(function(child) {
+        var children = item.children || [];
+        for (var i = 0; i < children.length; ++i) {
+            var child = children[i];
             if (child instanceof type) result.push(child);
             result = result.concat(descendants(child, type));
-        });
+        }
         return result;
     }
     function initTestCase() {

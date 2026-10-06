@@ -36,7 +36,7 @@ TestCase {
 
     function descendants(item, type) {
         if (item === window.contentItem.parent) {
-            var views = window.page.children.filter(function(child) {
+            var views = Array.prototype.filter.call(window.page.children, function(child) {
                 return child instanceof PageView && child.opened;
             }).sort(function(a, b) { return b.z - a.z; });
             return (views.length ? descendants(views[0], type) : [])
@@ -99,7 +99,7 @@ TestCase {
         var back = descendants(window.contentItem.parent, Button).filter(function(b) {
             return b.visible && b.text === "Go to starting position"
         })[0]
-        var flow = window.page.children.filter(function(item) { return item instanceof ProbeFlow })[0]
+        var flow = Array.prototype.filter.call(window.page.children, function(item) { return item instanceof ProbeFlow })[0]
         verify(flow !== undefined)
         mouseClick(back)
         tryCompare(flow, "phase", "result", 10000)
@@ -122,7 +122,7 @@ TestCase {
         save("dimensions")
     }
     function test_repeatability() {
-        var routine = window.page.children.filter(function(item) { return item instanceof ProbeFlow })[0]
+        var routine = Array.prototype.filter.call(window.page.children, function(item) { return item instanceof ProbeFlow })[0]
         routine.close()
         tryVerify(function() { return !window.page.controlsLocked() }, 3000)
         var reply = null
@@ -141,7 +141,7 @@ TestCase {
         })[0]
         verify(button !== undefined)
         mouseClick(button)
-        var flow = window.page.children.filter(function(item) { return item instanceof RepeatabilityFlow })[0]
+        var flow = Array.prototype.filter.call(window.page.children, function(item) { return item instanceof RepeatabilityFlow })[0]
         tryCompare(flow, "opened", true)
         flow.confirmPreparation()
         save("repeatability-options")

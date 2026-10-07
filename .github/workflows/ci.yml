@@ -30,14 +30,18 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Install Qt and test dependencies
+      - name: Install test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build qt6-base-dev qt6-declarative-dev \
-            qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts \
-            qml6-module-qtquick-templates qml6-module-qtquick-window \
-            qml6-module-qtqml-workerscript qml6-module-qttest \
-            fonts-dejavu-core netcat-openbsd
+          sudo apt-get install -y cmake ninja-build fonts-dejavu-core netcat-openbsd
+      - name: Install Qt 6.9.1
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.9.1'
+          host: linux_arm64
+          arch: linux_gcc_arm64
+          archives: icu qtbase qtdeclarative qtsvg
+          cache: true
       - name: Check Rust
         run: |
           cargo fmt --all --check
@@ -46,10 +50,9 @@ jobs:
       - name: Check assets
         run: node --test dev/test-assets.mjs
       - name: Run UI tests
-        env:
-          QT_DECLARATIVE_PREFIX: /usr/lib/qt6
-          QMLTESTRUNNER: /usr/lib/qt6/bin/qmltestrunner
-        run: ./dev/test-ui.sh
+        run: |
+          QT_DECLARATIVE_PREFIX="$QT_ROOT_DIR" \
+            QMLTESTRUNNER="$QT_ROOT_DIR/bin/qmltestrunner" ./dev/test-ui.sh
       - name: Build Linux service
         run: |
           docker build -t pimprobe-rust-builder packaging

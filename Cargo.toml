@@ -30,6 +30,10 @@ thiserror = "2"
 async-trait = "0.1"
 tempfile = "3"
 
+[profile.dev]
+debug = "line-tables-only"
+incremental = false
+
 [profile.release]
 lto = "thin"
 strip = true

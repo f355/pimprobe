@@ -44,8 +44,7 @@ impl Parameter {
             Self::Travel => (0.1, 100.0),
             Self::SearchDistance => (0.1, 1000.0),
             Self::Retract | Self::Diameter => (0.1, 20.0),
-            Self::PositioningFeed => (1.0, 10000.0),
-            Self::ProbeFeed => (1.0, 1000.0),
+            Self::PositioningFeed | Self::ProbeFeed => (1.0, f64::MAX),
         };
         NumericRange { minimum, maximum }
     }

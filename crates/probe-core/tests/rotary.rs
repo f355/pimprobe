@@ -212,10 +212,40 @@ async fn eccentric_rod_is_measured_with_both_tracking_paths() {
         assert!((result.xy_angle - 0.003f64.atan().to_degrees()).abs() < 0.02);
         assert!((result.xz_angle - (-0.002f64).atan().to_degrees()).abs() < 0.02);
         assert!((machine.state().position[3] - state.position[3]).abs() < 0.001);
+        assert!((machine.state().position[0] - state.position[0]).abs() < 0.001);
+        assert!((machine.state().position[2] - state.position[2]).abs() < 0.001);
         assert_eq!(machine.state().modes, state.modes);
         assert_eq!(
             machine.commands().iter().any(|c| c.starts_with("G19 G")),
             rotary_supported(version)
         );
+        if rotary_supported(version) {
+            let arcs: Vec<_> = machine
+                .commands()
+                .into_iter()
+                .filter(|c| c.starts_with("G19 G"))
+                .collect();
+            let mut at_crest = true;
+            for arc in &arcs {
+                if at_crest {
+                    assert!(arc.contains(" A90.000 "), "{arc}");
+                    at_crest = false;
+                } else if arc.contains(" A90.000 ") {
+                    at_crest = true;
+                } else {
+                    assert!(
+                        arc.contains(" A-180.000 ") || arc.contains(" A180.000 "),
+                        "{arc}"
+                    );
+                }
+            }
+            assert!(at_crest);
+            assert_eq!(
+                arcs.iter().filter(|arc| arc.contains(" A90.000 ")).count(),
+                4
+            );
+            assert!(arcs.iter().any(|arc| arc.contains(" A180.000 ")));
+            assert!(plan.program().contains("A-180 F#<tracking_feed>"));
+        }
     }
 }

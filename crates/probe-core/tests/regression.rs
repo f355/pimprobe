@@ -958,7 +958,7 @@ fn preflight_configuration_and_envelope_errors_are_fail_closed() {
         mutate(&mut s);
         assert!(review(s, cfg.clone()).is_err());
     }
-    for value in [0.0, -1.0, f64::NAN, f64::INFINITY, 10001.0] {
+    for value in [0.0, -1.0, f64::NAN, f64::INFINITY] {
         let mut c = cfg.clone();
         c.positioning_feed = value;
         assert!(review(original.clone(), c).is_err());

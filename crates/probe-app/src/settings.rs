@@ -17,7 +17,115 @@
 use pimprobe_core::{NumericRange, Parameter, RepeatabilitySettings};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
+use std::collections::BTreeMap;
 use std::sync::Arc;
+
+#[derive(Clone, Copy)]
+struct FeedLimits {
+    linear: f64,
+    rotary: f64,
+}
+
+impl FeedLimits {
+    fn from_settings(settings: &BTreeMap<i32, f64>) -> Option<Self> {
+        let rate = |key| {
+            settings
+                .get(&key)
+                .copied()
+                .filter(|v| v.is_finite() && *v >= 1.)
+        };
+        Some(Self {
+            linear: rate(110)?.min(rate(111)?).min(rate(112)?),
+            rotary: rate(113)?,
+        })
+    }
+
+    fn maximum(self, key: &str) -> Option<f64> {
+        match key {
+            "positioningFeed" | "coarseFeed" | "fineFeed" => Some(self.linear),
+            "rotaryFeed" => Some(self.rotary),
+            _ => None,
+        }
+    }
+}
+
+impl super::ProbeApp {
+    async fn feed_limits(&self) -> Result<FeedLimits, super::AppError> {
+        let mut settings = self.device.snapshot().settings;
+        if let Some(limits) = FeedLimits::from_settings(&settings) {
+            return Ok(limits);
+        }
+        let mut events = self.device.subscribe();
+        self.device.send("$$").await?;
+        tokio::time::timeout(std::time::Duration::from_secs(3), async {
+            loop {
+                let event = events
+                    .recv()
+                    .await
+                    .map_err(|_| pimprobe_core::Error::Disconnected)?;
+                if let Some(code) = event.controller_error {
+                    return Err(pimprobe_core::Error::Controller(format!("error:{code}")));
+                }
+                if let Some((key, value)) = event.setting {
+                    settings.insert(key, value);
+                    if let Some(limits) = FeedLimits::from_settings(&settings) {
+                        return Ok(limits);
+                    }
+                }
+            }
+        })
+        .await
+        .map_err(|_| {
+            super::AppError::conflict(
+                "settings",
+                "Could not read machine feed limits ($110-$113); reconnect and try again",
+            )
+        })?
+        .map_err(Into::into)
+    }
+
+    pub async fn settings_schema(&self) -> Result<Map<String, Value>, super::AppError> {
+        let _guard = self.acquire()?;
+        let limits = self.feed_limits().await?;
+        let mut schema = schema();
+        for (key, entry) in &mut schema {
+            if let Some(maximum) = limits.maximum(key) {
+                entry["maximum"] = json!(maximum);
+                entry["default"] = json!(entry["default"].as_f64().unwrap().min(maximum));
+            }
+        }
+        Ok(schema)
+    }
+
+    pub(super) async fn validate_feeds(
+        &self,
+        values: &[(&str, f64)],
+    ) -> Result<(), super::AppError> {
+        let limits = self.feed_limits().await?;
+        for &(key, value) in values {
+            let maximum = limits.maximum(key).unwrap();
+            if !(NumericRange {
+                minimum: 1.,
+                maximum,
+            })
+            .contains(value)
+            {
+                return Err(super::AppError::invalid(
+                    "settings",
+                    format!(
+                        "{key} must be between 1 and {maximum} {} (machine limit)",
+                        if key == "rotaryFeed" {
+                            "degrees/min"
+                        } else {
+                            "mm/min"
+                        }
+                    ),
+                ));
+            }
+        }
+        Ok(())
+    }
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum SettingsError {
@@ -61,7 +169,7 @@ fn rules() -> Vec<Rule> {
     for (key, value, minimum, maximum) in [
         ("rotaryRodDiameter", 10., 3., 100.),
         ("rotaryXDistance", 30., -200., 200.),
-        ("rotaryFeed", 360., 1., 3600.),
+        ("rotaryFeed", 5000., 1., f64::MAX),
         ("rotaryYDistance", 10., 0.1, 100.),
         ("rotaryZDistance", 10., 0.1, 100.),
     ] {
@@ -186,6 +294,18 @@ mod tests {
         Mutex,
         atomic::{AtomicBool, Ordering},
     };
+
+    #[test]
+    fn feed_limits_use_all_linear_axes_and_the_rotary_axis() {
+        let mut settings = [(110, 3000.), (111, 1000.), (112, 2500.), (113, 600.)].into();
+        let limits = FeedLimits::from_settings(&settings).unwrap();
+        assert_eq!(limits.maximum("fineFeed"), Some(1000.));
+        assert_eq!(limits.maximum("rotaryFeed"), Some(600.));
+        settings.insert(112, 500.);
+        assert_eq!(FeedLimits::from_settings(&settings).unwrap().linear, 500.);
+        settings.remove(&113);
+        assert!(FeedLimits::from_settings(&settings).is_none());
+    }
 
     #[derive(Default)]
     struct Store {

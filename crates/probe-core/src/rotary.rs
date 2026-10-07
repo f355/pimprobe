@@ -66,7 +66,7 @@ impl Default for RotaryConfig {
             z_distance: 10.0,
             rod_diameter: 10.0,
             x_distance: 30.0,
-            rotary_feed: 360.0,
+            rotary_feed: 5000.0,
             diameter: 2.0,
             retract: 0.5,
             positioning_feed: 1000.0,
@@ -87,12 +87,12 @@ impl RotaryConfig {
             }
         };
         for (name, value, lo, hi) in [
-            ("rotary feed", self.rotary_feed, 1.0, 3600.0),
+            ("rotary feed", self.rotary_feed, 1.0, f64::MAX),
             ("probe diameter", self.diameter, 0.1, 20.0),
             ("backoff", self.retract, 0.1, 10.0),
-            ("positioning feed", self.positioning_feed, 1.0, 10000.0),
-            ("coarse feed", self.coarse_feed, 1.0, 1000.0),
-            ("fine feed", self.fine_feed, 1.0, 1000.0),
+            ("positioning feed", self.positioning_feed, 1.0, f64::MAX),
+            ("coarse feed", self.coarse_feed, 1.0, f64::MAX),
+            ("fine feed", self.fine_feed, 1.0, f64::MAX),
         ] {
             validate(name, value, lo, hi)?;
         }
@@ -249,6 +249,7 @@ async fn query_rotary_frame<C: Controller + ?Sized>(c: &C) -> Result<State, Erro
         !rotary_supported(&c.state().firmware_version),
         false,
         false,
+        false,
     ];
     tokio::time::timeout(Duration::from_secs(3), async {
         c.send("$#").await?;
@@ -262,6 +263,7 @@ async fn query_rotary_frame<C: Controller + ?Sized>(c: &C) -> Result<State, Erro
                 .is_some_and(|(selected, _)| selected == wcs);
             received[2] |= event.coordinate_offset.is_some();
             received[3] |= event.tool_length_offset.is_some();
+            received[4] |= event.probe.is_some();
         }
         Ok(c.state())
     })
@@ -501,9 +503,17 @@ async fn station<C: Controller + ?Sized>(
             ));
         }
         let apex = [original[0], crest_y, clearance_z, a];
-        move_tip(c, apex, config).await?;
-        for (index, angle) in [90.0, -90.0].into_iter().enumerate() {
-            track(c, center, apex, 0.0, angle, config, native).await?;
+        let first_from = if pass == 0 { 0.0 } else { -90.0 };
+        // Apply the refined clearance orbit at the side, without stopping at
+        // the crest between measurement pairs.
+        move_tip(
+            c,
+            orbit(center, apex, first_from, config.diameter / 2.0),
+            config,
+        )
+        .await?;
+        for (index, (from, angle)) in [(first_from, 90.0), (90.0, -90.0)].into_iter().enumerate() {
+            track(c, center, apex, from, angle, config, native).await?;
             let side_start = tip(&c.state());
             sides[index] = touch(
                 c,
@@ -515,21 +525,22 @@ async fn station<C: Controller + ?Sized>(
             )
             .await?;
             move_tip(c, side_start, config).await?;
-            track(c, center, apex, angle, 0.0, config, native).await?;
         }
         let reading = rotary_station(original[0], crest_y, crest_z, sides[1], sides[0])?;
         let refined = [reading.center[1], reading.center[2]];
         let error = (refined[0] - center[0]).hypot(refined[1] - center[1]);
-        center = refined;
         measured = Some(reading);
         if pass >= 1 && error < 0.003 {
+            track(c, center, apex, -90.0, 0.0, config, native).await?;
             break;
         }
         if pass == 3 && error >= 0.003 {
+            track(c, center, apex, -90.0, 0.0, config, native).await?;
             return Err(Error::Compensation(
                 "rotary center did not converge; check rod diameter and starting height".into(),
             ));
         }
+        center = refined;
     }
     Ok(measured.unwrap())
 }
@@ -607,6 +618,9 @@ async fn run_inner<C: Controller + ?Sized>(
         let mut p = tip(&c.state());
         p[2] = start[2];
         move_tip(c, p, config).await?;
+        comment(observe, "Return X to the first station");
+        p[0] = start[0];
+        move_tip(c, p, config).await?;
         Ok(())
     }
     .await;
@@ -634,19 +648,64 @@ pub async fn restore_rotary_state<C: Controller + ?Sized>(
     if rotary_supported(&plan.start.firmware_version) {
         write_rotary_rotation(c, plan.start.wcs, plan.start.wcs_rotation.unwrap()).await?;
     }
-    send_confirmed(c, &format!("G{}", plan.start.plane)).await?;
+    c.send(&format!("G{}", plan.start.plane)).await?;
+    query_modes(c).await?;
+    if c.state().plane != plan.start.plane {
+        return Err(Error::Controller("arc plane not confirmed".into()));
+    }
     set_modes(c, plan.start.modes).await
 }
 
-async fn send_confirmed<C: Controller + ?Sized>(c: &C, command: &str) -> Result<(), Error> {
+async fn write_coordinate_data<C: Controller + ?Sized>(
+    c: &C,
+    wcs: i32,
+    axes: &[(usize, f64)],
+    rotation: Option<f64>,
+) -> Result<(), Error> {
+    let mut command = format!("G10 L2 P{}", wcs - 53);
+    for &(axis, value) in axes {
+        command.push_str(&format!(" {}{value:.3}", ["X", "Y", "Z", "A"][axis]));
+    }
+    if let Some(angle) = rotation {
+        command.push_str(&format!(" R{angle:.6}"));
+    }
     let mut rx = c.subscribe();
     tokio::time::timeout(Duration::from_secs(3), async {
-        c.send(command).await?;
-        loop {
-            if receive(&mut rx).await?.acknowledged {
-                return Ok(());
+        c.send(&command).await?;
+        c.send("$#").await?;
+        let mut origin_received = axes.is_empty();
+        let mut rotation_received = rotation.is_none();
+        let mut probe_received = false;
+        while !origin_received || !rotation_received || !probe_received {
+            let event = receive(&mut rx).await?;
+            // $# ends with the stored probe result. Consume it before motion
+            // can mistake that historical result for its own contact.
+            probe_received |= event.probe.is_some();
+            if let Some((_, origin)) = event
+                .wcs_origin
+                .filter(|(selected, _)| *selected == wcs && !axes.is_empty())
+            {
+                if axes
+                    .iter()
+                    .any(|&(axis, value)| (origin[axis] - value).abs() > 0.0015)
+                {
+                    return Err(Error::Controller("work zero not confirmed".into()));
+                }
+                origin_received = true;
+            }
+            if let Some(((_, actual), expected)) = event
+                .wcs_rotation
+                .filter(|(selected, _)| *selected == wcs)
+                .zip(rotation)
+            {
+                let difference = (actual - expected + 180.0).rem_euclid(360.0) - 180.0;
+                if difference.abs() > 0.0015 {
+                    return Err(Error::Controller("work rotation not confirmed".into()));
+                }
+                rotation_received = true;
             }
         }
+        Ok(())
     })
     .await
     .map_err(|_| Error::Timeout)?
@@ -664,7 +723,7 @@ pub async fn write_rotary_rotation<C: Controller + ?Sized>(
             "this firmware does not support work-coordinate rotation".into(),
         ));
     }
-    send_confirmed(c, &format!("G10 L2 P{} R{angle:.6}", wcs - 53)).await
+    write_coordinate_data(c, wcs, &[], Some(angle)).await
 }
 pub async fn zero_rotary<C: Controller + ?Sized>(
     c: &C,
@@ -700,16 +759,8 @@ async fn write_rotary_zero<C: Controller + ?Sized>(
     let z = center[2] - state.coordinate_offset[2] - state.tool_length_offset;
     let modes = query_modes(c).await?;
     set_modes(c, Modes { units: 21, ..modes }).await?;
-    let rotation = if rotate {
-        format!(" R{angle:.6}")
-    } else {
-        String::new()
-    };
-    let write = send_confirmed(
-        c,
-        &format!("G10 L2 P{} Y{y:.3} Z{z:.3}{rotation}", result.wcs - 53,),
-    )
-    .await;
+    let write =
+        write_coordinate_data(c, result.wcs, &[(1, y), (2, z)], rotate.then_some(angle)).await;
     if !c.state().motion_blocked {
         set_modes(c, modes).await?;
     }
@@ -823,52 +874,78 @@ impl RotaryPlan {
             lines.push(
                 "; Refine rotated crest pairs until side heights converge (2 to 4 pairs)".into(),
             );
-            lines.push("; The following pair is repeated with the updated axis estimate".into());
-            for angle in [90_i32, -90] {
-                lines.push(format!(
-                    "G1 Z[{} - #<current_z>] F{}",
-                    self.start.position[2], c.positioning_feed
-                ));
+            lines.push("; First rotated crest pair".into());
+            lines.push(format!(
+                "G1 Z[{} - #<current_z>] F{}",
+                self.start.position[2], c.positioning_feed
+            ));
+            for (from, angle) in [(0_i32, 90_i32), (90, -90)] {
+                let rotation = angle - from;
                 lines.push(
                     "; Tracking deltas and feed use the estimated axis, ball radius and starting Z"
                         .into(),
                 );
                 if rotary_supported(&self.start.firmware_version) {
-                    lines.push(format!("G19 {} Y#<side_delta_y> Z#<side_delta_z> J#<axis_j> K#<axis_k> A{angle} F#<tracking_feed>",if angle>0 {"G3"} else {"G2"}));
+                    lines.push(format!("G19 {} Y#<side_delta_y> Z#<side_delta_z> J#<axis_j> K#<axis_k> A{rotation} F#<tracking_feed>",if rotation>0 {"G3"} else {"G2"}));
                 } else {
                     lines.push(format!(
                         "; {} coordinated 5-degree segments",
-                        angle.abs() / 5
+                        rotation.abs() / 5
                     ));
-                    for _ in 0..18 {
+                    for _ in 0..rotation.abs() / 5 {
                         lines.push(format!(
                             "G38.3 Y#<segment_y> Z#<segment_z> A{} F#<tracking_feed>",
-                            angle.signum() * 5
+                            rotation.signum() * 5
                         ));
                     }
                 }
                 lines.push("; #<side_start_y> := Y after tracking".into());
                 preview_touch(&mut lines, Axis::Y, if angle > 0 { 1 } else { -1 }, c);
-                lines.push("; Back off to clearance orbit, then track back to the crest".into());
+                lines.push("; Back off to clearance orbit".into());
                 lines.push(format!(
                     "G38.3 Y[#<side_start_y> - #<current_y>] F{}",
                     c.positioning_feed
                 ));
-                if rotary_supported(&self.start.firmware_version) {
-                    lines.push(format!("G19 {} Y#<return_y> Z#<return_z> J#<return_j> K#<return_k> A{} F#<tracking_feed>",if angle>0 {"G2"} else {"G3"},-angle));
-                } else {
-                    for _ in 0..18 {
-                        lines.push(format!(
-                            "G38.3 Y#<return_segment_y> Z#<return_segment_z> A{} F#<tracking_feed>",
-                            -angle.signum() * 5
-                        ));
-                    }
+            }
+            lines.push(
+                "; If another pair is needed, adjust the clearance orbit at this side".into(),
+            );
+            lines.push(format!(
+                "G38.3 Y#<refinement_delta_y> Z#<refinement_delta_z> F{}",
+                c.positioning_feed
+            ));
+            lines.push("; Cross directly to the first side for the next pair".into());
+            if rotary_supported(&self.start.firmware_version) {
+                lines.push("G19 G3 Y#<side_delta_y> Z#<side_delta_z> J#<axis_j> K#<axis_k> A180 F#<tracking_feed>".into());
+            } else {
+                for _ in 0..36 {
+                    lines.push("G38.3 Y#<segment_y> Z#<segment_z> A5 F#<tracking_feed>".into());
+                }
+            }
+            lines.push(
+                "; Repeat both side touches and the intervening half-turn with the refined axis"
+                    .into(),
+            );
+            lines.push("; After the final pair, track back to the crest".into());
+            if rotary_supported(&self.start.firmware_version) {
+                lines.push("G19 G3 Y#<return_y> Z#<return_z> J#<return_j> K#<return_k> A90 F#<tracking_feed>".into());
+            } else {
+                for _ in 0..18 {
+                    lines.push(
+                        "G38.3 Y#<return_segment_y> Z#<return_segment_z> A5 F#<tracking_feed>"
+                            .into(),
+                    );
                 }
             }
         }
         lines.push(format!(
             "G1 Z[{} - #<current_z>] F{}",
             self.start.position[2], c.positioning_feed
+        ));
+        lines.push("; Return X to the first station".into());
+        lines.push(format!(
+            "G38.3 X[{} - #<current_x>] F{}",
+            self.start.position[0], c.positioning_feed
         ));
         if rotary_supported(&self.start.firmware_version) {
             lines.push(format!(

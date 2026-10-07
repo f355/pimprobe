@@ -101,7 +101,7 @@ PageView {
             }
         }, function(error) {
             activeRequest = null;
-            if (!terminal || error) {
+            if (!terminal) {
                 phase = "failed";
                 failure = error || "Calibration connection ended without a result";
             }

@@ -31,6 +31,13 @@ impl ProbeApp {
     ) -> Result<RotaryReview, AppError> {
         let _guard = self.acquire()?;
         config.validate()?;
+        self.validate_feeds(&[
+            ("positioningFeed", config.positioning_feed),
+            ("coarseFeed", config.coarse_feed),
+            ("fineFeed", config.fine_feed),
+            ("rotaryFeed", config.rotary_feed),
+        ])
+        .await?;
         let session = self.device.session_id();
         self.device.configure_rotary(&config)?;
         let state = pimprobe_core::query_rotary_state(self.device.as_ref()).await?;
@@ -118,7 +125,11 @@ impl ProbeApp {
                 Err(mut error) => {
                     app.recover(&error).await;
                     let state = app.device.state();
-                    if state.connected && state.ready && !state.motion_blocked {
+                    if !matches!(error, Error::Preflight(_) | Error::InvalidConfig(_))
+                        && state.connected
+                        && state.ready
+                        && !state.motion_blocked
+                    {
                         match pimprobe_core::restore_rotary_state(app.device.as_ref(), &plan).await
                         {
                             Err(recovery) => {

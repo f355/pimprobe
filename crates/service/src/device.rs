@@ -180,6 +180,10 @@ impl Device {
                         (33, state.probe_offset[0]),
                         (34, state.probe_offset[1]),
                         (35, state.probe_offset[2]),
+                        (110, 12000.),
+                        (111, 9000.),
+                        (112, 6000.),
+                        (113, 7200.),
                     ]
                     .into(),
                     ..DeviceSnapshot::default()

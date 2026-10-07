@@ -635,6 +635,31 @@ TestCase {
         compare(flow.phase, "failed");
     }
 
+    function test_terminal_failure_survives_transport_error_data() {
+        return [{tag: "routine"}, {tag: "rotary"}, {tag: "repeatability"}];
+    }
+    function test_terminal_failure_survives_transport_error(data) {
+        var flow;
+        if (data.tag === "routine") {
+            flow = showRoutine();
+            flow.proceed();
+        } else if (data.tag === "rotary") {
+            flow = descendants(page, RotaryFlow)[0];
+            flow.showCalibration({operation: "axis"});
+            flow.proceed();
+        } else {
+            flow = descendants(page, RepeatabilityFlow)[0];
+            flow.showCheck();
+            flow.confirmPreparation();
+            flow.start();
+        }
+        client.events({type: "error", code: "failed", message: "Probe result timed out"});
+        client.finish("Service unavailable");
+        compare(flow.phase, "failed");
+        compare(flow.failure, "Probe result timed out");
+        flow.close();
+    }
+
     function test_retract_before_leaving_uses_host_signal() {
         page.requestExit();
         var buttons = descendants(host.Overlay.overlay, Button);

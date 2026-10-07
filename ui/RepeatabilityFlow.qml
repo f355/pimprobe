@@ -112,7 +112,7 @@ PageView {
             home: home, retract: retractEachTime
         }, handleEvent, function(error) {
             activeRequest = null;
-            if (error || !terminalReceived) {
+            if (!terminalReceived) {
                 failure = error || "Connection ended before the check finished";
                 phase = "failed";
             }

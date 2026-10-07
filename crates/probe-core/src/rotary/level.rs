@@ -205,23 +205,23 @@ pub(super) async fn zero<C: Controller + ?Sized>(
     let state = query_rotary_frame(c).await?;
     let a = result.center[3] - state.coordinate_offset[3];
     let linear = if result.operation == RotaryOperation::Horizontal {
-        format!(
-            "Z{:.3}",
-            result.center[2] - state.coordinate_offset[2] - state.tool_length_offset
+        (
+            2,
+            result.center[2] - state.coordinate_offset[2] - state.tool_length_offset,
         )
     } else {
-        format!(
-            "Y{:.3}",
+        (
+            1,
             y_origin_for_point(
                 &state,
                 [result.center[0], result.center[1], result.center[2]],
-                state.wcs_rotation.unwrap_or(0.)
-            )?
+                state.wcs_rotation.unwrap_or(0.),
+            )?,
         )
     };
     let modes = query_modes(c).await?;
     set_modes(c, Modes { units: 21, ..modes }).await?;
-    let write = send_confirmed(c, &format!("G10 L2 P{} A{a:.3} {linear}", wcs - 53)).await;
+    let write = write_coordinate_data(c, wcs, &[(3, a), linear], None).await;
     if !c.state().motion_blocked {
         set_modes(c, modes).await?;
     }

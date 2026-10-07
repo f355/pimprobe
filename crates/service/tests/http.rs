@@ -456,6 +456,59 @@ async fn settings_schema_matches_accepted_values() {
     assert_eq!(schema["insideDepth"]["minimum"], 0.1);
     assert_eq!(schema["centerDepth"]["minimum"], 0.1);
     assert_eq!(schema["centerXSearchDistance"]["maximum"], 1000.0);
+    assert_eq!(schema["positioningFeed"]["maximum"], 6000.0);
+    assert_eq!(schema["coarseFeed"]["maximum"], 6000.0);
+    assert_eq!(schema["fineFeed"]["maximum"], 6000.0);
+    assert_eq!(schema["rotaryFeed"]["maximum"], 7200.0);
+}
+
+#[tokio::test]
+async fn feed_settings_and_reviews_follow_machine_limits() {
+    let (_temp, _app, router) = app();
+    for (key, value) in [
+        ("positioningFeed", 6001.),
+        ("coarseFeed", 6001.),
+        ("fineFeed", 6001.),
+        ("rotaryFeed", 7201.),
+    ] {
+        assert_api_error(
+            &router,
+            "PATCH",
+            "/api/v1/settings",
+            json!({key: value}),
+            StatusCode::BAD_REQUEST,
+            "machine limit",
+        )
+        .await;
+    }
+    let mut config = config();
+    config["fineFeed"] = json!(6001.);
+    assert_api_error(
+        &router,
+        "POST",
+        "/api/v1/routine/review",
+        config,
+        StatusCode::BAD_REQUEST,
+        "machine limit",
+    )
+    .await;
+    assert_api_error(
+        &router,
+        "POST",
+        "/api/v1/rotary/review",
+        json!({"rotaryFeed":7201}),
+        StatusCode::BAD_REQUEST,
+        "machine limit",
+    )
+    .await;
+    let (code, body) = request(
+        &router,
+        "PATCH",
+        "/api/v1/settings",
+        json!({"coarseFeed":5000,"fineFeed":5000,"rotaryFeed":7000}),
+    )
+    .await;
+    assert_eq!(code, StatusCode::OK, "{body}");
 }
 
 #[tokio::test]

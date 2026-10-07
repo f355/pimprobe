@@ -454,6 +454,13 @@ impl Controller for MockController {
                 tool_length_offset: Some(inner.state.tool_length_offset),
                 ..Event::default()
             });
+            let _ = self.events.send(Event {
+                probe: Some(Contact {
+                    position: inner.state.position,
+                    success: false,
+                }),
+                ..Event::default()
+            });
             return Ok(());
         }
         if matches!(command, "G17" | "G18" | "G19") {

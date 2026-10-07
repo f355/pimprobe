@@ -51,7 +51,8 @@ TextField {
     inputMethodHints: Qt.ImhFormattedNumbersOnly
     background: Rectangle {
         color: Theme.field
-        border.color: field.activeFocus ? Theme.accentBright : Theme.fieldBorder
+        border.color: !field.acceptableInput ? Theme.danger
+                    : field.activeFocus ? Theme.accentBright : Theme.fieldBorder
         border.width: field.activeFocus ? 2 : 1
         radius: Theme.radius
     }

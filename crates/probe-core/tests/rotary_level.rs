@@ -16,6 +16,149 @@
 
 use pimprobe_core::*;
 
+struct ParsedController {
+    inner: MockController,
+    events: tokio::sync::broadcast::Sender<Event>,
+    relay: tokio::task::JoinHandle<()>,
+    ignore_writes: bool,
+}
+impl ParsedController {
+    fn new(inner: MockController, ignore_writes: bool) -> Self {
+        let mut input = inner.subscribe();
+        let (events, _) = tokio::sync::broadcast::channel(256);
+        let output = events.clone();
+        let relay = tokio::spawn(async move {
+            while let Ok(event) = input.recv().await {
+                if !event.acknowledged {
+                    let _ = output.send(event);
+                }
+            }
+        });
+        Self {
+            inner,
+            events,
+            relay,
+            ignore_writes,
+        }
+    }
+}
+impl Drop for ParsedController {
+    fn drop(&mut self) {
+        self.relay.abort();
+    }
+}
+#[async_trait]
+impl Controller for ParsedController {
+    fn state(&self) -> State {
+        self.inner.state()
+    }
+    fn subscribe(&self) -> tokio::sync::broadcast::Receiver<Event> {
+        self.events.subscribe()
+    }
+    async fn send(&self, command: &str) -> Result<(), Error> {
+        if self.ignore_writes && command.starts_with("G10 ") {
+            return Ok(());
+        }
+        self.inner.send(command).await
+    }
+}
+
+#[tokio::test]
+async fn rotary_writes_and_restoration_use_readback_without_acknowledgments() {
+    for version in ["1.0.35-a", "1.0.35+c0.test"] {
+        let (inner, config) = fixture(RotaryOperation::Horizontal, 8., version);
+        let machine = ParsedController::new(inner, false);
+        let before = machine.state();
+        let plan = review_rotary(before.clone(), config).unwrap();
+        let mut result = RotaryResult::default();
+        run_rotary(
+            &machine,
+            &plan,
+            &mut result,
+            CancellationToken::new(),
+            |_| {},
+        )
+        .await
+        .unwrap();
+        assert_eq!(machine.state().modes, before.modes);
+        assert_eq!(machine.state().plane, before.plane);
+        assert_eq!(machine.state().wcs_rotation, before.wcs_rotation);
+        zero_rotary(&machine, &result).await.unwrap();
+        assert_eq!(machine.state().modes, before.modes);
+        assert!(
+            (machine.state().wcs_origin.unwrap()[3] + before.coordinate_offset[3]
+                - result.level.unwrap().center[3])
+                .abs()
+                < 0.001
+        );
+    }
+}
+
+#[tokio::test]
+async fn coordinate_readback_waits_for_its_trailing_probe_report() {
+    struct Readback {
+        inner: MockController,
+        events: tokio::sync::broadcast::Sender<Event>,
+        requested: tokio::sync::Notify,
+    }
+    #[async_trait]
+    impl Controller for Readback {
+        fn state(&self) -> State {
+            self.inner.state()
+        }
+        fn subscribe(&self) -> tokio::sync::broadcast::Receiver<Event> {
+            self.events.subscribe()
+        }
+        async fn send(&self, command: &str) -> Result<(), Error> {
+            self.inner.send(command).await?;
+            if command == "$#" {
+                self.events
+                    .send(Event {
+                        wcs_rotation: Some((54, 0.0)),
+                        ..Event::default()
+                    })
+                    .unwrap();
+                self.requested.notify_one();
+            }
+            Ok(())
+        }
+    }
+    let (inner, _) = fixture(RotaryOperation::Horizontal, 8., "1.0.35+c0.test");
+    let c = std::sync::Arc::new(Readback {
+        inner,
+        events: tokio::sync::broadcast::channel(16).0,
+        requested: tokio::sync::Notify::new(),
+    });
+    let worker = c.clone();
+    let task = tokio::spawn(async move { write_rotary_rotation(worker.as_ref(), 54, 0.).await });
+    c.requested.notified().await;
+    tokio::task::yield_now().await;
+    assert!(
+        !task.is_finished(),
+        "coordinate readback returned before the rest of $#"
+    );
+    c.events
+        .send(Event {
+            probe: Some(Contact {
+                position: c.state().position,
+                success: false,
+            }),
+            ..Event::default()
+        })
+        .unwrap();
+    task.await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn rotary_rotation_rejects_a_write_that_did_not_take_effect() {
+    let (inner, _) = fixture(RotaryOperation::Horizontal, 8., "1.0.35+c0.test");
+    let machine = ParsedController::new(inner, true);
+    let error = write_rotary_rotation(&machine, 54, 0.).await.unwrap_err();
+    assert!(matches!(error, Error::Controller(_)), "{error}");
+    assert!(error.to_string().contains("work rotation not confirmed"));
+    assert_eq!(machine.state().wcs_rotation, Some(2.5));
+}
+
 fn fixture(operation: RotaryOperation, tilt: f64, version: &str) -> (MockController, RotaryConfig) {
     let mut state = MockController::new().state();
     state.probe_extended = true;

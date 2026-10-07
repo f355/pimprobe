@@ -8,6 +8,9 @@
 
 Distances are in millimeters and linear feeds are in millimeters per minute, even if the machine was in inch mode before probing.
 
+Linear feeds are limited to the lowest X/Y/Z maximum feed in the machine settings.
+Rotary feed is limited to the A-axis maximum feed. An invalid value has a red border.
+
 ## Probe ball diameter
 
 The diameter of the probe ball. The measured surface is corrected by half this value in the touch direction. A wrong diameter gives a wrong surface coordinate.

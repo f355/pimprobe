@@ -205,7 +205,7 @@ PageView {
             }
         }, function (error) {
             activeRequest = null;
-            if (!terminal || error) {
+            if (!terminal) {
                 phase = "failed";
                 failure = error || "Routine connection ended without a confirmed result";
             }

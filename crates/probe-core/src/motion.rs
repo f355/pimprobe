@@ -320,10 +320,11 @@ pub(crate) async fn execute<C: Controller + ?Sized>(
                 }
                 if !status.ready {
                     moving = true;
+                    final_position = None;
                 }
             }
             if let Some(contact) = e.probe {
-                if probe && moving {
+                if probe {
                     if contact.success {
                         if !s.no_error {
                             segment(s, start, contact.position)?;
@@ -345,7 +346,7 @@ pub(crate) async fn execute<C: Controller + ?Sized>(
                     inconsistent_ready = true;
                     continue;
                 }
-                if moving {
+                if moving || hit.is_some() || failed || !within(status.position, start, 0.0005) {
                     probe_ready = true;
                     final_position = Some(status.position);
                 }

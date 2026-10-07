@@ -171,8 +171,9 @@ pub struct Event {
 }
 
 /// The caller owns exclusive machine command access for the entire run.
-/// Subscribe before sending; publish moving status before a probe report and
-/// settled status after it. Losing events is a fatal synchronization error.
+/// Subscribe before sending; publish probe results and settled status in either
+/// order. Short moves may have no moving status. Losing events is a fatal
+/// synchronization error.
 #[async_trait]
 pub trait Controller: Send + Sync {
     fn state(&self) -> State;

@@ -347,6 +347,19 @@ impl ProbeApp {
         &self,
         patch: Map<String, Value>,
     ) -> Result<Map<String, Value>, AppError> {
+        let feeds: Vec<_> = patch
+            .iter()
+            .filter(|(key, _)| {
+                matches!(
+                    key.as_str(),
+                    "positioningFeed" | "coarseFeed" | "fineFeed" | "rotaryFeed"
+                )
+            })
+            .map(|(key, value)| (key.as_str(), value.as_f64().unwrap_or(f64::NAN)))
+            .collect();
+        if !feeds.is_empty() {
+            self.validate_feeds(&feeds).await?;
+        }
         let mut settings = self.settings.lock().await;
         settings.update(patch).map_err(|e| match e {
             SettingsError::Invalid(_) => AppError::invalid("settings", e.to_string()),
@@ -403,6 +416,12 @@ impl ProbeApp {
         let app = self;
         let _guard = app.acquire()?;
         let session = app.device.session_id();
+        app.validate_feeds(&[
+            ("positioningFeed", config.positioning_feed),
+            ("coarseFeed", config.coarse_feed),
+            ("fineFeed", config.fine_feed),
+        ])
+        .await?;
         app.device.configure(&config)?;
         let modes = pimprobe_core::query_modes(app.device.as_ref()).await?;
         let mut state = app.device.state();
@@ -437,6 +456,12 @@ impl ProbeApp {
         let guard = app.acquire()?;
         let values = app.settings.lock().await.snapshot();
         let settings = app.settings.lock().await.values().repeatability();
+        app.validate_feeds(&[
+            ("positioningFeed", settings.positioning_feed),
+            ("coarseFeed", settings.coarse_feed),
+            ("fineFeed", settings.fine_feed),
+        ])
+        .await?;
         options.validate()?;
         settings.validate()?;
         pimprobe_core::check_repeatability(app.device.as_ref(), &options, settings)?;

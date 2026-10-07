@@ -185,6 +185,7 @@ impl ProbeDevice for Device {
     fn snapshot(&self) -> DeviceSnapshot {
         DeviceSnapshot {
             connected: true,
+            settings: [(110, 12000.), (111, 9000.), (112, 6000.), (113, 7200.)].into(),
             ..Default::default()
         }
     }
@@ -284,6 +285,30 @@ async fn rotary_uses_host_ownership_and_keeps_results_when_history_fails() {
             .unwrap();
         assert!(result.zeroed);
     }
+}
+
+#[tokio::test]
+async fn rotary_position_change_rejects_run_without_controller_recovery() {
+    let (app, device, _) = app();
+    let review = app
+        .review_rotary(pimprobe_core::RotaryConfig::default())
+        .await
+        .unwrap();
+    device.mock.send("G21 G94 G91").await.unwrap();
+    device.mock.send("G1 Y0.6 F1000").await.unwrap();
+    let commands_before = device.mock.commands();
+    let mut run = app.run_rotary(Token { id: review.id }).await.unwrap();
+    let mut terminal = None;
+    while let Some(event) = run.recv().await {
+        terminal = Some(event);
+    }
+    let Some(OperationEvent::Error { code, message, .. }) = terminal else {
+        panic!("expected a rejected rotary review");
+    };
+    assert_eq!(code, "failed");
+    assert!(message.contains("machine position or calibration changed"));
+    assert_eq!(device.mock.commands(), commands_before);
+    assert!(!app.state().recovery_failed);
 }
 
 #[tokio::test]

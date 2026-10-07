@@ -226,4 +226,17 @@ TestCase {
         editor.accept()
         compare(accepted.count, 1)
     }
+    function test_invalid_value_border() {
+        editor.typeKey("2")
+        editor.typeKey("0")
+        editor.typeKey("0")
+        compare(field.background.border.color, Theme.danger)
+        editor.accept()
+        compare(editor.target, field)
+        editor.begin(field)
+        editor.typeKey("5")
+        compare(field.background.border.color, Theme.accentBright)
+        editor.accept()
+        compare(field.background.border.color, Theme.fieldBorder)
+    }
 }

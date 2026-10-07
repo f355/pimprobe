@@ -156,28 +156,81 @@ async fn coarse_uses_actual_stop_fine_uses_trigger_and_retract_uses_stop() {
 }
 
 #[tokio::test]
-async fn stale_probe_and_ready_before_motion_are_ignored() {
+async fn unchanged_ready_before_motion_is_ignored() {
     let mut events = good();
-    events[0].splice(0..0, [contact(-119.0, true), status(-119.0, true)]);
+    events[0].insert(0, status(-120.0, true));
     let c = Scripted::new(events);
     assert!(run_contact(&c, config(), timing()).await.is_ok());
 }
 
 #[tokio::test(start_paused = true)]
-async fn stale_ready_and_ack_alone_do_not_complete_probe() {
+async fn unchanged_ready_and_ack_alone_do_not_complete_probe() {
     let c = Scripted::new(vec![vec![
         Event {
             acknowledged: true,
             ..Event::default()
         },
-        contact(-118.0, true),
-        status(-118.0, true),
+        status(-120.0, true),
     ]]);
     assert_eq!(
         run_contact(&c, config(), timing()).await.unwrap_err(),
         Error::Timeout
     );
     assert_eq!(c.commands.lock().unwrap().len(), 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn fast_contacts_complete_without_moving_reports() {
+    for report_after_ready in [false, true] {
+        let mut replies = good();
+        for index in [0, 2] {
+            replies[index].remove(0);
+            if report_after_ready {
+                replies[index].swap(0, 1);
+            }
+            replies[index].insert(0, status(if index == 0 { -120.0 } else { -118.5 }, true));
+        }
+        let c = Scripted::new(replies);
+        let result = run_contact(&c, config(), timing()).await.unwrap();
+        assert_eq!(result.contact.position, pos(-118.0));
+        assert_eq!(result.final_position, pos(-118.46));
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn fast_coarse_miss_without_moving_report_is_reported() {
+    let c = Scripted::new(vec![vec![contact(-115.0, false), status(-115.0, true)]]);
+    assert_eq!(
+        run_contact(&c, config(), timing()).await.unwrap_err(),
+        Error::CoarseNoContact
+    );
+    assert_eq!(c.commands.lock().unwrap().len(), 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn fast_guarded_move_still_requires_a_no_contact_result() {
+    for success in [false, true] {
+        let c = Scripted::new(vec![
+            vec![contact(-115.0, success), status(-115.0, true)],
+            vec![status(-115.5, true)],
+        ]);
+        let result = run_guarded_move(
+            &c,
+            GuardedMoveConfig {
+                axis: Axis::X,
+                distance: 5.0,
+                feed: 1000.0,
+                retract_distance: 0.5,
+            },
+            timing(),
+        )
+        .await;
+        if success {
+            assert!(matches!(result, Err(Error::UnexpectedContact { .. })));
+        } else {
+            assert_eq!(result.unwrap().position, pos(-115.0));
+        }
+    }
 }
 
 #[tokio::test(start_paused = true)]

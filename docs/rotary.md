@@ -79,7 +79,7 @@ The result shows both axis centers in G53 and two angles:
 X origin. **Align XY**, available with community firmware, sets the WCS's XY
 rotation to the measured angle.
 
-The probe finishes above the second place, at the starting Z and A angle.
+The probe returns to the first X position, at the starting Z and A angle.
 Check clearance before jogging away or retracting it.
 
 <!-- guide-only -->

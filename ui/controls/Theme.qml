@@ -35,6 +35,7 @@ QtObject {
     readonly property color pressed: (style || defaults).pressed
     readonly property color divider: (style || defaults).divider
     readonly property color text: (style || defaults).text
+    readonly property color primaryText: (style || defaults).primaryText
     readonly property color textMuted: (style || defaults).textMuted
     readonly property color accent: (style || defaults).accent
     readonly property color accentPressed: (style || defaults).accentPressed

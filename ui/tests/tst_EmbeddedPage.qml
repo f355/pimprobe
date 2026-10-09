@@ -439,7 +439,7 @@ TestCase {
         compare(code.text, command);
         compare(code.wrapMode, TextEdit.NoWrap);
         compare(code.font.pixelSize, 18);
-        var scroll = descendants(flow, ScrollView)[0];
+        var scroll = descendants(flow, ScrollView).filter(function(item) { return item.visible; })[0];
         verify(scroll.contentWidth > scroll.availableWidth);
         scroll.contentItem.contentX = scroll.contentWidth - scroll.availableWidth;
         verify(scroll.contentItem.contentX > 0);

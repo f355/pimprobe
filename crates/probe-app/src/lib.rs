@@ -791,19 +791,12 @@ impl ProbeApp {
         let app = self.clone();
         let guard = app.acquire()?;
         let session = app.device.session_id();
-        let (plan, result) = app
+        let (mut plan, result) = app
             .reviews
             .lock()
             .await
             .take_completed(&token.id, session)
-            .ok_or_else(|| AppError::conflict("zero", "No unzeroed result available"))?;
-        if result.zeroed {
-            app.reviews
-                .lock()
-                .await
-                .finish(token.id, session, plan, result);
-            return Err(AppError::conflict("zero", "Work zero already set"));
-        }
+            .ok_or_else(|| AppError::conflict("zero", "No completed result available"))?;
         let result = tokio::spawn(async move {
             let _guard = guard;
             let updated = pimprobe_core::zero_result(
@@ -823,6 +816,7 @@ impl ProbeApp {
                     json!({"offsets":token.offsets,"message":error.to_string()}),
                 ));
             } else if let Ok(result) = &updated {
+                results::rebase_start(&mut plan.start, &app.device.state());
                 let saved = app.logs.action(
                     &token.id,
                     "work_zero",

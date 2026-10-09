@@ -27,6 +27,14 @@ ApplicationWindow {
     visible: true
     color: Theme.page
     title: "Probing"
+    palette.window: Theme.page
+    palette.base: Theme.field
+    palette.text: Theme.text
+    palette.windowText: Theme.text
+    palette.button: Theme.control
+    palette.buttonText: Theme.text
+    palette.highlight: Theme.accent
+    palette.highlightedText: Theme.primaryText
 
     HttpClient {
         id: http

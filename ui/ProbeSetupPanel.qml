@@ -24,11 +24,9 @@ ProbePanel {
     property Component settingsContribution
     signal utilitiesRequested
     parameters: Pages.setup
-    setup: true
     ColumnLayout {
-        anchors.centerIn: parent
-        width: parent.width - 28
-        spacing: 14
+        anchors.fill: parent
+        spacing: 12
         LabButton {
             text: "Utilities"
             Layout.fillWidth: true
@@ -40,5 +38,6 @@ ProbePanel {
             Layout.fillWidth: true
             sourceComponent: panel.settingsContribution
         }
+        Item { Layout.fillHeight: true }
     }
 }

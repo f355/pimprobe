@@ -278,7 +278,7 @@ async fn completed_measurement_can_zero_another_wcs_without_probing_again() {
     assert_eq!(device.state().position, position);
     let zero = app
         .zero(ZeroRequest {
-            id: review.id,
+            id: review.id.clone(),
             offsets: [0.0; 3],
         })
         .await
@@ -293,6 +293,42 @@ async fn completed_measurement_can_zero_another_wcs_without_probing_again() {
             .iter()
             .any(|s| s.starts_with("G10 L20 P2 "))
     );
+    for offset in [1.25, -2.0, 0.0] {
+        let updated = app
+            .zero(ZeroRequest {
+                id: review.id.clone(),
+                offsets: [0.0, 0.0, offset],
+            })
+            .await
+            .unwrap();
+        assert_eq!(updated.machine_point, measured.machine_point);
+        let state = device.state();
+        assert_eq!(state.position, position);
+        assert!(
+            (state.position[2]
+                - state.work_position[2]
+                - measured.machine_point[2].unwrap()
+                - offset)
+                .abs()
+                < 0.001
+        );
+    }
+    let result = app
+        .select_result_wcs(ResultWcsRequest {
+            id: review.id.clone(),
+            wcs: 56,
+        })
+        .await
+        .unwrap();
+    assert_eq!(result.machine_point, measured.machine_point);
+    app.zero(ZeroRequest {
+        id: review.id,
+        offsets: [0.0, 0.0, -1.0],
+    })
+    .await
+    .unwrap();
+    assert_eq!(device.state().position, position);
+    assert_eq!(device.state().wcs, 56);
 }
 
 #[tokio::test]

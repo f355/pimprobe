@@ -17,7 +17,7 @@
 use super::*;
 use pimprobe_core::{RotaryResult, RoutineResult, State};
 
-fn rebase_start(start: &mut State, state: &State) {
+pub(super) fn rebase_start(start: &mut State, state: &State) {
     start.wcs = state.wcs;
     start.work_position =
         std::array::from_fn(|i| start.position[i] - (state.position[i] - state.work_position[i]));

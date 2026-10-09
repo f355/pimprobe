@@ -119,29 +119,34 @@ Popup {
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
-        Rectangle {
+        PageHeader {
             Layout.fillWidth: true
             Layout.preferredHeight: Theme.headerHeight
-            color: Theme.header
+            title: "Software update"
+            uiFont: flow.uiFont
+            backEnabled: flow.phase !== "installing"
+            onBack: flow.close()
+        }
+        ColumnLayout {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            Layout.margins: 16
+            spacing: 12
             RowLayout {
-                anchors.fill: parent
-                BackButton {
-                    Layout.preferredWidth: Theme.headerHeight
-                    Layout.fillHeight: true
-                    enabled: flow.phase !== "installing"
-                    onClicked: flow.close()
-                }
+                Layout.fillWidth: true
+                spacing: 12
                 Label {
                     Layout.fillWidth: true
-                    text: "Software update"
-                    color: Theme.text
-                    font.pixelSize: 24
+                    text: "Installed: " + (flow.currentVersion || "—")
+                    color: Theme.textMuted
+                    font.pixelSize: 18
+                    wrapMode: Text.WordWrap
                 }
                 ProbeSwitch {
-                    Layout.preferredWidth: 270
-                    Layout.preferredHeight: 50
-                    Layout.rightMargin: 16
+                    Layout.preferredWidth: 360
+                    Layout.preferredHeight: 56
                     text: "Include development releases"
+                    font.pixelSize: 20
                     checked: flow.development
                     enabled: flow.phase !== "installing"
                     onClicked: {
@@ -149,18 +154,6 @@ Popup {
                         flow.reload();
                     }
                 }
-            }
-        }
-        ColumnLayout {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            Layout.margins: 18
-            spacing: 12
-            Label {
-                Layout.fillWidth: true
-                text: "Installed: " + flow.currentVersion
-                color: Theme.textMuted
-                font.pixelSize: 16
             }
             Label {
                 Layout.fillWidth: true
@@ -196,76 +189,40 @@ Popup {
                     color: Theme.text
                     font.pixelSize: 18
                     wrapMode: TextEdit.WordWrap
+                    padding: 16
                     background: Rectangle { color: Theme.panel; radius: 8 }
                 }
             }
             RowLayout {
-                Layout.alignment: Qt.AlignRight
+                Layout.fillWidth: true
+                spacing: 12
                 visible: flow.phase === "available" || flow.phase === "error"
+                Item { Layout.fillWidth: true }
                 LabButton {
                     visible: flow.phase === "error"
                     text: "Try again"
-                    font.pixelSize: 19
+                    Layout.preferredWidth: 232
+                    Layout.preferredHeight: 64
                     onClicked: flow.reload()
                 }
                 LabButton {
                     visible: flow.phase === "available"
                     text: "Install update"
                     primary: true
-                    font.pixelSize: 19
+                    Layout.preferredWidth: 232
+                    Layout.preferredHeight: 64
                     onClicked: installConfirmation.open()
                 }
             }
         }
     }
 
-    Dialog {
+    TouchDialog {
         id: installConfirmation
-        parent: Overlay.overlay
-        anchors.centerIn: parent
-        width: 590
-        height: 220
-        modal: true
         title: "Install update"
-        standardButtons: Dialog.NoButton
-        closePolicy: Popup.NoAutoClose
-        background: Rectangle {
-            color: Theme.panelRaised
-            border.color: Theme.divider
-            radius: 12
-        }
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: 18
-            spacing: 16
-            Label {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                text: "Make sure the machine is idle and the spindle is stopped. Install this update now?"
-                color: Theme.text
-                font.pixelSize: 21
-                wrapMode: Text.WordWrap
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-            }
-            RowLayout {
-                Layout.alignment: Qt.AlignHCenter
-                spacing: 12
-                LabButton {
-                    text: "Cancel"
-                    font.pixelSize: 20
-                    onClicked: installConfirmation.close()
-                }
-                LabButton {
-                    text: "Install"
-                    font.pixelSize: 20
-                    primary: true
-                    onClicked: {
-                        installConfirmation.close();
-                        flow.install();
-                    }
-                }
-            }
-        }
+        message: "Make sure the machine is idle and the spindle is stopped. Install this update now?"
+        acceptText: "Install"
+        font.family: flow.uiFont
+        onAccepted: flow.install()
     }
 }

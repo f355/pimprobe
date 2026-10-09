@@ -40,8 +40,8 @@ ProbeButton {
             var bottom = height * 0.70;
             var centerX = width / 2;
             var centerY = height / 2;
-            var probeX = control.zApproach ? centerX : centerX - control.xApproach * 8;
-            var probeY = control.zApproach ? centerY : centerY + control.yApproach * 8;
+            var probeX = control.zApproach ? centerX : centerX - control.xApproach * 14;
+            var probeY = control.zApproach ? centerY : centerY + control.yApproach * 14;
 
             context.fillStyle = Theme.panelRaised;
             context.fillRect(margin, margin, width - 2 * margin, height - 2 * margin);
@@ -87,13 +87,13 @@ ProbeButton {
             context.strokeStyle = Theme.text;
             context.lineWidth = 3;
             if (control.xApproach < 0)
-                Draw.arrow(context, probeX - 5, probeY, left + 3, probeY);
+                Draw.arrow(context, probeX - 5, probeY, left + 2, probeY);
             else if (control.xApproach > 0)
-                Draw.arrow(context, probeX + 5, probeY, right - 3, probeY);
+                Draw.arrow(context, probeX + 5, probeY, right - 2, probeY);
             if (control.yApproach > 0)
-                Draw.arrow(context, probeX, probeY - 5, probeX, top + 3);
+                Draw.arrow(context, probeX, probeY - 5, probeX, top + 2);
             else if (control.yApproach < 0)
-                Draw.arrow(context, probeX, probeY + 5, probeX, bottom - 3);
+                Draw.arrow(context, probeX, probeY + 5, probeX, bottom - 2);
 
             context.strokeStyle = Theme.text;
             Draw.crosshair(context, probeX, probeY);

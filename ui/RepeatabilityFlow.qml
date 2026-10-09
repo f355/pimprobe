@@ -42,6 +42,7 @@ PageView {
     property bool terminalReceived: false
     property bool stopRequested: false
     property bool streamStarted: false
+    property bool sourceVisible: false
     readonly property bool canStart: axes.some(function(a) { return a; }) && repetitions >= 1 && repetitions <= 100
     readonly property bool showingResults: phase === "running" || phase === "result" || phase === "failed"
     NumericEditor { id: editor }
@@ -56,6 +57,7 @@ PageView {
 
     function showCheck() {
         editor.cancel();
+        sourceVisible = false;
         phase = "prepare";
         failure = "";
         logText = "";
@@ -137,43 +139,56 @@ PageView {
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
-        Rectangle {
+        PageHeader {
             Layout.fillWidth: true
             Layout.preferredHeight: Theme.headerHeight
             visible: flow.showHeader
-            color: Theme.header
-            RowLayout {
-                anchors.fill: parent
-                BackButton {
-                    Layout.preferredWidth: Theme.headerHeight
-                    Layout.fillHeight: true
-                    enabled: flow.phase !== "running"
-                    onClicked: flow.close()
-                }
-                Label {
-                    Layout.fillWidth: true
-                    text: "Probe repeatability"
-                    font.pixelSize: 24
-                    color: Theme.text
-                }
-            }
+            title: "Probe repeatability"
+            detail: flow.showingResults ? flow.measurements.length + " / " + flow.repetitions + " runs" : ""
+            uiFont: flow.uiFont
+            backEnabled: flow.phase !== "running"
+            onBack: flow.close()
         }
         ColumnLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.margins: 16
             spacing: 12
-            Label {
+            RowLayout {
                 visible: flow.phase === "prepare"
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.margins: 16
-                text: "Home the machine with the L bracket installed. The probe uses machine coordinates (G53) to find the bracket walls and bed.\n\nLeave room for the probe to extend and clear the path to the bracket."
-                color: Theme.text
-                font.pixelSize: 24
-                wrapMode: Text.WordWrap
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
+                spacing: 32
+                InsideProbeButton {
+                    Layout.preferredWidth: 252
+                    Layout.preferredHeight: 252
+                    xApproach: -1
+                    yApproach: -1
+                    enabled: false
+                }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 20
+                    Label {
+                        text: "Before starting"
+                        color: Theme.text
+                        font.pixelSize: 26
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        text: "Home the machine with the L bracket installed. The probe uses machine coordinates (G53) to find the bracket walls and bed."
+                        color: Theme.text
+                        font.pixelSize: 20
+                        wrapMode: Text.WordWrap
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        text: "Leave room for the probe to extend and clear the path to the bracket."
+                        color: Theme.textMuted
+                        font.pixelSize: 20
+                        wrapMode: Text.WordWrap
+                    }
+                }
             }
             RowLayout {
                 visible: flow.phase === "options"
@@ -215,7 +230,8 @@ PageView {
                                 required property string modelData
                                 required property int index
                                 Layout.preferredWidth: 56
-                                Layout.preferredHeight: 52
+                                Layout.preferredHeight: 56
+                                padding: 8
                                 text: modelData
                                 font.pixelSize: 23
                                 checkable: true
@@ -280,13 +296,10 @@ PageView {
                     Item { Layout.fillHeight: true }
                 }
             }
-            Label {
+            MessageStrip {
                 visible: flow.failure.length > 0
                 Layout.fillWidth: true
                 text: flow.failure
-                color: Theme.warning
-                font.pixelSize: 18
-                wrapMode: Text.WordWrap
             }
             RowLayout {
                 visible: flow.showingResults
@@ -295,7 +308,8 @@ PageView {
                 spacing: 16
                 ScrollView {
                     id: logScroll
-                    Layout.preferredWidth: 270
+                    visible: flow.sourceVisible
+                    Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
                     TextArea {
@@ -304,15 +318,17 @@ PageView {
                         selectByMouse: false
                         wrapMode: TextEdit.NoWrap
                         font.family: flow.codeFont
-                        font.pixelSize: 15
+                        font.pixelSize: 18
+                        padding: 12
                         color: Theme.text
-                        background: Rectangle { color: Theme.control; radius: 10 }
+                        background: Rectangle { color: Theme.panel; radius: Theme.radius }
                     }
                 }
                 ColumnLayout {
+                    visible: !flow.sourceVisible
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    spacing: 4
+                    spacing: 2
                     Label {
                         text: flow.phase === "running" ? "G53 measurements (mm)" : "Deviation from mean (mm)"
                         color: Theme.text
@@ -320,7 +336,8 @@ PageView {
                     }
                     RowLayout {
                         Layout.fillWidth: true
-                        Label { text: "Run"; color: Theme.textMuted; font.pixelSize: 17; Layout.preferredWidth: 78 }
+                        Layout.rightMargin: 16
+                        Label { text: "Run"; color: Theme.textMuted; font.pixelSize: 17; Layout.preferredWidth: 108 }
                         Repeater {
                             model: ["X", "Y", "Z"]
                             Label {
@@ -340,14 +357,17 @@ PageView {
                         Layout.fillHeight: true
                         clip: true
                         model: flow.measurements
-                        ScrollBar.vertical: ScrollBar {}
+                        ScrollBar.vertical: ScrollBar {
+                            policy: ScrollBar.AlwaysOn
+                            visible: readings.contentHeight > readings.height + 0.5
+                        }
                         delegate: RowLayout {
                             id: reading
                             required property var modelData
                             required property int index
-                            width: readings.width
+                            width: readings.width - 16
                             height: 32
-                            Label { text: reading.index + 1; color: Theme.textMuted; font.pixelSize: 18; Layout.preferredWidth: 78 }
+                            Label { text: reading.index + 1; color: Theme.textMuted; font.pixelSize: 18; Layout.preferredWidth: 108 }
                             Repeater {
                                 model: reading.modelData
                                 Label {
@@ -371,7 +391,8 @@ PageView {
                             id: summary
                             required property var modelData
                             Layout.fillWidth: true
-                            Label { text: summary.modelData.label; color: Theme.textMuted; font.pixelSize: 17; Layout.preferredWidth: 78 }
+                            Layout.rightMargin: 16
+                            Label { text: summary.modelData.label; color: Theme.textMuted; font.pixelSize: 17; Layout.preferredWidth: 108 }
                             Repeater {
                                 model: flow.statistics
                                 Label {
@@ -391,6 +412,13 @@ PageView {
             }
             RowLayout {
                 Layout.fillWidth: true
+                spacing: 12
+                LabButton {
+                    visible: flow.showingResults
+                    text: flow.sourceVisible ? "Readings" : "Log"
+                    Layout.preferredWidth: 128
+                    onClicked: flow.sourceVisible = !flow.sourceVisible
+                }
                 Label {
                     Layout.fillWidth: true
                     text: flow.showingResults ?
@@ -399,12 +427,13 @@ PageView {
                         (flow.retractEachTime ? "Retract: yes" : "Retract: no") : ""
                     color: Theme.textMuted
                     font.pixelSize: 16
+                    wrapMode: Text.WordWrap
                 }
                 LabButton {
                     visible: !flow.showingResults
                     text: "Cancel"
                     Layout.preferredWidth: 140
-                    Layout.preferredHeight: 50
+                    Layout.preferredHeight: 56
                     font.pixelSize: 20
                     onClicked: flow.close()
                 }
@@ -413,7 +442,7 @@ PageView {
                     text: flow.phase === "prepare" ? "Fixture is ready" : flow.phase === "options" ? "Start check" : "Close"
                     enabled: flow.phase !== "options" || flow.canStart
                     Layout.preferredWidth: 180
-                    Layout.preferredHeight: 50
+                    Layout.preferredHeight: 56
                     font.pixelSize: 20
                     primary: flow.phase === "options"
                     onClicked: flow.phase === "prepare" ? flow.confirmPreparation() : flow.phase === "options" ? flow.start() : flow.close()
@@ -425,7 +454,7 @@ PageView {
                     enabled: flow.streamStarted && !flow.stopRequested
                     font.pixelSize: 20
                     Layout.preferredWidth: 180
-                    Layout.preferredHeight: 50
+                    Layout.preferredHeight: 56
                     onClicked: flow.stop()
                 }
             }

@@ -33,22 +33,13 @@ PageView {
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
-        Rectangle {
+        PageHeader {
             Layout.fillWidth: true
             Layout.preferredHeight: Theme.headerHeight
             visible: page.showHeader
-            color: Theme.header
-            BackButton {
-                width: Theme.headerHeight
-                height: parent.height
-                onClicked: page.close()
-            }
-            Label {
-                anchors.centerIn: parent
-                text: "Probe settings"
-                color: Theme.text
-                font.pixelSize: 24
-            }
+            title: "Probe settings"
+            uiFont: page.font.family
+            onBack: page.close()
         }
         Item {
             Layout.fillWidth: true

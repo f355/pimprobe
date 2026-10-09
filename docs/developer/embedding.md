@@ -49,6 +49,11 @@ and application exit handling.
 The client exposes `state`, `error`, their change signals and `refresh()`.
 `state` has the same fields as the standalone `/api/v1/state` response.
 
+`state.coordinates.probe` and `state.coordinates.spindle` each contain
+`machinePosition` and `workPosition` arrays in X/Y/Z/A order. Probe coordinates
+use the fixed probe calibration; spindle coordinates include the last known
+tool-length offset. A reference is `null` until its coordinates are available.
+
 `request(operation, arguments, callback)` calls back with
 `{ok: true, data: ...}` or `{ok: false, error: "..."}`. It returns an object with
 an `abort()` method. Callbacks may complete synchronously.
@@ -65,11 +70,21 @@ The page uses these operation names:
 | `probe.set`, `wcs.select` | Probe actuator and active work coordinates |
 | `routine.review`, `routine.run` | Review and execute a measurement |
 | `routine.zero`, `routine.return`, `routine.measured` | Actions on a completed result |
+| `routine.wcs` | Select a WCS for a completed result |
 | `rotary.review`, `rotary.run` | Review and execute rotary calibration or surface alignment |
-| `rotary.zero`, `rotary.rotation` | Save rotary zeros or XY alignment |
+| `rotary.zero`, `rotary.rotation` | Save rotary zeros or X/Y work-coordinate rotation |
+| `rotary.wcs` | Select a WCS for a rotary result |
 | `repeatability.run` | Repeated measurements |
 | `repeatability.stop` | End the repeatability check after the current movement or touch finishes |
 | `history.get`, `history.export`, `history.clear` | Measurement records and logs |
+| `history.open` | Reopen a saved ordinary or rotary result |
+| `history.wcs`, `history.zero`, `history.rotation` | Apply a reopened measurement |
+
+Result WCS requests take `{id, wcs}` and return the updated measurement.
+`history.open` takes `{id}` and returns `{entry, result, canApply}`. Use
+`entry.id` for its subsequent actions. Work-zero requests take `{id, offsets}`
+with three X/Y/Z offsets; rotary zeros and rotation use `{id}`. History actions
+return the updated result, and `canApply` indicates a completed measurement.
 
 `client/HttpClient.qml` maps these calls to the standalone HTTP API. The update
 page additionally uses `updates.check`, `updates.install` and `updates.status`.

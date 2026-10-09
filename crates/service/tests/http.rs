@@ -798,15 +798,14 @@ async fn review_run_stream_and_late_zero() {
     assert_eq!(result["zeroed"], true);
     assert_eq!(result["point"], terminal["result"]["point"]);
     assert_eq!(before, app.device.state().position);
-    assert_api_error(
-        &router,
-        "POST",
-        "/api/v1/routine/zero",
-        token.clone(),
-        StatusCode::CONFLICT,
-        "already set",
-    )
-    .await;
+    let origin = app.device.state().wcs_origin;
+    let (code, body) = request(&router, "POST", "/api/v1/routine/zero", token.clone()).await;
+    assert_eq!(code, StatusCode::OK, "{body}");
+    let repeated: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(repeated["zeroed"], true, "{body}");
+    assert_eq!(repeated["machinePoint"], result["machinePoint"]);
+    assert_eq!(app.device.state().wcs_origin, origin);
+    assert_eq!(app.device.state().position, before);
     assert_api_error(
         &router,
         "POST",
@@ -1238,7 +1237,7 @@ async fn failed_late_zero_attempt_cannot_be_replayed() {
         "/api/v1/routine/zero",
         token,
         StatusCode::CONFLICT,
-        "No unzeroed result",
+        "No completed result",
     )
     .await;
 }

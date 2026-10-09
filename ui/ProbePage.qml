@@ -37,7 +37,7 @@ Pane {
             checked: (page.machineState.status || {}).probeActuatorKnown === true && (page.machineState.status || {}).probeActuator !== 0
             enabled: page.machineState.connected && (page.machineState.status || {}).mode === "Ready" && (page.machineState.status || {}).probeActuatorKnown && !page.actuatorRequestPending && !page.machineState.actuatorPending && !page.interactionLocked()
             font.family: page.uiFontFamily
-            font.pixelSize: 15
+            font.pixelSize: 18
             contentItem: Label {
                 leftPadding: probeSwitch.indicator.width + probeSwitch.spacing
                 text: probeSwitch.text
@@ -96,6 +96,7 @@ Pane {
         })
     property string requestError: "Starting service"
     property string actionError: ""
+    readonly property var droCoordinates: (machineState.coordinates || {})[droReference.probeSelected ? "probe" : "spindle"] || ({})
     readonly property bool actuatorRequestPending: actuatorRequest.pending
     property bool exitAfterRetract: false
 
@@ -186,7 +187,7 @@ Pane {
     }
 
     function interactionLocked() {
-        return controlsLocked() || confirmDialog.phase === "running" || confirmDialog.zeroing || repeatabilityDialog.phase === "running" || rotaryDialog.phase === "running" || rotaryDialog.busy;
+        return controlsLocked() || confirmDialog.phase === "running" || confirmDialog.busy || repeatabilityDialog.phase === "running" || rotaryDialog.phase === "running" || rotaryDialog.busy;
     }
 
     function setProbeExtended(extended) {
@@ -283,62 +284,63 @@ Pane {
 
         RowLayout {
             anchors.fill: parent
+            anchors.leftMargin: 8
+            anchors.rightMargin: 16
             spacing: 8
 
             BackButton {
                 id: backButton
-                Layout.preferredWidth: Theme.headerHeight
+                Layout.preferredWidth: 48
                 Layout.fillHeight: true
                 onClicked: page.requestExit()
-            }
-
-            Loader {
-                Layout.preferredWidth: 158
-                Layout.preferredHeight: 56
-                sourceComponent: page.headerControls
             }
 
             Item {
                 Layout.fillWidth: true
             }
 
-            Repeater {
-                model: ["X", "Y", "Z"]
-                ColumnLayout {
-                    id: headerCoordinate
-                    required property string modelData
-                    required property int index
-                    Layout.preferredWidth: 112
-                    Layout.fillHeight: true
-                    spacing: 0
+            RowLayout {
+                Layout.fillHeight: true
+                spacing: 4
+                Repeater {
+                    model: ["X", "Y", "Z"]
+                    ColumnLayout {
+                        id: headerCoordinate
+                        required property string modelData
+                        required property int index
+                        Layout.preferredWidth: 136
+                        Layout.fillHeight: true
+                        spacing: 0
 
-                    Label {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        text: headerCoordinate.modelData + " " + page.coordinate((page.machineState.status || {}).workPosition, headerCoordinate.index)
-                        color: Theme.text
-                        font.family: page.monoFontFamily
-                        font.pixelSize: 22
-                        horizontalAlignment: Text.AlignRight
-                        verticalAlignment: Text.AlignBottom
-                    }
-                    Label {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        text: page.coordinate((page.machineState.status || {}).machinePosition, headerCoordinate.index)
-                        color: Theme.textMuted
-                        font.family: page.monoFontFamily
-                        font.pixelSize: 13
-                        horizontalAlignment: Text.AlignRight
-                        verticalAlignment: Text.AlignTop
+                        Label {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            text: headerCoordinate.modelData + " " + page.coordinate(page.droCoordinates.workPosition, headerCoordinate.index)
+                            color: Theme.text
+                            font.family: page.monoFontFamily
+                            font.pixelSize: 22
+                            horizontalAlignment: Text.AlignRight
+                            verticalAlignment: Text.AlignBottom
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            text: page.coordinate(page.droCoordinates.machinePosition, headerCoordinate.index)
+                            color: Theme.textMuted
+                            font.family: page.monoFontFamily
+                            font.pixelSize: 16
+                            horizontalAlignment: Text.AlignRight
+                            verticalAlignment: Text.AlignTop
+                        }
                     }
                 }
             }
 
             LabButton {
-                Layout.preferredWidth: 82
+                Layout.preferredWidth: 80
                 Layout.fillHeight: true
                 background: null
+                padding: 8
                 text: "G" + page.currentWcs()
                 font.family: page.uiFontFamily
                 font.pixelSize: 22
@@ -347,15 +349,24 @@ Pane {
                 onClicked: wcsPicker.open()
             }
 
+            CoordinateReferenceButton {
+                id: droReference
+                objectName: "droReference"
+                Layout.preferredWidth: 96
+                Layout.preferredHeight: 56
+                font.family: page.uiFontFamily
+            }
+
             LabButton {
                 id: helpButton
                 Layout.preferredWidth: 48
                 Layout.preferredHeight: 48
-                Layout.rightMargin: 14
+                Layout.rightMargin: 0
                 text: "?"
                 font.family: page.uiFontFamily
                 font.pixelSize: 25
                 font.bold: true
+                padding: 4
                 contentItem: Label {
                     text: helpButton.text
                     color: Theme.text
@@ -394,18 +405,13 @@ Pane {
             anchors.fill: parent
             spacing: 0
 
-            Rectangle {
+            PageHeader {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Theme.headerHeight
                 visible: page.showHeader
-                color: Theme.header
-
-                BackButton {
-                    anchors.left: parent.left
-                    width: Theme.headerHeight
-                    height: parent.height
-                    onClicked: wcsPicker.close()
-                }
+                title: "Work coordinates"
+                uiFont: page.uiFontFamily
+                onBack: wcsPicker.close()
             }
 
             Label {
@@ -420,10 +426,10 @@ Pane {
             GridLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.margins: 24
+                Layout.margins: 16
                 columns: 3
-                columnSpacing: 18
-                rowSpacing: 18
+                columnSpacing: 12
+                rowSpacing: 12
 
                 Repeater {
                     model: [54, 55, 56, 57, 58, 59]
@@ -465,26 +471,13 @@ Pane {
             anchors.fill: parent
             spacing: 0
 
-            Rectangle {
+            PageHeader {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Theme.headerHeight
                 visible: page.showHeader
-                color: Theme.header
-
-                BackButton {
-                    anchors.left: parent.left
-                    width: Theme.headerHeight
-                    height: parent.height
-                    onClicked: helpPage.close()
-                }
-
-                Label {
-                    anchors.centerIn: parent
-                    text: ["Outside", "Inside", "Center", "Rotary", "Settings"][page.helpIndex] + " help"
-                    color: Theme.text
-                    font.family: page.uiFontFamily
-                    font.pixelSize: 24
-                }
+                title: ["Outside", "Inside", "Center", "Rotary", "Settings"][page.helpIndex] + " help"
+                uiFont: page.uiFontFamily
+                onBack: helpPage.close()
             }
 
             ScrollView {
@@ -502,7 +495,7 @@ Pane {
                     font.family: page.uiFontFamily
                     font.pixelSize: 19
                     wrapMode: TextEdit.WordWrap
-                    padding: 28
+                    padding: 16
                     background: null
                 }
             }
@@ -547,6 +540,14 @@ Pane {
         showHeader: page.showHeader
         client: page.client
         uiFont: page.uiFontFamily
+        onResultRequested: function (opened) {
+            var details = historyDialog.detail(opened.entry);
+            historyDialog.close();
+            if (opened.entry.category === "rotary")
+                rotaryDialog.showHistory(opened, details);
+            else
+                confirmDialog.showHistory(opened, details);
+        }
     }
 
     ProbeSettingsPage {
@@ -584,98 +585,21 @@ Pane {
         }
     }
 
-    Dialog {
+    TouchDialog {
         id: exitDialog
-        Component.onCompleted: if ("popupType" in exitDialog) exitDialog.popupType = Popup.Item
-        parent: page
-        anchors.centerIn: parent
+        objectName: "exitDialog"
         font.family: page.uiFontFamily
-        width: 640
-        height: 230
-        modal: true
         title: "Probe extended"
-        standardButtons: Dialog.NoButton
-        closePolicy: Popup.NoAutoClose
-
-        header: Label {
-            text: exitDialog.title
-            padding: 12
-            elide: Text.ElideRight
-            color: Theme.text
-            font.family: page.uiFontFamily
-            font.pixelSize: 19
-            font.bold: true
-            background: Rectangle {
-                x: 1
-                y: 1
-                width: parent.width - 2
-                height: parent.height - 1
-                color: Theme.panelRaised
-            }
-        }
-
-        background: Rectangle {
-            color: Theme.panelRaised
-            border.color: Theme.divider
-            radius: 12
-        }
-
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: 18
-            spacing: 14
-
-            Label {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                text: page.exitAfterRetract ? "Retracting probe..." : "Retract the probe before leaving?"
-                horizontalAlignment: Text.AlignHCenter
-                color: Theme.text
-                font.family: page.uiFontFamily
-                font.pixelSize: 19
-                wrapMode: Text.WordWrap
-                verticalAlignment: Text.AlignVCenter
-            }
-            Label {
-                Layout.fillWidth: true
-                visible: page.actionError.length > 0
-                text: page.actionError
-                color: Theme.danger
-                font.pixelSize: 16
-            }
-            RowLayout {
-                Layout.alignment: Qt.AlignHCenter
-                spacing: 10
-                LabButton {
-                    text: "Cancel"
-                    font.pixelSize: 22
-                    Layout.preferredWidth: 152
-                    Layout.preferredHeight: 56
-                    enabled: !page.exitAfterRetract
-                    onClicked: {
-                        exitDialog.close();
-                        page.exitCancelled();
-                    }
-                }
-                LabButton {
-                    text: "Leave extended"
-                    font.pixelSize: 22
-                    Layout.preferredWidth: 208
-                    Layout.preferredHeight: 56
-                    enabled: !page.exitAfterRetract
-                    onClicked: page.leaveRequested()
-                }
-                LabButton {
-                    text: "Retract and exit"
-                    font.pixelSize: 22
-                    Layout.preferredWidth: 216
-                    Layout.preferredHeight: 56
-                    enabled: !page.exitAfterRetract
-                    primary: true
-                    onClicked: page.retractAndExit()
-                }
-            }
-        }
+        message: page.exitAfterRetract ? "Retracting probe..." : "Retract the probe before leaving?"
+        errorText: page.actionError
+        busy: page.exitAfterRetract
+        closeOnAccept: false
+        alternateText: "Leave extended"
+        acceptText: "Retract and exit"
+        onRejected: page.exitCancelled()
+        // Keep the prompt visible until retraction is confirmed.
+        onAlternate: page.leaveRequested()
+        onAccepted: page.retractAndExit()
     }
 
     Timer {
@@ -705,26 +629,44 @@ Pane {
             }
         }
 
-        TabBar {
-            id: tabs
-            onCurrentIndexChanged: numericEditor.cancel()
+        MessageStrip {
+            Layout.fillWidth: true
+            Layout.leftMargin: 16
+            Layout.rightMargin: 16
+            visible: !page.machineState.connected || page.actionError.length > 0
+            text: page.actionError || page.requestError || "Controller disconnected"
+            textColor: Theme.danger
+        }
+
+        RowLayout {
             Layout.fillWidth: true
             Layout.preferredHeight: 56
-            enabled: !page.interactionLocked()
-            background: Rectangle {
-                color: Theme.page
+            spacing: 8
+            Loader {
+                visible: page.showHeader
+                Layout.leftMargin: Theme.margin
+                Layout.preferredWidth: 140
+                Layout.preferredHeight: 56
+                sourceComponent: page.headerControls
             }
-
-            Repeater {
-                model: page.compactLayout ? ["Outside", "Inside", "Center", "Rotary"] : ["Outside", "Inside", "Center", "Rotary", "Settings"]
-                LabTabButton {
-                    id: tabButton
-                    required property string modelData
-                    implicitHeight: 56
-                    height: tabs.height
-                    text: modelData
-                    font.family: page.uiFontFamily
-                    font.pixelSize: 20
+            TabBar {
+                id: tabs
+                onCurrentIndexChanged: numericEditor.cancel()
+                Layout.fillWidth: true
+                Layout.preferredHeight: 56
+                enabled: !page.interactionLocked()
+                background: Rectangle {
+                    color: Theme.page
+                }
+                Repeater {
+                    model: page.compactLayout ? ["Outside", "Inside", "Center", "Rotary"] : ["Outside", "Inside", "Center", "Rotary", "Settings"]
+                    LabTabButton {
+                        required property string modelData
+                        implicitHeight: 56
+                        height: tabs.height
+                        text: modelData
+                        font.family: page.uiFontFamily
+                    }
                 }
             }
         }
@@ -743,8 +685,6 @@ Pane {
                     settings: page.settings
                     editor: numericEditor
                     parameters: Pages.outside
-                    roomy: true
-                    compact: page.compactLayout
                     ProbeGrid {
                         anchors.centerIn: parent
                         width: parent.width
@@ -759,8 +699,6 @@ Pane {
                     settings: page.settings
                     editor: numericEditor
                     parameters: Pages.inside
-                    roomy: true
-                    compact: page.compactLayout
                     ProbeGrid {
                         anchors.centerIn: parent
                         width: parent.width
@@ -775,8 +713,6 @@ Pane {
                     settings: page.settings
                     editor: numericEditor
                     parameters: Pages.center
-                    roomy: true
-                    compact: page.compactLayout
                     CenterGrid {
                         anchors.centerIn: parent
                         width: parent.width
@@ -790,8 +726,6 @@ Pane {
                     settings: page.settings
                     editor: numericEditor
                     parameters: Pages.rotary
-                    roomy: true
-                    compact: page.compactLayout
                     GridLayout {
                         anchors.fill: parent
                         columns: 2

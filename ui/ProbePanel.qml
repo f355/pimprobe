@@ -25,9 +25,6 @@ Item {
     required property ProbeSettings settings
     required property NumericEditor editor
     required property var parameters
-    property bool roomy: false
-    property bool setup: false
-    property bool compact: false
     property Component footer
     default property alias workContent: workArea.data
 
@@ -40,25 +37,13 @@ Item {
             id: workArea
             Layout.preferredWidth: Theme.columnWidth
             Layout.fillHeight: true
-            Rectangle {
-                anchors.fill: parent
-                color: Theme.panel
-                radius: Theme.radius
-                z: -1
-            }
         }
         Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Rectangle {
-                anchors.fill: parent
-                color: Theme.panel
-                radius: Theme.radius
-            }
             Flickable {
                 id: parameterScroll
                 anchors.fill: parent
-                anchors.margins: 14
                 clip: true
                 contentWidth: width
                 contentHeight: Math.max(height, parameterRows.implicitHeight)
@@ -66,13 +51,13 @@ Item {
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: ScrollBar {
                     id: parameterBar
-                    policy: parameterScroll.contentHeight > parameterScroll.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+                    visible: parameterScroll.contentHeight > parameterScroll.height + 0.5
+                    policy: ScrollBar.AlwaysOn
                 }
                 ColumnLayout {
                     id: parameterRows
                     width: parameterScroll.width - (parameterBar.visible ? 12 : 0)
-                    height: parameterScroll.contentHeight
-                    spacing: panel.compact ? 8 : panel.roomy ? 14 : panel.setup ? 8 : 6
+                    spacing: 12
                     Repeater {
                         model: panel.parameters
                         ParameterRow {
@@ -81,15 +66,11 @@ Item {
                             settings: panel.settings
                             editor: panel.editor
                             definition: modelData
-                            fieldHeight: panel.compact || panel.setup ? 56 : panel.roomy ? 62 : 50
-                            fieldWidth: panel.setup ? 100 : 130
-                            labelSize: panel.compact ? 20 : panel.roomy || panel.setup ? 18 : 17
-                            numberSize: panel.roomy ? 24 : panel.setup ? 23 : 22
+                            fieldHeight: 56
+                            fieldWidth: 112
+                            labelSize: 20
+                            numberSize: 24
                         }
-                    }
-                    Item {
-                        Layout.fillHeight: true
-                        visible: !panel.compact && !panel.setup
                     }
                     Loader {
                         Layout.fillWidth: true

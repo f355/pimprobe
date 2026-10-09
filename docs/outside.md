@@ -6,7 +6,7 @@
 
 ## Where to start
 
-Extend the probe with the top-row switch, then position the ball above the stock, near the edge or corner you want to measure. The arrows show the directions of the measuring strokes; the green dot marks the measured point.
+Extend the probe with the switch beside the tabs, then position the ball above the stock, near the edge or corner you want to measure. The arrows show the directions of the measuring strokes; the green dot marks the measured point.
 
 Tap a button to review the moves. Nothing moves until you press Proceed.
 

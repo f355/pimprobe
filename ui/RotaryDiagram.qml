@@ -20,6 +20,7 @@ import "ProbeDrawing.js" as Draw
 
 ProbeButton {
     diagramLabel: "Calibrate rotary axis"
+    caption: "Axis center"
     contentItem: ProbeDiagram {
         onPaint: {
             var c = getContext("2d");

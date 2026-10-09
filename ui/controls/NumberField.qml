@@ -48,6 +48,7 @@ TextField {
         top: field.maximum
     }
     horizontalAlignment: TextInput.AlignRight
+    font.pixelSize: 24
     inputMethodHints: Qt.ImhFormattedNumbersOnly
     background: Rectangle {
         color: Theme.field

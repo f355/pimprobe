@@ -24,7 +24,13 @@ PageView {
     id: flow
     required property var client
     property bool showHeader: true
-    signal alarmRequested()
+    signal alarmRequested
+    signal calibrationSaved(string message)
+    signal resultWcsRequested(int wcs)
+    onResultWcsRequested: function (wcs) {
+        selectResultWcs(wcs);
+    }
+    property bool historical: false
     property string uiFont
     property string codeFont
     property string phase: "review"
@@ -35,22 +41,34 @@ PageView {
     property bool simulated: false
     property var activeRequest: null
     property string requestedAction: ""
+    property bool sourceVisible: false
     property string operation: "axis"
     readonly property bool leveling: operation !== "axis"
     readonly property string zeroAxes: operation === "horizontal" ? "A/Z" : operation === "axis" ? "Y/Z" : "A/Y"
     readonly property string title: operation === "horizontal" ? "Level horizontal surface" : operation === "vertical" ? "Align vertical surface toward Y+" : operation === "verticalNegative" ? "Align vertical surface toward Y−" : "Calibrate rotary axis"
     readonly property bool busy: reviewRequest.pending || actionRequest.pending
-    ServiceRequest { id: reviewRequest; client: flow.client }
-    ServiceRequest { id: actionRequest; client: flow.client }
+    ServiceRequest {
+        id: reviewRequest
+        client: flow.client
+    }
+    ServiceRequest {
+        id: actionRequest
+        client: flow.client
+    }
 
     x: 0
     y: 0
     width: parent ? parent.width : 800
     height: parent ? parent.height : 480
     padding: 0
-    background: Rectangle { color: Theme.page }
+    font.family: uiFont
+    background: Rectangle {
+        color: Theme.page
+    }
 
     function showCalibration(config) {
+        historical = false;
+        sourceVisible = false;
         operation = config.operation || "axis";
         phase = "review";
         result = {};
@@ -58,7 +76,7 @@ PageView {
         failure = "";
         reviewID = "";
         open();
-        reviewRequest.send("rotary.review", config, function(reply) {
+        reviewRequest.send("rotary.review", config, function (reply) {
             if (!reply.ok || !reply.data) {
                 failure = reply.error || "Could not prepare calibration";
                 return;
@@ -68,20 +86,53 @@ PageView {
             simulated = reply.data.simulated;
         });
     }
+    function showHistory(opened, details) {
+        reviewRequest.cancel();
+        actionRequest.cancel();
+        historical = true;
+        operation = opened.entry.config.operation || "axis";
+        result = opened.result;
+        reviewID = opened.canApply ? opened.entry.id : "";
+        phase = "result";
+        failure = opened.entry.error || "";
+        text = details;
+        sourceVisible = false;
+        open();
+    }
+    function selectResultWcs(wcs) {
+        if (!reviewID || busy || phase !== "result")
+            return;
+        failure = "";
+        actionRequest.send(historical ? "history.wcs" : "rotary.wcs", {
+            id: reviewID,
+            wcs: wcs
+        }, function (reply) {
+            if (!reply.ok || !reply.data) {
+                failure = reply.error || "Could not select work coordinates";
+                return;
+            }
+            result = reply.data;
+            client.refresh();
+        });
+    }
     function append(message) {
         text += message + "\n";
-        Qt.callLater(function() {
+        Qt.callLater(function () {
             codeScroll.contentItem.contentY = Math.max(0, codeScroll.contentHeight - codeScroll.availableHeight);
         });
     }
     function proceed() {
-        if (!reviewID || busy) return;
+        if (!reviewID || busy)
+            return;
         phase = "running";
         text = "";
         var terminal = false;
-        activeRequest = client.stream("rotary.run", {id: reviewID}, function(event) {
+        activeRequest = client.stream("rotary.run", {
+            id: reviewID
+        }, function (event) {
             if (event.type === "progress") {
-                if (event.progress.kind === "script") append(event.progress.message);
+                if (event.progress.kind === "script")
+                    append(event.progress.message);
             } else if (event.type === "result") {
                 result = event.result;
                 phase = "result";
@@ -97,9 +148,10 @@ PageView {
                     phase = "failed";
                 }
                 terminal = true;
-                if (event.code === "controller_alarm") alarmRequested();
+                if (event.code === "controller_alarm")
+                    alarmRequested();
             }
-        }, function(error) {
+        }, function (error) {
             activeRequest = null;
             if (!terminal) {
                 phase = "failed";
@@ -108,71 +160,58 @@ PageView {
         });
     }
     function confirmAction(action) {
+        if (!reviewID || busy)
+            return;
         requestedAction = action;
         confirmation.open();
     }
     function applyAction() {
         confirmation.close();
         failure = "";
-        actionRequest.send("rotary." + requestedAction, {id: reviewID}, function(reply) {
+        actionRequest.send((historical ? "history." : "rotary.") + requestedAction, {
+            id: reviewID
+        }, function (reply) {
             if (!reply.ok || !reply.data) {
                 failure = reply.error || "Could not save calibration";
                 return;
             }
             result = reply.data;
-            append(requestedAction === "zero" ? "; " + zeroAxes + " work zero saved" : "; XY alignment saved");
+            calibrationSaved(requestedAction === "zero" ? "Work zero set" : "X/Y rotation set");
+            append(requestedAction === "zero" ? "; " + zeroAxes + " work zero saved" : "; X/Y work-coordinate rotation saved");
+            client.refresh();
         });
     }
     onClosed: {
         confirmation.close();
         reviewRequest.cancel();
         actionRequest.cancel();
-        if (activeRequest) activeRequest.abort();
+        if (activeRequest)
+            activeRequest.abort();
     }
 
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
-        Rectangle {
+        PageHeader {
             Layout.fillWidth: true
-            Layout.preferredHeight: 70
+            Layout.preferredHeight: Theme.headerHeight
             visible: flow.showHeader
-            color: Theme.header
-            RowLayout {
-                anchors.fill: parent
-                BackButton {
-                    Layout.preferredWidth: 70
-                    Layout.fillHeight: true
-                    enabled: flow.phase !== "running" && !flow.busy
-                    onClicked: flow.close()
-                }
-                Label {
-                    Layout.fillWidth: true
-                    text: flow.title
-                    color: Theme.text
-                    font.family: flow.uiFont
-                    font.pixelSize: 22
-                }
-                Label {
-                    Layout.rightMargin: 18
-                    text: flow.simulated ? "Simulation" : ""
-                    color: Theme.textMuted
-                    font.pixelSize: 18
-                }
-            }
+            title: flow.title
+            detail: flow.phase === "failed" ? "Failed" : flow.phase === "result" ? "Measured · G53" : flow.phase === "running" ? "Running" : flow.simulated ? "Simulation" : "Review"
+            uiFont: flow.uiFont
+            backEnabled: flow.phase !== "running" && !flow.busy
+            onBack: flow.close()
         }
         ColumnLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.margins: 14
-            spacing: 10
-            Label {
+            Layout.margins: 16
+            spacing: 12
+            MessageStrip {
                 Layout.fillWidth: true
                 visible: flow.failure.length > 0
                 text: flow.failure
-                color: Theme.danger
-                font.pixelSize: 17
-                wrapMode: Text.WordWrap
+                textColor: Theme.danger
             }
             RowLayout {
                 Layout.fillWidth: true
@@ -180,9 +219,9 @@ PageView {
                 spacing: 16
                 ScrollView {
                     id: codeScroll
+                    visible: flow.phase !== "result" || flow.sourceVisible
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    Layout.preferredWidth: flow.phase === "result" ? 310 : 760
                     clip: true
                     contentWidth: codeText.implicitWidth
                     TextArea {
@@ -195,77 +234,37 @@ PageView {
                         color: Theme.text
                         wrapMode: TextEdit.NoWrap
                         padding: 8
-                        background: Rectangle { color: Theme.panel; radius: 12 }
-                    }
-                }
-                ColumnLayout {
-                    visible: flow.phase === "result"
-                    Layout.preferredWidth: 420
-                    Layout.fillHeight: true
-                    spacing: 10
-                    Label {
-                        text: flow.leveling ? "Verified touches · G53" : "Axis centers · G53"
-                        color: Theme.text
-                        font.family: flow.uiFont
-                        font.pixelSize: 21
-                    }
-                    Repeater {
-                        model: flow.leveling ? ((flow.result.level || {}).touches || []) : (flow.result.stations || [])
-                        ColumnLayout {
-                            required property var modelData
-                            required property int index
-                            Layout.fillWidth: true
-                            spacing: 4
-                            Label {
-                                text: (flow.leveling ? "Touch " : "Station ") + (parent.index + 1)
-                                color: Theme.textMuted
-                                font.pixelSize: 18
-                            }
-                            Label {
-                                Layout.fillWidth: true
-                                text: ["X", "Y", "Z"].map(function(axis, i) {
-                                    var point = flow.leveling ? parent.modelData : parent.modelData.center;
-                                    return axis + " " + Number(point[i]).toFixed(3);
-                                }).join("   ")
-                                color: Theme.text
-                                font.family: flow.codeFont
-                                font.pixelSize: 18
-                                wrapMode: Text.WordWrap
-                            }
+                        background: Rectangle {
+                            color: Theme.panel
+                            radius: Theme.radius
                         }
                     }
-                    Label {
-                        text: flow.leveling ? "A correction  " + Number((flow.result.level || {}).correction || 0).toFixed(4) + "°"
-                            : "XY alignment  " + Number(flow.result.xyAngle || 0).toFixed(4) + "°"
-                        color: Theme.text
-                        font.pixelSize: 20
-                    }
-                    Label {
-                        text: flow.leveling ? "Remaining tilt  " + Number((flow.result.level || {}).residual || 0).toFixed(4) + "°"
-                            : "XZ slope  " + Number(flow.result.xzAngle || 0).toFixed(4) + "°"
-                        color: Theme.text
-                        font.pixelSize: 20
-                    }
-                    Label {
-                        Layout.fillWidth: true
-                        text: flow.zeroAxes + " zero: " + (flow.leveling ? "measured surface" : "station 1") + " · G" + flow.result.wcs +
-                              (flow.result.zeroed ? " · Saved" : "") +
-                              (flow.result.rotationApplied ? "\nXY alignment saved" : "")
-                        color: Theme.textMuted
-                        font.pixelSize: 18
-                        wrapMode: Text.WordWrap
-                    }
-                    Item { Layout.fillHeight: true }
+                }
+                RotaryResultView {
+                    visible: flow.phase === "result" && !flow.sourceVisible
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    flow: flow
                 }
             }
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 10
-                Item { Layout.fillWidth: true }
+                LabButton {
+                    visible: flow.phase === "result"
+                    text: flow.sourceVisible ? "Result" : flow.historical ? "Details" : "Log"
+                    Layout.preferredWidth: 96
+                    Layout.preferredHeight: 64
+                    onClicked: flow.sourceVisible = !flow.sourceVisible
+                }
+                Item {
+                    Layout.fillWidth: true
+                }
                 LabButton {
                     visible: flow.phase === "review"
                     text: "Cancel"
-                    Layout.preferredHeight: 56
+                    Layout.preferredHeight: 64
+                    Layout.preferredWidth: 144
                     font.pixelSize: 20
                     onClicked: flow.close()
                 }
@@ -274,24 +273,27 @@ PageView {
                     text: flow.busy ? "Preparing…" : "Proceed"
                     enabled: !flow.busy && flow.reviewID.length > 0
                     primary: true
-                    Layout.preferredHeight: 56
+                    Layout.preferredHeight: 64
+                    Layout.preferredWidth: 184
                     font.pixelSize: 20
                     onClicked: flow.proceed()
                 }
                 LabButton {
                     visible: flow.phase === "result"
                     text: "Set " + flow.zeroAxes + " zero"
-                    enabled: !flow.busy && !flow.result.zeroed
+                    enabled: !flow.busy && flow.reviewID.length > 0
                     primary: true
-                    Layout.preferredHeight: 56
+                    Layout.preferredHeight: 64
+                    Layout.preferredWidth: 232
                     font.pixelSize: 20
                     onClicked: flow.confirmAction("zero")
                 }
                 LabButton {
                     visible: flow.phase === "result" && !flow.leveling && flow.result.rotationSupported === true
-                    text: "Align XY"
-                    enabled: !flow.busy && !flow.result.rotationApplied
-                    Layout.preferredHeight: 56
+                    text: "Set X/Y rotation"
+                    enabled: !flow.busy && flow.reviewID.length > 0
+                    Layout.preferredHeight: 64
+                    Layout.preferredWidth: 216
                     font.pixelSize: 20
                     onClicked: flow.confirmAction("rotation")
                 }
@@ -299,45 +301,19 @@ PageView {
                     visible: flow.phase === "result" || flow.phase === "failed"
                     text: "Close"
                     enabled: !flow.busy
-                    Layout.preferredHeight: 56
+                    Layout.preferredHeight: 64
+                    Layout.preferredWidth: 144
                     font.pixelSize: 20
                     onClicked: flow.close()
                 }
             }
         }
     }
-    Dialog {
+    TouchDialog {
         id: confirmation
-        Component.onCompleted: if ("popupType" in confirmation) confirmation.popupType = Popup.Item
-        parent: flow
-        anchors.centerIn: parent
-        width: 590
-        height: 220
-        modal: true
-        closePolicy: Popup.NoAutoClose
-        background: Rectangle { color: Theme.panelRaised; radius: 12; border.color: Theme.divider }
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: 16
-            Label {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                text: flow.requestedAction === "zero"
-                    ? "Set G" + flow.result.wcs + " " + flow.zeroAxes + " zero " + (flow.leveling ? "to the measured surface and current A angle?" : "to station 1?")
-                    : "Set G" + flow.result.wcs + " XY rotation to " + Number(flow.result.xyAngle).toFixed(4) + "°?"
-                color: Theme.text
-                font.family: flow.uiFont
-                font.pixelSize: 22
-                wrapMode: Text.WordWrap
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-            }
-            RowLayout {
-                Layout.alignment: Qt.AlignHCenter
-                spacing: 14
-                LabButton { text: "Cancel"; font.pixelSize: 22; onClicked: confirmation.close() }
-                LabButton { text: "Apply"; font.pixelSize: 22; primary: true; onClicked: flow.applyAction() }
-            }
-        }
+        title: flow.requestedAction === "zero" ? "Set work zero" : "Set X/Y rotation"
+        message: flow.requestedAction === "zero" ? "Set G" + flow.result.wcs + " " + flow.zeroAxes + " zero " + (flow.leveling ? "to the measured surface and current A angle?" : "to the first measured axis center?") : "Set G" + flow.result.wcs + " X/Y rotation to " + Number(flow.result.xyAngle).toFixed(4) + "°?"
+        font.family: flow.uiFont
+        onAccepted: flow.applyAction()
     }
 }

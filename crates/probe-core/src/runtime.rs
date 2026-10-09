@@ -486,10 +486,10 @@ async fn write_zero<C: Controller + ?Sized>(
     let mut words = Vec::new();
     for a in p.axes() {
         let i = a.index();
-        let point = result.point[i]
+        let surface = result.machine_point[i]
             .filter(|v| v.is_finite())
-            .ok_or_else(|| Error::Compensation(format!("missing {a} result")))?;
-        let surface = point + p.start.position[i] - p.start.work_position[i] + offsets[i];
+            .ok_or_else(|| Error::Compensation(format!("missing {a} result")))?
+            + offsets[i];
         // G10 L20 takes tool-compensated WPos; the probe measurement is fixed in G53.
         let tool_offset = if a == Axis::Z {
             state.tool_length_offset
@@ -898,11 +898,10 @@ async fn zero_inner<C: Controller + ?Sized>(
         ));
     }
     if !result.settled
-        || result.zeroed
         || result.wcs != p.config.wcs
         || result.axes != p.axes().iter().map(ToString::to_string).collect::<Vec<_>>()
     {
-        return Err(Error::Preflight("no matching unzeroed result".into()));
+        return Err(Error::Preflight("no matching completed result".into()));
     }
     let state = c.state();
     p.check_state(&state, state.position)?;

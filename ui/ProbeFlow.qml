@@ -35,12 +35,16 @@ PageView {
     property string failure: ""
     readonly property bool reviewing: reviewRequest.pending
     ServiceRequest {
-        client: flow.client
         id: reviewRequest
+        client: flow.client
     }
     ServiceRequest {
-        client: flow.client
         id: zeroRequest
+        client: flow.client
+    }
+    ServiceRequest {
+        id: wcsRequest
+        client: flow.client
     }
     property var activeRequest: null
     property bool zeroed: false
@@ -49,35 +53,66 @@ PageView {
     property bool returning: false
     property bool positioning: false
     property real safeZOffset: 40
-    signal alarmRequested()
+    signal alarmRequested
     signal settingChanged(string key, var value)
     property string completedID: ""
     readonly property bool zeroing: zeroRequest.pending
+    readonly property bool busy: zeroing || wcsRequest.pending
+    property bool historical: false
     property string logText: ""
     property var result: []
     property var spans: [null, null, null]
     readonly property var dimensions: {
         var round = routine.feature === "boss" || routine.feature === "hole";
-        return [0, 1].filter(function(i) { return spans[i] !== null; }).map(function(i) {
+        return [0, 1].filter(function (i) {
+            return spans[i] !== null;
+        }).map(function (i) {
             var ridge = routine.feature === "y-ridge" || routine.feature === "y-valley";
             var label = round ? "Span " + ["X", "Y"][i] : i === 0 ? "Width X" : ridge ? "Width Y" : "Length Y";
-            return {label: label, value: spans[i]};
+            return {
+                label: label,
+                value: spans[i]
+            };
         });
     }
     property var machinePoint: [null, null, null]
     property var offsets: [0, 0, 0]
-    readonly property var measuredAxes: [0, 1, 2].filter(function (i) { return flow.result.length > i && flow.result[i] !== null; })
-    NumericEditor { id: resultEditor }
+    property bool sourceVisible: false
+    signal workZeroSaved
+    signal resultWcsRequested(int wcs)
+    onResultWcsRequested: function (wcs) {
+        selectResultWcs(wcs);
+    }
+    readonly property var measuredAxes: [0, 1, 2].filter(function (i) {
+        return flow.result.length > i && flow.result[i] !== null;
+    })
+    NumericEditor {
+        id: resultEditor
+    }
 
     function measuredPosition(axis) {
         return Number(machinePoint[axis]);
+    }
+
+    function measuredWorkPosition(axis) {
+        var state = client.state || {};
+        var reference = (state.coordinates || {}).spindle;
+        if (!reference || (state.status || {}).wcs !== routine.wcs)
+            return Number(result[axis]);
+        var angle = Number((state.wcsRotations || {})[routine.wcs] || 0) * Math.PI / 180;
+        var dx = machinePoint[0] === null ? 0 : machinePoint[0] - reference.machinePosition[0];
+        var dy = machinePoint[1] === null ? 0 : machinePoint[1] - reference.machinePosition[1];
+        if (axis === 0)
+            return reference.workPosition[0] + Math.cos(angle) * dx + Math.sin(angle) * dy;
+        if (axis === 1)
+            return reference.workPosition[1] - Math.sin(angle) * dx + Math.cos(angle) * dy;
+        return reference.workPosition[2] + machinePoint[2] - reference.machinePosition[2];
     }
 
     function setOffset(axis, value) {
         var updated = offsets.slice();
         updated[axis] = value;
         offsets = updated;
-        zeroed = false;
     }
     onPhaseChanged: {
         if (phase === "result" || phase === "failed")
@@ -90,12 +125,15 @@ PageView {
     width: parent ? parent.width : 800
     height: parent ? parent.height : 480
     padding: 0
+    font.family: uiFont
     background: Rectangle {
         color: Theme.page
     }
 
     function showRoutine(value) {
+        historical = false;
         routine = value;
+        sourceVisible = false;
         phase = "review";
         failure = "";
         logText = "";
@@ -115,6 +153,7 @@ PageView {
         safeZOffset = Number(value.safeZOffset);
         reviewRequest.cancel();
         zeroRequest.cancel();
+        wcsRequest.cancel();
         open();
         reviewRequest.send("routine.review", value, function (reply) {
             if (!reply.ok || !reply.data) {
@@ -124,6 +163,50 @@ PageView {
             program = reply.data.program;
             reviewID = reply.data.id;
             simulated = reply.data.simulated === true;
+        });
+    }
+
+    function showHistory(opened, details) {
+        reviewRequest.cancel();
+        zeroRequest.cancel();
+        wcsRequest.cancel();
+        resultEditor.cancel();
+        historical = true;
+        routine = Object.assign({}, opened.entry.config, {
+            wcs: opened.result.wcs
+        });
+        safeZOffset = Number(routine.safeZOffset || 40);
+        sourceVisible = false;
+        failure = opened.entry.error || "";
+        reviewID = "";
+        program = [];
+        logText = details;
+        offsets = ((opened.entry.workZero || {}).offsets || [0, 0, 0]).slice();
+        returning = false;
+        positioning = false;
+        acceptResult(opened.result, opened.canApply ? opened.entry.id : "");
+        open();
+    }
+
+    function selectResultWcs(wcs) {
+        if (!completedID || busy || phase !== "result")
+            return;
+        resultEditor.cancel();
+        failure = "";
+        var id = completedID;
+        wcsRequest.send(historical ? "history.wcs" : "routine.wcs", {
+            id: id,
+            wcs: wcs
+        }, function (reply) {
+            if (!reply.ok || !reply.data) {
+                failure = reply.error || "Could not select work coordinates";
+                return;
+            }
+            routine = Object.assign({}, routine, {
+                wcs: reply.data.wcs
+            });
+            acceptResult(reply.data, id);
+            client.refresh();
         });
     }
 
@@ -147,7 +230,8 @@ PageView {
     }
 
     function returnToStart() {
-        if (!completedID || zeroing || returned || phase !== "result") return;
+        if (!completedID || busy || historical || returned || phase !== "result")
+            return;
         resultEditor.cancel();
         var id = completedID;
         completedID = "";
@@ -155,9 +239,12 @@ PageView {
     }
 
     function goToMeasured() {
-        if (!completedID || zeroing || positioned || phase !== "result") return;
-        if (resultEditor.target) resultEditor.accept();
-        if (resultEditor.target) return;
+        if (!completedID || busy || historical || positioned || phase !== "result")
+            return;
+        if (resultEditor.target)
+            resultEditor.accept();
+        if (resultEditor.target)
+            return;
         var id = completedID;
         completedID = "";
         startMotion(id, "measured");
@@ -178,11 +265,15 @@ PageView {
         returning = action === "return";
         positioning = action === "measured";
         phase = "running";
-        if (action === "run") logText = "";
+        if (action === "run")
+            logText = "";
         failure = "";
         var terminal = false;
-        var body = {id: id};
-        if (positioning) body.safeZOffset = safeZOffset;
+        var body = {
+            id: id
+        };
+        if (positioning)
+            body.safeZOffset = safeZOffset;
         activeRequest = client.stream("routine." + action, body, function (event) {
             if (event.type === "progress") {
                 if (event.progress.kind === "script")
@@ -213,14 +304,16 @@ PageView {
     }
 
     function zeroResult() {
-        if (!completedID || zeroing || zeroed)
+        if (!completedID || busy)
             return;
-        if (resultEditor.target) resultEditor.accept();
-        if (resultEditor.target) return;
+        if (resultEditor.target)
+            resultEditor.accept();
+        if (resultEditor.target)
+            return;
         var id = completedID;
         completedID = "";
         failure = "";
-        zeroRequest.send("routine.zero", {
+        zeroRequest.send(historical ? "history.zero" : "routine.zero", {
             id: id,
             offsets: offsets.slice()
         }, function (reply) {
@@ -234,15 +327,19 @@ PageView {
             result = reply.data.point;
             zeroed = reply.data.zeroed;
             completedID = id;
+            workZeroSaved();
             appendLog("; G" + routine.wcs + " work zero confirmed");
+            client.refresh();
         });
     }
 
-    Component.onDestruction: if (activeRequest) activeRequest.abort()
+    Component.onDestruction: if (activeRequest)
+        activeRequest.abort()
     onClosed: {
         resultEditor.cancel();
         reviewRequest.cancel();
         zeroRequest.cancel();
+        wcsRequest.cancel();
         if (activeRequest && phase === "running")
             activeRequest.abort();
     }
@@ -250,35 +347,15 @@ PageView {
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
-        Rectangle {
+        PageHeader {
             Layout.fillWidth: true
             Layout.preferredHeight: Theme.headerHeight
             visible: flow.showHeader
-            color: Theme.header
-            RowLayout {
-                anchors.fill: parent
-                spacing: 8
-                BackButton {
-                    Layout.preferredWidth: Theme.headerHeight
-                    Layout.fillHeight: true
-                    enabled: flow.phase !== "running" && !flow.zeroing
-                    onClicked: flow.close()
-                }
-                Label {
-                    Layout.fillWidth: true
-                    text: flow.description
-                    color: Theme.text
-                    font.family: flow.uiFont
-                    font.pixelSize: 22
-                    wrapMode: Text.WordWrap
-                }
-                Label {
-                    Layout.rightMargin: 18
-                    text: flow.simulated ? "Simulation" : ""
-                    color: Theme.textMuted
-                    font.pixelSize: 18
-                }
-            }
+            title: flow.description
+            detail: flow.phase === "failed" ? "Failed" : flow.phase === "result" ? "Complete" : flow.phase === "running" ? "Running" : flow.simulated ? "Simulation" : "Review"
+            uiFont: flow.uiFont
+            backEnabled: flow.phase !== "running" && !flow.busy
+            onBack: flow.close()
         }
 
         ColumnLayout {
@@ -287,13 +364,10 @@ PageView {
             Layout.margins: 16
             spacing: 12
 
-            Label {
+            MessageStrip {
                 Layout.fillWidth: true
                 visible: flow.failure.length > 0 || flow.reviewing
                 text: flow.reviewing ? "Preparing routine..." : flow.failure
-                color: Theme.warning
-                font.pixelSize: 18
-                wrapMode: Text.WordWrap
             }
 
             RowLayout {
@@ -302,8 +376,8 @@ PageView {
                 spacing: Theme.groupSpacing
 
                 Item {
-                    Layout.fillWidth: flow.phase !== "result"
-                    Layout.preferredWidth: flow.phase === "result" ? Theme.columnWidth : -1
+                    visible: flow.phase !== "result" || flow.sourceVisible
+                    Layout.fillWidth: true
                     Layout.fillHeight: true
                     ScrollView {
                         id: logScroll
@@ -321,131 +395,35 @@ PageView {
                             font.pixelSize: 18
                             padding: 8
                             color: Theme.text
-                            background: Rectangle { color: Theme.control; radius: 10 }
+                            background: Rectangle {
+                                color: Theme.panel
+                                radius: Theme.radius
+                            }
                         }
-                    }
-                    NumericKeypad {
-                        anchors.fill: parent
-                        visible: resultEditor.target !== null
-                        onKeyPressed: function(key) { resultEditor.typeKey(key); }
-                        onAccepted: resultEditor.accept()
                     }
                 }
 
-                ColumnLayout {
-                    visible: flow.phase === "result"
+                ProbeResultView {
+                    visible: flow.phase === "result" && !flow.sourceVisible
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    spacing: flow.dimensions.length ? 8 : 5
-                    ColumnLayout {
-                        visible: flow.dimensions.length > 0
-                        Layout.fillWidth: true
-                        spacing: 2
-                        Repeater {
-                            model: flow.dimensions
-                            RowLayout {
-                                required property var modelData
-                                Layout.fillWidth: true
-                                Label {
-                                    text: modelData.label
-                                    Layout.fillWidth: true
-                                    font.pixelSize: 20
-                                    color: Theme.text
-                                }
-                                Label {
-                                    text: modelData.value.toFixed(3) + " mm"
-                                    font.pixelSize: 22
-                                    color: Theme.text
-                                }
-                            }
-                        }
-                    }
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Label {
-                            Layout.fillWidth: true
-                            text: "Measured \u00b7 G53"
-                            font.pixelSize: 20
-                            color: Theme.text
-                        }
-                        Label {
-                            Layout.preferredWidth: 132
-                            text: "Offset (mm)"
-                            font.pixelSize: 20
-                            horizontalAlignment: Text.AlignRight
-                            color: Theme.text
-                        }
-                    }
-                    Repeater {
-                        model: flow.measuredAxes
-                        RowLayout {
-                            required property int modelData
-                            Layout.fillWidth: true
-                            spacing: 8
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: 0
-                                Label {
-                                    Layout.fillWidth: true
-                                    text: ["X", "Y", "Z"][modelData] + "  " + flow.measuredPosition(modelData).toFixed(3)
-                                    font.family: flow.uiFont
-                                    font.pixelSize: 26
-                                    color: Theme.text
-                                }
-                                Label {
-                                    Layout.fillWidth: true
-                                    text: "G" + flow.routine.wcs + " zero at G53 " + (flow.measuredPosition(modelData) + flow.offsets[modelData]).toFixed(3)
-                                    font.pixelSize: 18
-                                    wrapMode: Text.WordWrap
-                                    color: Theme.textMuted
-                                }
-                            }
-                            NumberField {
-                                enabled: !flow.zeroing && !flow.zeroed && flow.completedID.length > 0
-                                editor: resultEditor
-                                minimum: -1000
-                                maximum: 1000
-                                value: flow.offsets[modelData]
-                                onCommitted: function(value) { flow.setOffset(modelData, value); }
-                                Layout.preferredWidth: 132
-                                Layout.preferredHeight: flow.dimensions.length ? 54 : 58
-                                font.pixelSize: 26
-                            }
-                        }
-                    }
-                    Item { Layout.fillHeight: true }
-                    RowLayout {
-                        visible: flow.routine.family === "inside" && !flow.routine.z
-                        Layout.fillWidth: true
-                        Label {
-                            Layout.fillWidth: true
-                            text: "Safe Z offset"
-                            color: Theme.text
-                            font.pixelSize: 20
-                        }
-                        NumberField {
-                            editor: resultEditor
-                            minimum: 0.1
-                            maximum: 1000
-                            value: flow.safeZOffset
-                            onCommitted: function(value) {
-                                flow.safeZOffset = value;
-                                flow.settingChanged("safeZOffset", value);
-                            }
-                            Layout.preferredWidth: 132
-                            Layout.preferredHeight: 54
-                            font.pixelSize: 24
-                        }
-                    }
-                    Label {
-                        text: flow.zeroed ? "Work zero set" : "Work zero was not changed"
-                        color: flow.zeroed ? Theme.accentBright : Theme.text
-                        font.pixelSize: 18
-                    }
+                    flow: flow
+                    editor: resultEditor
                 }
             }
             RowLayout {
                 Layout.fillWidth: true
+                spacing: 12
+                LabButton {
+                    visible: flow.phase === "result"
+                    text: flow.sourceVisible ? "Result" : flow.historical ? "Details" : "Log"
+                    Layout.preferredWidth: 96
+                    onClicked: {
+                        resultEditor.cancel();
+                        flow.sourceVisible = !flow.sourceVisible;
+                        Qt.callLater(flow.scrollLogToEnd);
+                    }
+                }
                 Item {
                     Layout.fillWidth: true
                 }
@@ -460,27 +438,27 @@ PageView {
                 LabButton {
                     text: "Set Work Zero"
                     visible: flow.phase === "result"
-                    enabled: !flow.zeroing && !flow.zeroed && flow.completedID.length > 0
-                    Layout.preferredWidth: 190
+                    enabled: !flow.busy && flow.completedID.length > 0
+                    Layout.preferredWidth: 184
                     Layout.preferredHeight: 56
                     font.pixelSize: 20
                     primary: true
                     onClicked: flow.zeroResult()
                 }
                 LabButton {
-                    text: "Go to starting position"
-                    visible: flow.phase === "result" && (flow.routine.family !== "inside" || flow.routine.z)
-                    enabled: !flow.zeroing && !flow.returned && flow.completedID.length > 0
-                    Layout.preferredWidth: 280
+                    text: "Return to start"
+                    visible: flow.phase === "result" && !flow.historical && (flow.routine.family !== "inside" || flow.routine.z)
+                    enabled: !flow.busy && !flow.returned && flow.completedID.length > 0
+                    Layout.preferredWidth: 208
                     Layout.preferredHeight: 56
                     font.pixelSize: 20
                     onClicked: flow.returnToStart()
                 }
                 LabButton {
-                    text: "Go to measured point"
-                    visible: flow.phase === "result" && flow.routine.family === "inside" && !flow.routine.z
-                    enabled: !flow.zeroing && !flow.positioned && flow.completedID.length > 0
-                    Layout.preferredWidth: 240
+                    text: "Move to measured XY"
+                    visible: flow.phase === "result" && !flow.historical && flow.routine.family === "inside" && !flow.routine.z
+                    enabled: !flow.busy && !flow.positioned && flow.completedID.length > 0
+                    Layout.preferredWidth: 244
                     Layout.preferredHeight: 56
                     font.pixelSize: 20
                     onClicked: flow.goToMeasured()
@@ -488,7 +466,7 @@ PageView {
                 LabButton {
                     visible: flow.phase !== "running"
                     text: flow.phase === "review" ? "Proceed" : "Close"
-                    enabled: !flow.zeroing && (flow.phase !== "review" || (flow.reviewID.length > 0 && !flow.reviewing))
+                    enabled: !flow.busy && (flow.phase !== "review" || (flow.reviewID.length > 0 && !flow.reviewing))
                     Layout.preferredWidth: 140
                     Layout.preferredHeight: 56
                     font.pixelSize: 20

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="720" viewBox="0 0 960 720" role="img" aria-labelledby="title desc">
-<title id="title">Rotary axis calibration: two stations and rotated crest measurements</title>
-<desc id="desc">Top view of a rod held in a chuck, with two measuring stations separated by X distance. End views show the initial side touches, the true crest touch, and the same crest rotated to each side to find the rotary center.</desc>
+<title id="title">Rotary axis calibration: two axis centers and rotated crest measurements</title>
+<desc id="desc">Top view of a rod held in a chuck, with two measured axis centers separated by X distance. End views show the initial side touches, the true crest touch, and the same crest rotated to each side to find the rotary center.</desc>
 <defs>
   <path id="arrow" d="M-14-6L0 0L-14 6Z" fill="#343a3e"/>
   <path id="dimension" d="M-8-4L0 0L-8 4Z" fill="#343a3e"/>
@@ -17,7 +17,7 @@
   <path d="M180 164H887" stroke="#929a9f" stroke-dasharray="7 6"/>
   <path d="M315 124V205M705 124V205" stroke="#555d62" stroke-dasharray="4 4"/>
   <use href="#start" x="315" y="164"/><use href="#start" x="705" y="164"/>
-  <text x="264" y="231">First station</text><text x="642" y="231">Second station</text>
+  <text x="264" y="231">First axis center</text><text x="642" y="231">Second axis center</text>
   <path d="M315 105H705" stroke="#343a3e" stroke-width="1.5"/>
   <use href="#dimension" transform="translate(315 105) rotate(180)"/><use href="#dimension" transform="translate(705 105)"/>
   <text x="462" y="94">X distance</text>
@@ -27,7 +27,7 @@
   <use href="#dimension" transform="translate(908 218)"/><use href="#dimension" transform="translate(850 192) rotate(-90)"/>
   <text x="913" y="224">X+</text><text x="837" y="186">Y+</text>
   <path d="M24 283H936" stroke="#d4d8db"/>
-  <text x="24" y="320" font-size="21">At each station, looking along X</text>
+  <text x="24" y="320" font-size="21">At each measuring point, looking along X</text>
   <text x="24" y="351">1. Find the Y midpoint</text>
   <text x="342" y="351">2. Touch the true crest</text>
   <text x="661" y="351">3. Rotate that crest to each side</text>
@@ -66,7 +66,7 @@
   <text x="674" y="598" font-size="14">Radius = half the side span</text>
   <text x="674" y="619" font-size="14">Y center = midpoint of side touches</text>
   <text x="674" y="640" font-size="14">Z center = top Z − radius</text>
-  <text x="24" y="677" font-size="16">Repeat at the second station. The two centers give XY alignment and XZ slope.</text>
+  <text x="24" y="677" font-size="16">Repeat at the second point. The two centers give the axis angles in X/Y and X/Z.</text>
   <text x="24" y="704" fill="#626a70" font-size="14">White crosshair: probe start · Red dots: surface touches · Green crosshair: axis center · Schematic, not to scale</text>
 </g>
 </svg>

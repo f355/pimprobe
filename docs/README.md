@@ -8,7 +8,7 @@ Use the probe to find an edge, corner, surface or center, then set work zero fro
 
 1. Home the machine, stop the spindle and secure the stock.
 2. Open probing with the probe-ball button beside Wi-Fi.
-3. Leave room for the probe to extend, then use the top-row switch.
+3. Leave room for the probe to extend, then use the switch beside the tabs.
 4. Check **Settings**, especially the ball diameter and feeds. Position the ball with the machine's controls or MPG.
 5. Choose a tab and enter the distances for your feature. Use the guides below to check the starting position.
 6. Tap the picture of the surface or feature you want. Check the moves, then press **Proceed**.
@@ -29,6 +29,8 @@ In the button pictures, the crosshair is the starting position of the probe ball
 ## Top row
 
 The large coordinates are relative to the selected work zero. The smaller numbers below them are machine coordinates (G53).
+
+Choose **Probe** to read the probe ball position, or **Tool** to read the tool tip with the last known tool-length offset.
 
 Tap the **G54** (or other G-number) to choose a work coordinate system. Each one has its own zero. Check this before probing: it is the coordinate system the results page will set.
 

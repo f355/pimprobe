@@ -21,5 +21,6 @@ Canvas {
     antialiasing: true
     onWidthChanged: requestPaint()
     onHeightChanged: requestPaint()
+    onVisibleChanged: if (visible) requestPaint()
     Component.onCompleted: requestPaint()
 }

@@ -78,7 +78,8 @@ The socket framing is documented in
 [`docs/developer/controller-bridge.md`](docs/developer/controller-bridge.md).
 
 See [embedding](docs/developer/embedding.md) for the Rust host interfaces and
-the reusable QML page.
+the reusable QML page, and [UI guidelines](docs/developer/ui.md) for layouts
+and shared controls.
 
 Parameter ranges are defined in `crates/probe-core/src/parameters.rs` and
 exposed at `/api/v1/settings/schema`. Deploy the UI and service together

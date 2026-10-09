@@ -322,15 +322,15 @@ TestCase {
         var overlay = probeWindow.contentItem.parent
         var prompt
         tryVerify(function() {
-            prompt = descendants(overlay, Label).filter(function(label) {
+            prompt = descendants(overlay, TextArea).filter(function(label) {
                 return label.visible && label.text === "Retract the probe before leaving?"
             })[0]
             return prompt !== undefined
         })
         try {
-            var panel = prompt.parent
-            while (panel && !(panel.width === 640 && panel.height === 230)) panel = panel.parent
-            verify(panel !== null, "Exit dialog panel exists")
+            var dialog = findChild(probeWindow.page, "exitDialog")
+            verify(dialog !== null, "Exit dialog exists")
+            var panel = dialog.contentItem.parent
             var position = panel.mapToItem(overlay, 0, 0)
             verify(Math.abs(position.x + panel.width / 2 - overlay.width / 2) <= 1,
                    "Exit dialog is horizontally centered in the window")
@@ -409,8 +409,10 @@ TestCase {
             }), label + " is available in Utilities")
         }
         var toolPosition = repeatability.mapToItem(utilitiesPanel, 0, 0)
-        verify(toolPosition.y + repeatability.height >= utilitiesPanel.height - 20,
-               "Repeatability stays at the bottom of Utilities")
+        verify(toolPosition.x >= 16 && toolPosition.y >= 64
+            && toolPosition.x + repeatability.width <= utilitiesPanel.width - 16
+            && toolPosition.y + repeatability.height <= utilitiesPanel.height - 16,
+            "Repeatability fits within the Utilities margins")
         mouseClick(repeatability)
         var flow = contentObject(RepeatabilityFlow)
         verify(flow !== null)
@@ -461,7 +463,17 @@ TestCase {
         tryVerify(function() { return history.entries.length > 0 }, 3000)
         compare(history.entries[0].status, "success")
         compare(history.entries[0].label, "Z surface")
-        history.close()
+        mouseClick(findChild(history, "historyOpenResult"))
+        var resultPage = contentObject(ProbeFlow)
+        tryVerify(function() { return resultPage.opened && resultPage.historical }, 3000)
+        compare(resultPage.machinePoint, terminal.result.machinePoint)
+        verify(resultPage.completedID.length > 0)
+        resultPage.setOffset(2, -2)
+        resultPage.zeroResult()
+        tryVerify(function() { return !resultPage.zeroing }, 3000)
+        compare(resultPage.failure, "")
+        verify(resultPage.zeroed)
+        resultPage.close()
         panel.closed()
     }
 

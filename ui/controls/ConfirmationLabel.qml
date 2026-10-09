@@ -17,28 +17,26 @@
 import QtQuick
 import QtQuick.Controls
 
-TabButton {
-    id: control
-    font.pixelSize: Theme.textSize
-    padding: 6
+Label {
+    id: label
+    property string heading
+    property string confirmation: ""
+    text: confirmation || heading
+    color: confirmation ? Theme.accentBright : Theme.text
+    font.pixelSize: 22
+    elide: Text.ElideRight
 
-    contentItem: Label {
-        text: control.text
-        font: control.font
-        color: control.checked ? Theme.text : Theme.textMuted
-        horizontalAlignment: Text.AlignHCenter
-        verticalAlignment: Text.AlignVCenter
+    function confirm(message) {
+        confirmation = message;
+        timeout.restart();
     }
-
-    background: Rectangle {
-        color: control.checked ? Theme.accentWash : "transparent"
-        Rectangle {
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.bottom: parent.bottom
-            height: 3
-            visible: control.checked
-            color: Theme.accentBright
-        }
+    function clear() {
+        confirmation = "";
+        timeout.stop();
+    }
+    Timer {
+        id: timeout
+        interval: 3000
+        onTriggered: label.confirmation = ""
     }
 }

@@ -21,10 +21,11 @@ Button {
     id: control
     property bool primary: false
     property bool selected: false
-    property color textColor: selected ? Theme.accentBright : Theme.text
+    property color textColor: selected ? Theme.accentBright : primary ? Theme.primaryText : Theme.text
 
     implicitHeight: Theme.buttonHeight
-    padding: 8
+    implicitWidth: Math.max(56, contentItem.implicitWidth + 32)
+    padding: 12
     font.pixelSize: Theme.textSize
     font.weight: Font.Normal
 
@@ -42,8 +43,8 @@ Button {
             : control.down ? (control.primary ? Theme.accentPressed : Theme.pressed)
             : control.selected ? Theme.accentWash
             : control.primary ? Theme.accent : Theme.control
-        border.width: control.selected ? 2 : 0
-        border.color: Theme.accentBright
+        border.width: control.selected || control.activeFocus ? 2 : 1
+        border.color: control.selected || control.activeFocus ? Theme.accentBright : Theme.divider
         radius: Theme.radius
         opacity: control.enabled ? 1 : 0.55
     }

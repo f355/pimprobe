@@ -8,4 +8,4 @@ Sideways and downward positioning moves use G38.3 at Positioning feed. An unexpe
 
 If the coarse search runs out of travel without touching, the routine fails. Check the starting position and search distance before trying again. A failed fine touch can raise a firmware alarm; the probing screen closes so you can clear it on the main screen. Inspect the machine before clearing an alarm.
 
-Probe extension is controlled separately by the top-row switch. A routine leaves the actuator extended.
+Probe extension is controlled separately by the switch beside the tabs. A routine leaves the actuator extended.

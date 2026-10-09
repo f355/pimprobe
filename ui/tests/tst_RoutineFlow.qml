@@ -88,9 +88,9 @@ TestCase {
 		var resultLabels = descendants(flow.contentItem, Label).filter(function(label) {
 			return label.visible
 		})
-		var xCoordinate = resultLabels.filter(function(label) { return label.text.indexOf("X  ") === 0 })[0]
-		var xZero = resultLabels.filter(function(label) { return label.text.indexOf("G54 zero at G53") === 0 })[0]
-		var yCoordinate = resultLabels.filter(function(label) { return label.text.indexOf("Y  ") === 0 })[0]
+		var xCoordinate = resultLabels.filter(function(label) { return label.text.indexOf("X ") === 0 })[0]
+		var xZero = resultLabels.filter(function(label) { return label.text.indexOf("G54 ") === 0 })[0]
+		var yCoordinate = resultLabels.filter(function(label) { return label.text.indexOf("Y ") === 0 })[0]
 		verify(xCoordinate && xZero && yCoordinate)
 		var xCoordinateBottom = xCoordinate.mapToItem(flow.contentItem, 0, xCoordinate.height).y
 		var xZeroTop = xZero.mapToItem(flow.contentItem, 0, 0).y
@@ -103,6 +103,25 @@ TestCase {
 		verify(flow.completedID.length > 0)
 		var measuredX = flow.measuredPosition(0)
 		var measuredY = flow.measuredPosition(1)
+        var resultView = descendants(flow.contentItem, ProbeResultView)[0]
+        var leftPane = resultView.children[0]
+        var leftSize = [leftPane.width, leftPane.height]
+        compare(leftPane.width, Theme.columnWidth)
+        var offsetField = findChild(flow, "resultOffset0")
+        var fieldX = offsetField.mapToItem(flow.contentItem, 0, 0).x
+        offsetField.editor.begin(offsetField)
+        waitForRendering(flow.contentItem)
+        compare([leftPane.width, leftPane.height], leftSize)
+        compare(offsetField.mapToItem(flow.contentItem, 0, 0).x, fieldX)
+        compare(xCoordinate.font.pixelSize, 28)
+        offsetField.editor.cancel()
+        flow.resultWcsRequested(55)
+        tryVerify(function() { return !flow.busy }, 3000)
+        compare(flow.failure, "")
+        compare(flow.routine.wcs, 55)
+        compare(flow.measuredPosition(0), measuredX)
+        compare(flow.measuredPosition(1), measuredY)
+        var selectedPoint = flow.result.slice()
 		flow.setOffset(0, 1.25)
 		flow.setOffset(1, -2)
 		flow.zeroResult()
@@ -110,12 +129,34 @@ TestCase {
 		compare(flow.failure,"")
 		verify(flow.zeroed)
 		verify(flow.completedID.length > 0)
+        var zeroButton = descendants(flow.contentItem, LabButton).filter(function(button) { return button.text === "Set Work Zero" })[0]
+        verify(zeroButton.enabled)
+        verify(offsetField.enabled)
+        compare([leftPane.width, leftPane.height], leftSize)
+        var saved = resultLabels.filter(function(label) { return label.text === "Work zero set" })[0]
+        verify(saved && saved.visible)
 		var after = null
 		Api.request("GET", http.serviceUrl + "/state", null, function(reply) { after = reply.data })
 		tryVerify(function() { return after !== null }, 3000)
+        tryVerify(function() {
+            return JSON.stringify((http.state.status || {}).workPosition) === JSON.stringify(after.status.workPosition)
+        }, 3000)
+        compare(xZero.text, "G55 " + flow.measuredWorkPosition(0).toFixed(3))
 		verify(Math.abs(after.status.machinePosition[0] - after.status.workPosition[0] - measuredX - 1.25) < 0.002)
 		verify(Math.abs(after.status.machinePosition[1] - after.status.workPosition[1] - measuredY + 2) < 0.002)
-		verify(Math.abs(flow.result[0] - expectedX) < 0.001)
+			compare(flow.result, selectedPoint)
+        var previousCoordinate = xZero.text
+        flow.setOffset(0, -0.75)
+        compare(xZero.text, previousCoordinate)
+        flow.zeroResult()
+        tryCompare(flow, "zeroing", false, 5000)
+        compare(flow.failure, "")
+        tryVerify(function() { return xZero.text !== previousCoordinate }, 3000)
+        compare(xZero.text, "G55 " + flow.measuredWorkPosition(0).toFixed(3))
+        verify(zeroButton.enabled && offsetField.enabled)
+        compare([leftPane.width, leftPane.height], leftSize)
+        tryVerify(function() { return saved.text === "Work zero" }, 4000)
+        compare([leftPane.width, leftPane.height], leftSize)
 		verify(flow.logText.indexOf("; Coarse") !== -1)
 		verify(flow.logText.indexOf("; Fine") !== -1)
 		var backoff = /#<x_after_backoff> := (-?[0-9.]+)/.exec(flow.logText)
@@ -127,6 +168,9 @@ TestCase {
         compare(flow.failure, "")
         verify(flow.returned)
         flow.close()
+        var selected = false
+        http.request("wcs.select", {wcs:54}, function(reply) { selected = reply.ok })
+        tryVerify(function() { return selected }, 3000)
     }
 
     function test_inside_result_starts_at_entry_and_can_move_over_measurement() {
@@ -203,6 +247,44 @@ TestCase {
             compare(flow.dimensions.map(function(d) { return d.value }), item.spans.filter(function(v) { return v !== null }))
         }
     }
+
+    function test_measured_work_coordinates_data() {
+        return [
+            {tag: "unrotated", angle: 0, toolOffset: 0, expected: [14, 18, 31]},
+            {tag: "rotated", angle: 90, toolOffset: 0, expected: [8, 16, 31]},
+            {tag: "tool-compensated", angle: 0, toolOffset: 7, expected: [14, 18, 31]}
+        ]
+    }
+
+    function test_measured_work_coordinates(data) {
+        var previous = {state: http.state, routine: flow.routine, machinePoint: flow.machinePoint, offsets: flow.offsets}
+        try {
+            flow.routine = {wcs: 55}
+            flow.machinePoint = [-96, -82, -39]
+            http.state = {
+                status: {wcs: 55}, wcsRotations: {55: data.angle},
+                coordinates: {spindle: {
+                    machinePosition: [-100, -80, -40 - data.toolOffset],
+                    workPosition: [10, 20, 30 - data.toolOffset]
+                }}
+            }
+            for (var i = 0; i < 3; ++i)
+                verify(Math.abs(flow.measuredWorkPosition(i) - data.expected[i]) < 0.0001)
+            flow.setOffset(0, 2)
+            compare(flow.measuredWorkPosition(0), data.expected[0])
+            http.state = Object.assign({}, http.state, {coordinates: {spindle: {
+                machinePosition: http.state.coordinates.spindle.machinePosition,
+                workPosition: [15, 20, 30 - data.toolOffset]
+            }}})
+            verify(Math.abs(flow.measuredWorkPosition(0) - data.expected[0] - 5) < 0.0001)
+        } finally {
+            http.state = previous.state
+            flow.routine = previous.routine
+            flow.machinePoint = previous.machinePoint
+            flow.offsets = previous.offsets
+        }
+    }
+
     function test_zero_failure_retry(data) {
         var original = Api.request
         var callback

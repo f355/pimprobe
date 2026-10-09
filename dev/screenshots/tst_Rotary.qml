@@ -69,8 +69,11 @@ TestCase {
         save("rotary-result");
         flow.close();
         ["horizontal", "vertical", "verticalNegative"].forEach(function(operation) {
-            waitForRendering(window.contentItem);
-            mouseClick(findChild(window.contentItem,operation + "LevelButton"));
+            var next = findChild(window.contentItem, operation + "LevelButton");
+            tryVerify(function() { return next.enabled; }, 3000);
+            mouseClick(next);
+            tryCompare(flow, "operation", operation, 3000);
+            compare(flow.phase, "review");
             tryVerify(function() { return !flow.busy && flow.reviewID.length > 0; },3000);
             compare(flow.failure, "");
             flow.proceed();

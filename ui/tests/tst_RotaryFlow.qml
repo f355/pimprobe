@@ -65,7 +65,11 @@ TestCase {
         compare(flow.result.stations.length, 2);
         verify(Math.abs(flow.result.xyAngle - Math.atan(0.003) * 180 / Math.PI) < 0.02);
         var labels = descendants(flow.contentItem, Label).filter(function(label) { return label.visible; });
-        verify(labels.some(function(label) { return label.text.indexOf("X ") === 0 && label.text.indexOf("Z ") !== -1; }));
+        flow.result.stations.forEach(function(station) {
+            station.center.forEach(function(value) {
+                verify(labels.some(function(label) { return label.text === Number(value).toFixed(3); }));
+            });
+        });
         var buttons = descendants(flow.contentItem, Button).filter(function(button) { return button.visible; });
         buttons.forEach(function(button) {
             tryVerify(function() {
@@ -73,17 +77,33 @@ TestCase {
                 return p.y >= 0 && p.y + button.height <= flow.height;
             }, 3000, button.text + " is clipped");
         });
+        var stations = JSON.stringify(flow.result.stations);
+        flow.resultWcsRequested(56);
+        tryVerify(function() { return !flow.busy; }, 3000);
+        compare(flow.failure, "");
+        compare(flow.result.wcs, 56);
+        compare(JSON.stringify(flow.result.stations), stations);
         flow.requestedAction = "zero";
         flow.applyAction();
         tryVerify(function() { return !flow.busy; }, 3000);
         compare(flow.failure, "");
         verify(flow.result.zeroed);
+        var zero = buttons.filter(function(button) { return button.text === "Set Y/Z zero"; })[0];
+        verify(zero.enabled);
+        flow.applyAction();
+        tryVerify(function() { return !flow.busy; }, 3000);
+        compare(flow.failure, "");
+        compare(JSON.stringify(flow.result.stations), stations);
         flow.requestedAction = "rotation";
         flow.applyAction();
         tryVerify(function() { return !flow.busy; }, 3000);
         compare(flow.failure, "");
         verify(flow.result.rotationApplied);
+        verify(buttons.filter(function(button) { return button.text === "Set X/Y rotation"; })[0].enabled);
         flow.close();
+        var restored = false;
+        http.request("wcs.select", {wcs:54}, function(reply) { restored = reply.ok; });
+        tryVerify(function() { return restored; }, 3000);
     }
 
     function test_level_surfaces_and_save_their_axes() {
@@ -113,6 +133,7 @@ TestCase {
             mouseClick(apply);
             tryVerify(function() { return !flow.busy && flow.result.zeroed === true; },3000);
             compare(flow.failure, "");
+            verify(zero.enabled);
             flow.close();
         });
     }

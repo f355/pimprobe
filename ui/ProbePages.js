@@ -41,6 +41,13 @@ var setup = [
     {key: "rotaryFeed", label: "Rotary feed", unit: "°/min"}
 ];
 
+function featureName(routine) {
+    if (routine.z) return "Z surface";
+    if (routine.family === "center")
+        return routine.feature[0].toUpperCase() + routine.feature.slice(1).replace("-", " ") + " center";
+    return (routine.family === "inside" ? "Inside" : "Outside") + (routine.x && routine.y ? " corner" : " edge");
+}
+
 function routine(settings, family, selection, wcs) {
     var config = {
         family: family,

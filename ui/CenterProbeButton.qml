@@ -29,7 +29,7 @@ ProbeButton {
         ProbeDiagram {
             id: diagram
             anchors.fill: parent
-            anchors.bottomMargin: 20
+            anchors.bottomMargin: control.label.length ? 24 : 0
             onPaint: {
                 var c = getContext("2d");
                 c.reset();
@@ -39,19 +39,19 @@ ProbeButton {
                 var round = f === "boss" || f === "hole";
                 var onlyX = f.indexOf("x-") === 0, onlyY = f.indexOf("y-") === 0;
                 var z = f === "z";
-                var radius = Math.min(23, width * 0.3, height * 0.35);
+                var radius = Math.min(width * 0.3, height * (f === "boss" || f === "block" ? 0.25 : 0.35));
                 var left = cx - radius, right = cx + radius, top = cy - radius, bottom = cy + radius;
                 if (onlyX) {
-                    left = cx - 17;
-                    right = cx + 17;
+                    left = cx - width * 0.18;
+                    right = cx + width * 0.18;
                     top = internal ? 0 : 3;
                     bottom = internal ? height : height - 3;
                 }
                 if (onlyY) {
                     left = internal ? 0 : 3;
                     right = internal ? width : width - 3;
-                    top = cy - 15;
-                    bottom = cy + 15;
+                    top = cy - height * 0.23;
+                    bottom = cy + height * 0.23;
                 }
                 c.fillStyle = internal ? Theme.stock : Theme.panelRaised;
                 c.fillRect(0, 0, width, height);
@@ -100,8 +100,9 @@ ProbeButton {
             anchors.bottom: parent.bottom
             anchors.horizontalCenter: parent.horizontalCenter
             text: control.label
+            visible: text.length > 0
             color: Theme.text
-            font.pixelSize: 16
+            font.pixelSize: 18
         }
     }
 }

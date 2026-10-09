@@ -56,121 +56,78 @@ Item {
         clearRequest.cancel();
     }
 
-    Column {
-        anchors.top: parent.top
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: repeatabilityButton.top
-        anchors.margins: Theme.margin
-        spacing: 14
-        clip: true
-
-        RowLayout {
+    ColumnLayout {
+        anchors.fill: parent
+        spacing: 0
+        PageHeader {
+            Layout.fillWidth: true
+            Layout.preferredHeight: Theme.headerHeight
             visible: utilitiesPanel.showHeader
-            width: parent.width
-            height: 56
-            spacing: 12
-
-            BackButton {
-                Layout.preferredWidth: 70
-                Layout.fillHeight: true
-                onClicked: utilitiesPanel.closed()
-            }
-
-            Label {
-                Layout.fillWidth: true
-                text: "Utilities"
-                color: Theme.text
-                font.family: utilitiesPanel.uiFont
-                font.pixelSize: 25
-                verticalAlignment: Text.AlignVCenter
-            }
+            title: "Utilities"
+            uiFont: utilitiesPanel.uiFont
+            onBack: utilitiesPanel.closed()
         }
-
-        LabButton {
-            text: "Probe history"
-            width: parent.width
-            height: 64
-            font.family: utilitiesPanel.uiFont
-            font.pixelSize: 20
-            onClicked: utilitiesPanel.historyRequested()
-        }
-        LabButton {
-            text: "Export logs"
-            width: parent.width
-            height: 64
-            enabled: !exportRequest.pending && !clearRequest.pending
-            font.family: utilitiesPanel.uiFont
-            font.pixelSize: 20
-            onClicked: utilitiesPanel.exportLogs()
-        }
-        LabButton {
-            text: "Clear logs"
-            width: parent.width
-            height: 64
-            enabled: !exportRequest.pending && !clearRequest.pending
-            font.family: utilitiesPanel.uiFont
-            font.pixelSize: 20
-            onClicked: clearConfirmation.open()
-        }
-        Label {
-            width: parent.width
-            text: utilitiesPanel.message
-            color: utilitiesPanel.message.indexOf("Saved:") === 0 || utilitiesPanel.message === "Logs cleared"
-                ? Theme.accentBright : Theme.warning
-            font.pixelSize: 17
-            wrapMode: Text.WordWrap
-        }
-    }
-
-    LabButton {
-        id: repeatabilityButton
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        anchors.margins: Theme.margin
-        height: 64
-        text: "Probe repeatability"
-        font.family: utilitiesPanel.uiFont
-        font.pixelSize: 20
-        onClicked: utilitiesPanel.repeatabilityRequested()
-    }
-
-    Popup {
-        id: clearConfirmation
-        Component.onCompleted: if ("popupType" in clearConfirmation) clearConfirmation.popupType = Popup.Item
-        parent: Overlay.overlay
-        anchors.centerIn: parent
-        width: 540
-        height: 200
-        padding: 18
-        modal: true
-        closePolicy: Popup.NoAutoClose
-        background: Rectangle { color: Theme.panel; radius: 6 }
         ColumnLayout {
-            anchors.fill: parent
-            spacing: 12
-            Label {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            Layout.margins: 16
+            spacing: 16
+            LabButton {
+                text: "Probe history"
                 Layout.fillWidth: true
-                text: "Clear probing logs?"
-                color: Theme.text
+                Layout.preferredHeight: 80
                 font.pixelSize: 24
-                horizontalAlignment: Text.AlignHCenter
+                onClicked: utilitiesPanel.historyRequested()
+            }
+            GridLayout {
+                Layout.fillWidth: true
+                columns: 2
+                rowSpacing: 12
+                columnSpacing: 12
+                LabButton {
+                    text: "Export logs"
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 1
+                    Layout.preferredHeight: 56
+                    enabled: !exportRequest.pending && !clearRequest.pending
+                    onClicked: utilitiesPanel.exportLogs()
+                }
+                LabButton {
+                    text: "Clear logs"
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 1
+                    Layout.preferredHeight: 56
+                    textColor: Theme.danger
+                    enabled: !exportRequest.pending && !clearRequest.pending
+                    onClicked: clearConfirmation.open()
+                }
             }
             Label {
                 Layout.fillWidth: true
-                text: "Probe history and diagnostic traces will be removed."
-                color: Theme.text
+                text: utilitiesPanel.message
+                color: utilitiesPanel.message.indexOf("Saved:") === 0 || utilitiesPanel.message === "Logs cleared"
+                    ? Theme.accentBright : Theme.warning
                 font.pixelSize: 18
-                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
             }
             Item { Layout.fillHeight: true }
-            RowLayout {
-                Layout.alignment: Qt.AlignHCenter
-                spacing: 16
-                LabButton { text: "Cancel"; Layout.preferredWidth: 160; onClicked: clearConfirmation.close() }
-                LabButton { text: "Clear logs"; Layout.preferredWidth: 160; onClicked: utilitiesPanel.clearLogs() }
+            LabButton {
+                text: "Probe repeatability"
+                Layout.preferredWidth: 280
+                Layout.preferredHeight: 56
+                onClicked: utilitiesPanel.repeatabilityRequested()
             }
         }
     }
+
+    TouchDialog {
+        id: clearConfirmation
+        title: "Clear probing logs?"
+        message: "Probe history and diagnostic traces will be removed."
+        acceptText: "Clear logs"
+        destructive: true
+        font.family: utilitiesPanel.uiFont
+        onAccepted: utilitiesPanel.clearLogs()
+    }
+
 }

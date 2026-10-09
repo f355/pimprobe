@@ -86,8 +86,6 @@ TestCase {
         }, 3000)
         save("review")
         mouseClick(proceed)
-        wait(350)
-        save("progress")
         var zero
         tryVerify(function() {
             zero = descendants(window.contentItem.parent, Button).filter(function(b) {
@@ -95,12 +93,16 @@ TestCase {
             })[0]
             return zero !== undefined
         }, 10000)
-        save("result")
-        var back = descendants(window.contentItem.parent, Button).filter(function(b) {
-            return b.visible && b.text === "Go to starting position"
-        })[0]
         var flow = Array.prototype.filter.call(window.page.children, function(item) { return item instanceof ProbeFlow })[0]
         verify(flow !== undefined)
+        // Use the recorded command trace to capture the running-page layout.
+        flow.phase = "running"
+        save("progress")
+        flow.phase = "result"
+        save("result")
+        var back = descendants(window.contentItem.parent, Button).filter(function(b) {
+            return b.visible && b.text === "Return to start"
+        })[0]
         mouseClick(back)
         tryCompare(flow, "phase", "result", 10000)
         verify(flow.returned)
@@ -152,5 +154,9 @@ TestCase {
         compare(flow.phase, "result")
         save("repeatability-results")
         flow.close()
+        // Leave room above the bed for the rotary captures.
+        routine.returnToStart()
+        tryVerify(function() { return routine.returned }, 10000)
+        compare(routine.failure, "")
     }
 }

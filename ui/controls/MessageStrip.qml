@@ -14,33 +14,25 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+pragma ComponentBehavior: Bound
 import QtQuick
-import "controls"
 import QtQuick.Controls
-LabButton {
-    id: control
-    property string diagramLabel: ""
-    property string caption: ""
-    checkable: false
-    padding: 8
-    bottomPadding: caption.length ? 36 : 8
-    background: Rectangle {
-        color: control.down ? Theme.pressed : Theme.control
-        radius: Theme.radius
-        border.color: control.down ? Theme.accentBright : Theme.divider
-    }
-    ToolTip.visible: hovered && diagramLabel.length > 0
-    ToolTip.text: diagramLabel
-    Accessible.name: diagramLabel
-    Label {
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        anchors.margins: 8
-        visible: control.caption.length > 0
-        text: control.caption
+
+ScrollView {
+    id: message
+    property string text
+    property color textColor: Theme.warning
+    implicitHeight: Math.min(72, body.implicitHeight)
+    contentWidth: availableWidth
+    clip: true
+    TextArea {
+        id: body
+        readOnly: true
+        text: message.text
+        color: message.textColor
         font.pixelSize: 18
-        color: Theme.text
-        horizontalAlignment: Text.AlignHCenter
+        wrapMode: TextEdit.WordWrap
+        padding: 0
+        background: null
     }
 }

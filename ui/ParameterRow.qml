@@ -25,10 +25,10 @@ RowLayout {
     required property ProbeSettings settings
     required property NumericEditor editor
     required property var definition
-    property int fieldHeight: 50
+    property int fieldHeight: 56
     property int fieldWidth: 130
-    property int labelSize: 17
-    property int numberSize: 22
+    property int labelSize: 20
+    property int numberSize: 24
     spacing: 12
 
     Label {
@@ -39,12 +39,14 @@ RowLayout {
         wrapMode: Text.WordWrap
     }
     Item {
-        Layout.preferredWidth: 180
-        Layout.minimumWidth: 180
-        Layout.maximumWidth: 180
+        Layout.preferredWidth: 194
+        Layout.minimumWidth: 194
+        Layout.maximumWidth: 194
         Layout.preferredHeight: row.fieldHeight
         NumberField {
             id: input
+            objectName: row.definition.key
+            Accessible.name: row.definition.label
             editor: row.editor
             width: row.fieldWidth
             height: row.fieldHeight
@@ -62,7 +64,7 @@ RowLayout {
             anchors.verticalCenter: parent.verticalCenter
             text: row.definition.unit || "mm"
             color: Theme.textMuted
-            font.pixelSize: 17
+            font.pixelSize: 16
         }
     }
 }

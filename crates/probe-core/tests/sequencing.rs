@@ -551,6 +551,11 @@ fn measured_x(c: &Scripted) -> (RoutinePlan, RoutineResult) {
     .unwrap();
     let result = RoutineResult {
         point: [Some(35.0), None, None],
+        machine_point: [
+            Some(35.0 + plan.start.position[0] - plan.start.work_position[0]),
+            None,
+            None,
+        ],
         wcs: 54,
         axes: vec!["X".into()],
         settled: true,

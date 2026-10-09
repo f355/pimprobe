@@ -28,8 +28,8 @@ sets the maximum A speed in degrees per minute; XYZ positioning uses the
 positioning feed. Check the probe calibration before taking measurements.
 
 Press the operation's button, review the G-code and press **Proceed**. Saving
-zeros or applying alignment is a separate action on the results screen, with
-confirmation.
+zeros or setting work-coordinate rotation is a separate action on the results
+screen, with confirmation.
 
 ## Calibrate the rotary axis
 
@@ -48,7 +48,7 @@ as it turns. Check clearance for the whole shaft down both sides.
 
 ### How it measures
 
-![Two measuring stations and rotated crest touches](images/rotary-axis.svg)
+![Two measured axis centers and rotated crest touches](images/rotary-axis.svg)
 
 At each place, the probe finds an initial top height, measures the Y midpoint
 and touches the crest above that midpoint. The chuck then turns 90° each way
@@ -72,12 +72,14 @@ during those positioning moves stops the calibration.
 
 The result shows both axis centers in G53 and two angles:
 
-- **XY alignment:** the sideways angle of the rotary axis relative to X travel.
-- **XZ slope:** its vertical angle, for mechanically adjusting the rotary unit.
+- **Axis angle in X/Y:** the sideways angle of the rotary axis relative to X
+  travel.
+- **Axis angle in X/Z:** its vertical angle, for mechanically adjusting the
+  rotary unit.
 
 **Set Y/Z zero** puts the first center at Y0/Z0 in the selected WCS, keeping its
-X origin. **Align XY**, available with community firmware, sets the WCS's XY
-rotation to the measured angle.
+X origin. **Set X/Y rotation**, available with community firmware, sets the
+WCS's X/Y rotation to the measured angle.
 
 The probe returns to the first X position, at the starting Z and A angle.
 Check clearance before jogging away or retracting it.

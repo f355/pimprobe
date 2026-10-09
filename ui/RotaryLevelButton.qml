@@ -24,6 +24,7 @@ ProbeButton {
     property bool vertical: false
     property bool negativeY: false
     diagramLabel: vertical ? (negativeY ? "Align vertical surface toward Y−" : "Align vertical surface toward Y+") : "Level horizontal surface"
+    caption: vertical ? (negativeY ? "Align face Y−" : "Align face Y+") : "Level surface"
 
     contentItem: ProbeDiagram {
         onPaint: {

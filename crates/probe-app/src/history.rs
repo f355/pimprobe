@@ -212,6 +212,9 @@ impl Records {
                 }
                 HistoryEvent::Action { action, data } => {
                     if let Some(&index) = indices.get(&record.id) {
+                        if let Some(result) = data.get("result") {
+                            entries[index].result = Some(result.clone());
+                        }
                         if action == "work_zero" {
                             entries[index].work_zero = Some(data.clone());
                         }

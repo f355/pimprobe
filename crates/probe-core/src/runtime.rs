@@ -545,6 +545,92 @@ pub async fn zero_result<C: Controller + ?Sized>(
     }
 }
 
+/// Set work zero from a saved, compensated G53 measurement.
+pub async fn zero_recorded_result<C: Controller + ?Sized>(
+    c: &C,
+    result: &RoutineResult,
+    offsets: [f64; 3],
+) -> Result<RoutineResult, Error> {
+    preflight_machine(&c.state())?;
+    if c.state().wcs != result.wcs || !(54..=59).contains(&result.wcs) {
+        return Err(Error::Preflight(
+            "select the result WCS before setting work zero".into(),
+        ));
+    }
+    if offsets.iter().any(|v| !v.is_finite() || v.abs() > 1000.) {
+        return Err(Error::InvalidConfig(
+            "offsets must be finite and within -1000..1000 mm".into(),
+        ));
+    }
+    let state = crate::rotary::query_rotary_frame(c).await?;
+    let mut target: [Option<f64>; 3] =
+        std::array::from_fn(|i| result.machine_point[i].map(|value| value + offsets[i]));
+    for (i, axis) in ["X", "Y", "Z"].into_iter().enumerate() {
+        if !result.axes.iter().any(|measured| measured == axis) {
+            target[i] = None;
+        } else if !target[i].is_some_and(f64::is_finite) {
+            return Err(Error::Compensation(format!("missing {axis} result")));
+        }
+    }
+    let origin = state
+        .wcs_origin
+        .ok_or_else(|| Error::Preflight("work origin is unavailable".into()))?;
+    let (sin, cos) = state.wcs_rotation.unwrap_or(0.).to_radians().sin_cos();
+    let mut axes = Vec::new();
+    match (target[0], target[1]) {
+        (Some(x), Some(y)) => {
+            axes.push((
+                0,
+                x - cos * state.coordinate_offset[0] + sin * state.coordinate_offset[1],
+            ));
+            axes.push((
+                1,
+                y - sin * state.coordinate_offset[0] - cos * state.coordinate_offset[1],
+            ));
+        }
+        (Some(x), None) | (None, Some(x)) => {
+            if cos.abs() < 1e-6 {
+                return Err(Error::Preflight(
+                    "select an unrotated WCS to zero a single X/Y axis".into(),
+                ));
+            }
+            if target[0].is_some() {
+                axes.push((
+                    0,
+                    x + sin / cos * (state.position[1] - origin[1])
+                        - state.coordinate_offset[0] / cos,
+                ));
+            } else {
+                axes.push((
+                    1,
+                    x - sin / cos * (state.position[0] - origin[0])
+                        - state.coordinate_offset[1] / cos,
+                ));
+            }
+        }
+        _ => {}
+    }
+    if let Some(z) = target[2] {
+        axes.push((2, z - state.coordinate_offset[2]));
+    }
+    if axes.is_empty() {
+        return Err(Error::Preflight("no measured axes available".into()));
+    }
+    let modes = query_modes(c).await?;
+    let metric = Modes { units: 21, ..modes };
+    if metric != modes {
+        set_modes(c, metric).await?;
+    }
+    let write = crate::rotary::write_coordinate_data(c, result.wcs, &axes, None).await;
+    if metric != modes && !c.state().motion_blocked {
+        set_modes(c, modes).await?;
+    }
+    write?;
+    let mut updated = result.clone();
+    updated.zeroed = true;
+    Ok(updated)
+}
+
 pub async fn return_to_start<C: Controller + ?Sized>(
     c: &C,
     p: &RoutinePlan,

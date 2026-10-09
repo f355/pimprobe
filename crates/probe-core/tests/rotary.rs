@@ -48,10 +48,7 @@ async fn zero_and_alignment_keep_the_axis_on_y_zero_in_either_order() {
                 + (station.center[1] - origin[1]) * angle.cos()
                 - after.coordinate_offset[1];
             assert!(y.abs() < 0.001, "station {station:?}, Y={y}");
-            let z = station.center[2]
-                - origin[2]
-                - after.coordinate_offset[2]
-                - after.tool_length_offset;
+            let z = station.center[2] - origin[2] - after.coordinate_offset[2];
             assert!(z.abs() < 0.001, "Z={z}");
         }
     }

@@ -29,8 +29,8 @@ use axum::{
     routing::{get, post},
 };
 use pimprobe_app::{
-    AppError, ErrorKind, Motion, Operation, ProbeApp, ResultWcsRequest, Token, ZeroRequest,
-    history::Records, settings::Settings,
+    AppError, ErrorKind, HistoryAction, Motion, Operation, ProbeApp, ResultWcsRequest, Token,
+    ZeroRequest, history::Records, settings::Settings,
 };
 use pimprobe_core::{Controller, RepeatabilityOptions, RoutineConfig};
 use serde::Deserialize;
@@ -99,6 +99,10 @@ pub fn router(app: Arc<App>) -> Router {
         .route("/api/v1/repeatability/run", post(repeatability))
         .route("/api/v1/repeatability/stop", post(stop_repeatability))
         .route("/api/v1/logs/history", get(history))
+        .route("/api/v1/logs/history/open", post(open_history))
+        .route("/api/v1/logs/history/wcs", post(history_wcs))
+        .route("/api/v1/logs/history/zero", post(history_zero))
+        .route("/api/v1/logs/history/rotation", post(history_rotation))
         .route("/api/v1/logs/export", post(export_logs))
         .route("/api/v1/logs/clear", post(clear_logs))
         .route("/api/v1/updates/check", get(check_update))
@@ -187,6 +191,42 @@ async fn history(
     State(app): State<Arc<App>>,
 ) -> Result<Json<Vec<pimprobe_app::history::HistoryEntry>>, ApiError> {
     Ok(Json(app.probe.history().await?))
+}
+async fn open_history(
+    State(app): State<Arc<App>>,
+    ApiJson(token): ApiJson<Token>,
+) -> Result<Json<pimprobe_app::HistoryResult>, ApiError> {
+    Ok(Json(app.probe.open_history_result(&token.id).await?))
+}
+async fn history_wcs(
+    State(app): State<Arc<App>>,
+    ApiJson(request): ApiJson<ResultWcsRequest>,
+) -> Result<Json<pimprobe_app::MeasurementResult>, ApiError> {
+    Ok(Json(
+        app.probe
+            .apply_history_result(request.id, HistoryAction::Wcs(request.wcs))
+            .await?,
+    ))
+}
+async fn history_zero(
+    State(app): State<Arc<App>>,
+    ApiJson(request): ApiJson<ZeroRequest>,
+) -> Result<Json<pimprobe_app::MeasurementResult>, ApiError> {
+    Ok(Json(
+        app.probe
+            .apply_history_result(request.id, HistoryAction::Zero(request.offsets))
+            .await?,
+    ))
+}
+async fn history_rotation(
+    State(app): State<Arc<App>>,
+    ApiJson(token): ApiJson<Token>,
+) -> Result<Json<pimprobe_app::MeasurementResult>, ApiError> {
+    Ok(Json(
+        app.probe
+            .apply_history_result(token.id, HistoryAction::Rotation)
+            .await?,
+    ))
 }
 async fn export_logs(
     State(app): State<Arc<App>>,

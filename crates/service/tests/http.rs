@@ -37,6 +37,101 @@ fn config() -> Value {
 }
 
 #[tokio::test]
+async fn saved_measurement_can_be_reopened_after_restart_and_zeroed_without_motion() {
+    let (temp, app, router) = app();
+    let (_, body) = request(&router, "POST", "/api/v1/routine/review", config()).await;
+    let review: Value = serde_json::from_str(&body).unwrap();
+    let (_, body) = request(
+        &router,
+        "POST",
+        "/api/v1/routine/run",
+        json!({"id":review["id"]}),
+    )
+    .await;
+    let finished: Value = serde_json::from_str(body.lines().last().unwrap()).unwrap();
+    assert_eq!(finished["type"], "result", "{body}");
+    let old_point = finished["result"]["machinePoint"].clone();
+    app.shutdown().await;
+    let mock = MockController::new();
+    let app = App::new(
+        Device::Mock(Box::new(mock)),
+        settings::open(temp.path().join("settings.json")).unwrap(),
+        None,
+        LogStore::open(temp.path().join("logs")).unwrap(),
+    );
+    let router = pimprobe_service::http::router(app.clone());
+    let position = app.device.state().position;
+    let (_, body) = request(
+        &router,
+        "POST",
+        "/api/v1/logs/history/open",
+        json!({"id":review["id"]}),
+    )
+    .await;
+    let opened: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(opened["result"]["machinePoint"], old_point, "{body}");
+    assert_eq!(opened["canApply"], true);
+    let (_, body) = request(
+        &router,
+        "POST",
+        "/api/v1/logs/history/wcs",
+        json!({"id":review["id"],"wcs":55}),
+    )
+    .await;
+    let selected: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(selected["wcs"], 55, "{body}");
+    let (_, body) = request(
+        &router,
+        "POST",
+        "/api/v1/logs/history/zero",
+        json!({"id":review["id"],"offsets":[0,0,-2]}),
+    )
+    .await;
+    let zeroed: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(zeroed["zeroed"], true, "{body}");
+    let state = app.device.state();
+    assert_eq!(state.position, position);
+    assert!(!state.probe_extended);
+    assert!((state.wcs_origin.unwrap()[2] - (old_point[2].as_f64().unwrap() - 2.)).abs() < 0.001);
+    let (_, body) = request(&router, "GET", "/api/v1/logs/history", Value::Null).await;
+    let history: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(history[0]["result"]["wcs"], 55);
+    assert_eq!(history[0]["workZero"]["offsets"], json!([0., 0., -2.]));
+}
+
+#[tokio::test]
+async fn rotary_history_reopens_the_final_measurement_and_saves_to_another_wcs() {
+    let (_temp, _app, router) = app();
+    let (_, body) = request(
+        &router,
+        "POST",
+        "/api/v1/rotary/review",
+        json!({"operation":"horizontal","yDistance":10,"zDistance":10}),
+    )
+    .await;
+    let review: Value = serde_json::from_str(&body).unwrap();
+    let token = json!({"id":review["id"]});
+    let (_, body) = request(&router, "POST", "/api/v1/rotary/run", token.clone()).await;
+    let last: Value = serde_json::from_str(body.lines().last().unwrap()).unwrap();
+    assert_eq!(last["type"], "result", "{body}");
+    let (_, body) = request(&router, "POST", "/api/v1/logs/history/open", token.clone()).await;
+    let opened: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(opened["result"]["level"], last["result"]["level"], "{body}");
+    assert_eq!(opened["canApply"], true);
+    request(
+        &router,
+        "POST",
+        "/api/v1/logs/history/wcs",
+        json!({"id":review["id"],"wcs":56}),
+    )
+    .await;
+    let (_, body) = request(&router, "POST", "/api/v1/logs/history/zero", token).await;
+    let result: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(result["wcs"], 56, "{body}");
+    assert_eq!(result["zeroed"], true);
+}
+
+#[tokio::test]
 async fn state_exposes_both_dro_reference_points() {
     let (_temp, app, router) = app();
     let (_, body) = request(&router, "GET", "/api/v1/state", Value::Null).await;

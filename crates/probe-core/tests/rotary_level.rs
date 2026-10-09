@@ -292,10 +292,7 @@ async fn levels_both_surfaces_and_preserves_other_work_axes() {
                 if operation == RotaryOperation::Horizontal {
                     assert_eq!(origin[1], before.wcs_origin.unwrap()[1]);
                     assert!(
-                        (origin[2] + saved.coordinate_offset[2] + saved.tool_length_offset
-                            - level.center[2])
-                            .abs()
-                            < 0.001
+                        (origin[2] + saved.coordinate_offset[2] - level.center[2]).abs() < 0.001
                     );
                 } else {
                     assert_eq!(origin[2], before.wcs_origin.unwrap()[2]);

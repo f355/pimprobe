@@ -205,10 +205,7 @@ pub(super) async fn zero<C: Controller + ?Sized>(
     let state = query_rotary_frame(c).await?;
     let a = result.center[3] - state.coordinate_offset[3];
     let linear = if result.operation == RotaryOperation::Horizontal {
-        (
-            2,
-            result.center[2] - state.coordinate_offset[2] - state.tool_length_offset,
-        )
+        (2, result.center[2] - state.coordinate_offset[2])
     } else {
         (
             1,

@@ -17,12 +17,14 @@
 pub mod coordinates;
 pub mod device;
 pub mod history;
+mod history_results;
 pub mod host;
 pub mod operations;
 mod results;
 mod reviews;
 mod rotary;
 pub mod settings;
+pub use history_results::{HistoryAction, HistoryResult};
 pub use operations::{MeasurementResult, OperationEvent};
 pub use rotary::RotaryReview;
 
@@ -51,6 +53,7 @@ pub struct ProbeApp {
     settings: Mutex<Settings>,
     reviews: Mutex<Reviews>,
     rotary_reviews: Mutex<Reviews<pimprobe_core::RotaryPlan, pimprobe_core::RotaryResult>>,
+    history_result: Mutex<Option<HistoryResult>>,
     action: Arc<Mutex<()>>,
     active: AtomicBool,
     recovery_failed: AtomicBool,
@@ -72,6 +75,7 @@ impl ProbeApp {
             settings: Mutex::new(settings),
             reviews: Mutex::new(Reviews::default()),
             rotary_reviews: Mutex::new(Reviews::default()),
+            history_result: Mutex::new(None),
             action: Arc::new(Mutex::new(())),
             active: AtomicBool::new(false),
             recovery_failed: AtomicBool::new(false),

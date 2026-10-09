@@ -241,7 +241,7 @@ pub async fn query_rotary_state<C: Controller + ?Sized>(c: &C) -> Result<State, 
     .map_err(|_| Error::Timeout)?
 }
 
-async fn query_rotary_frame<C: Controller + ?Sized>(c: &C) -> Result<State, Error> {
+pub(crate) async fn query_rotary_frame<C: Controller + ?Sized>(c: &C) -> Result<State, Error> {
     let mut rx = c.subscribe();
     let wcs = c.state().wcs;
     let mut received = [
@@ -656,7 +656,7 @@ pub async fn restore_rotary_state<C: Controller + ?Sized>(
     set_modes(c, plan.start.modes).await
 }
 
-async fn write_coordinate_data<C: Controller + ?Sized>(
+pub(crate) async fn write_coordinate_data<C: Controller + ?Sized>(
     c: &C,
     wcs: i32,
     axes: &[(usize, f64)],
@@ -756,7 +756,7 @@ async fn write_rotary_zero<C: Controller + ?Sized>(
 ) -> Result<(), Error> {
     let center = result.stations[0].center;
     let y = y_origin_for_point(state, center, angle)?;
-    let z = center[2] - state.coordinate_offset[2] - state.tool_length_offset;
+    let z = center[2] - state.coordinate_offset[2];
     let modes = query_modes(c).await?;
     set_modes(c, Modes { units: 21, ..modes }).await?;
     let write =

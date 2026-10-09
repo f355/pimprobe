@@ -18,6 +18,39 @@ use pimprobe_core::*;
 use serde::Deserialize;
 use std::{path::Path, sync::Mutex};
 
+#[tokio::test]
+async fn saved_machine_point_sets_rotated_work_zero_with_g92_and_tool_compensation() {
+    let mut state = MockController::new().state();
+    state.wcs_rotation = Some(30.);
+    state.coordinate_offset = [1., -2., 0.5, 0.];
+    state.tool_length_offset = 7.25;
+    state.modes = Modes {
+        units: 20,
+        distance: 90,
+        feed: 94,
+    };
+    let machine = MockController::with_state(state.clone());
+    let result = RoutineResult {
+        machine_point: [Some(-100.), Some(-80.), Some(-40.)],
+        axes: vec!["X".into(), "Y".into(), "Z".into()],
+        wcs: 54,
+        ..Default::default()
+    };
+    let updated = zero_recorded_result(&machine, &result, [1., -2., 3.])
+        .await
+        .unwrap();
+    assert!(updated.zeroed);
+    assert_eq!(machine.state().position, state.position);
+    assert_eq!(machine.state().modes, state.modes);
+    let after = machine.state();
+    let origin = after.wcs_origin.unwrap();
+    let (sin, cos) = 30_f64.to_radians().sin_cos();
+    let (x, y, z) = (-99. - origin[0], -82. - origin[1], -37. - origin[2]);
+    assert!((cos * x + sin * y - after.coordinate_offset[0]).abs() < 0.002);
+    assert!((-sin * x + cos * y - after.coordinate_offset[1]).abs() < 0.002);
+    assert!((z - after.coordinate_offset[2]).abs() < 0.002);
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Fixture {

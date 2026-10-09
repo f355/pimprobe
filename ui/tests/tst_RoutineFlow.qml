@@ -73,12 +73,11 @@ TestCase {
                           positioningFeed:1000,coarseFeed:30,fineFeed:10})
         tryVerify(function() { return !flow.reviewing }, 3000)
         compare(flow.failure, "")
-        verify(flow.reviewID.length > 0)
         compare(flow.width,800)
         compare(flow.height,480)
         flow.proceed()
-        compare(flow.phase,"running")
         tryCompare(flow,"phase","result",10000)
+        verify(waitForPolish(view))
         verify(Math.abs(flow.result[0] - expectedX) < 0.001)
         verify(Math.abs(flow.result[1] - expectedY) < 0.001,
                "Expected Y " + expectedY + ", got " + flow.result[1])
@@ -110,7 +109,7 @@ TestCase {
         var offsetField = findChild(flow, "resultOffset0")
         var fieldX = offsetField.mapToItem(flow.contentItem, 0, 0).x
         offsetField.editor.begin(offsetField)
-        waitForRendering(flow.contentItem)
+        verify(waitForPolish(view))
         compare([leftPane.width, leftPane.height], leftSize)
         compare(offsetField.mapToItem(flow.contentItem, 0, 0).x, fieldX)
         compare(xCoordinate.font.pixelSize, 28)
@@ -173,6 +172,80 @@ TestCase {
         tryVerify(function() { return selected }, 3000)
     }
 
+    function test_review_options_data() {
+        return [
+            {tag: "outside", family: "outside", x: 1, y: 0, z: false, key: "xSearchDistance", value: 12, command: "G38.3 X-12 F800"},
+            {tag: "inside", family: "inside", x: 1, y: 0, z: false, key: "xSearchDistance", value: 12, command: "G38.3 X12 F125"},
+            {tag: "hole", family: "center", feature: "hole", x: 1, y: 1, z: false, key: "xSearchDistance", value: 14, command: "G38.3 X-14 F125"},
+            {tag: "Z", family: "outside", x: 0, y: 0, z: true, key: "depth", value: 8, command: "G38.3 Z-8 F125"}
+        ]
+    }
+
+    function api(path) {
+        var result = null
+        Api.request("GET", http.serviceUrl + path, null, function(reply) { result = reply })
+        tryVerify(function() { return result !== null }, 3000)
+        verify(result.ok, result.error)
+        return result.data
+    }
+
+    function enterReviewValue(key, value, accept) {
+        var field = findChild(flow, "review-" + key)
+        verify(field !== null, key)
+        field.forceActiveFocus()
+        field.editor.begin(field)
+        String(value).split("").forEach(function(digit) { field.editor.typeKey(digit) })
+        if (accept) field.editor.accept()
+        return field
+    }
+
+    function test_review_options(data) {
+        var settings = api("/settings")
+        flow.showRoutine({family: data.family, feature: data.feature || "", x: data.x, y: data.y, z: data.z,
+            wcs: 54, zero: false, safeZOffset: 40, depth: 5, xSearchDistance: 10, ySearchDistance: 10, retract: 0.5, diameter: 2,
+            positioningFeed: 1000, coarseFeed: 300, fineFeed: 50})
+        tryVerify(function() { return !flow.reviewing }, 3000)
+        compare(flow.failure, "")
+        enterReviewValue("coarseFeed", 125, true)
+        enterReviewValue("fineFeed", 25, true)
+        enterReviewValue("positioningFeed", 800, true)
+        enterReviewValue("retract", 0.7, true)
+        enterReviewValue(data.key, data.value, false)
+        var proceed = descendants(flow.contentItem, LabButton).filter(function(button) { return button.text === "Proceed" })[0]
+        mouseClick(proceed)
+        tryCompare(flow, "phase", "result", 10000)
+        compare(flow.failure, "")
+        verify(flow.logText.indexOf(data.command) !== -1, flow.logText)
+        verify(/G38.2 [XYZ]-?1.2 F25/.test(flow.logText), flow.logText)
+        var history = api("/logs/history")
+        var entry = history.filter(function(item) { return item.id === flow.completedID })[0]
+        verify(entry !== undefined)
+        compare(entry.config[data.key], data.value)
+        compare(entry.config.coarseFeed, 125)
+        compare(entry.config.retract, 0.7)
+        compare(JSON.stringify(api("/settings")), JSON.stringify(settings))
+        flow.close()
+    }
+
+    function test_invalid_review_options_can_be_corrected() {
+        flow.showRoutine({family: "outside", x: 0, y: 0, z: true, wcs: 54, zero: false, safeZOffset: 40,
+            depth: 5, xSearchDistance: 10, ySearchDistance: 10, retract: 0.5, diameter: 2,
+            positioningFeed: 1000, coarseFeed: 300, fineFeed: 50})
+        tryVerify(function() { return !flow.reviewing }, 3000)
+        var before = api("/state").status.machinePosition
+        enterReviewValue("fineFeed", 6001, true)
+        flow.proceed()
+        tryVerify(function() { return !flow.reviewing }, 3000)
+        compare(flow.phase, "review")
+        verify(flow.failure.indexOf("machine limit") !== -1, flow.failure)
+        compare(api("/state").status.machinePosition, before)
+        enterReviewValue("fineFeed", 50, true)
+        flow.proceed()
+        tryCompare(flow, "phase", "result", 10000)
+        compare(flow.failure, "")
+        flow.close()
+    }
+
     function test_inside_result_starts_at_entry_and_can_move_over_measurement() {
         var before = null
         Api.request("GET", http.serviceUrl + "/state", null, function(reply) { before = reply.data })
@@ -210,10 +283,11 @@ TestCase {
         flow.close()
     }
 
-    function test_review_error_explains_the_blocked_direction() {
+    function test_start_error_explains_the_blocked_direction() {
         flow.showRoutine({family:"outside",x:-1,y:0,z:false,wcs:54,zero:false,safeZOffset:40,
                           depth:5,xSearchDistance:1000,ySearchDistance:10,retract:0.5,diameter:4,
                           positioningFeed:1000,coarseFeed:30,fineFeed:10})
+        flow.proceed()
         tryVerify(function() { return !flow.reviewing }, 3000)
         verify(flow.failure.indexOf("X+") !== -1, flow.failure)
         verify(flow.failure.indexOf("Move toward X-") !== -1, flow.failure)

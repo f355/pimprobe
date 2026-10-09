@@ -112,11 +112,8 @@ TestCase {
         tryVerify(function() { return !probeWindow.page.settings.saving }, 3000)
 		var ridge = descendants(center, CenterProbeButton).filter(function(b) { return b.feature === "x-ridge" })[0]
 		mouseClick(ridge)
-		tryVerify(function() {
-			return descendants(probeWindow.contentItem.parent, TextArea).some(function(a) {
-				return a.visible && a.text.indexOf("contact_x_low") !== -1
-			})
-		}, 3000)
+        var flow = probeWindow.page.topPage
+        compare(descendants(flow, OperationReview)[0].draft.xSearchDistance, 80)
         var cancel = descendants(probeWindow.contentItem.parent, Button).filter(function(b) {
             return b.visible && b.text === "Cancel"
         })[0]
@@ -127,11 +124,7 @@ TestCase {
         tapKey("\u21B5")
         tryVerify(function() { return !probeWindow.page.settings.saving }, 3000)
         mouseClick(ridge)
-        tryVerify(function() {
-            return descendants(probeWindow.contentItem.parent, TextArea).some(function(a) {
-                return a.visible && a.text.indexOf("G38.3 X-50 ") !== -1
-            })
-        }, 3000)
+        compare(descendants(flow, OperationReview)[0].draft.xSearchDistance, 50)
         mouseClick(cancel)
         centerField.editor.begin(centerField)
         String(originalDistance).split("").forEach(function(key) { centerField.editor.typeKey(key) })

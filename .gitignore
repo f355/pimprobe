@@ -6,3 +6,4 @@
 /ui/fonts/
 *.user
 .DS_Store
+/dev/animations/node_modules/

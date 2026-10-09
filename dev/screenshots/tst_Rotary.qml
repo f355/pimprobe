@@ -60,10 +60,9 @@ TestCase {
         var button = findChild(window.contentItem, "rotaryCalibrationButton");
         mouseClick(button);
         var flow = Array.prototype.filter.call(window.page.children, function(item) { return item instanceof RotaryFlow; })[0];
-        tryVerify(function() { return !flow.busy && flow.reviewID.length > 0; },3000);
         save("rotary-review");
         flow.proceed();
-        tryVerify(function() { return flow.phase !== "running"; },10000);
+        tryVerify(function() { return flow.phase === "result" || flow.phase === "failed"; },10000);
         compare(flow.failure,"");
         compare(flow.phase,"result");
         save("rotary-result");
@@ -74,10 +73,9 @@ TestCase {
             mouseClick(next);
             tryCompare(flow, "operation", operation, 3000);
             compare(flow.phase, "review");
-            tryVerify(function() { return !flow.busy && flow.reviewID.length > 0; },3000);
             compare(flow.failure, "");
             flow.proceed();
-            tryVerify(function() { return flow.phase !== "running"; },10000);
+            tryVerify(function() { return flow.phase === "result" || flow.phase === "failed"; },10000);
             compare(flow.failure, "");
             compare(flow.phase, "result");
             save("rotary-" + operation + "-result");

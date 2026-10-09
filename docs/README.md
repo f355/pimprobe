@@ -44,7 +44,14 @@ The back arrow leaves probing. If the probe is extended, it asks whether to retr
 
 ![Review of an outside corner routine](images/review.png)
 
-The heading names the measurement. The scrollable G-code lists every planned move, with comments. Values such as `#<x_after_backoff>` stand for positions that will only be known after a touch. The log fills those in as the routine runs.
+The heading names the measurement. The looping picture shows the probe's path,
+with three short steps below it. Check where the ball starts, which surfaces it
+touches and where it finishes.
+
+The fields on the right apply to this run. You can adjust its distances, feeds
+and backoff here. Settings and the values on the probing tabs stay unchanged.
+**Proceed** accepts any value still being edited and checks the options before
+starting. If a value exceeds a machine limit, correct it and press Proceed again.
 
 Check the directions, distances and clearance, including the return path. **Cancel** and the back arrow return to the controls. **Proceed** starts motion.
 

@@ -43,6 +43,7 @@ PageView {
     property string requestedAction: ""
     property bool sourceVisible: false
     property string operation: "axis"
+    property var config: ({})
     readonly property bool leveling: operation !== "axis"
     readonly property string zeroAxes: operation === "horizontal" ? "A/Z" : operation === "axis" ? "Y/Z" : "A/Y"
     readonly property string title: operation === "horizontal" ? "Level horizontal surface" : operation === "vertical" ? "Align vertical surface toward Y+" : operation === "verticalNegative" ? "Align vertical surface toward Y−" : "Calibrate rotary axis"
@@ -70,20 +71,29 @@ PageView {
         historical = false;
         sourceVisible = false;
         operation = config.operation || "axis";
+        flow.config = Object.assign({}, config);
         phase = "review";
         result = {};
         text = "";
         failure = "";
         reviewID = "";
+        reviewRequest.cancel();
         open();
-        reviewRequest.send("rotary.review", config, function (reply) {
+    }
+    function prepareRun(value) {
+        config = value;
+        reviewID = "";
+        failure = "";
+        reviewRequest.send("rotary.review", value, function (reply) {
             if (!reply.ok || !reply.data) {
                 failure = reply.error || "Could not prepare calibration";
                 return;
             }
+            config = reply.data.config;
             reviewID = reply.data.id;
             text = reply.data.program;
             simulated = reply.data.simulated;
+            runReviewed();
         });
     }
     function showHistory(opened, details) {
@@ -122,8 +132,14 @@ PageView {
         });
     }
     function proceed() {
-        if (!reviewID || busy)
+        if (phase !== "review" || busy || !operationReview.item)
             return;
+        var value = operationReview.item.parameters();
+        if (!value)
+            return;
+        prepareRun(value);
+    }
+    function runReviewed() {
         phase = "running";
         text = "";
         var terminal = false;
@@ -197,7 +213,7 @@ PageView {
             Layout.preferredHeight: Theme.headerHeight
             visible: flow.showHeader
             title: flow.title
-            detail: flow.phase === "failed" ? "Failed" : flow.phase === "result" ? "Measured · G53" : flow.phase === "running" ? "Running" : flow.simulated ? "Simulation" : "Review"
+            detail: flow.phase === "failed" ? "Failed" : flow.phase === "result" ? "Measured · G53" : flow.phase === "running" ? "Running" : "Confirm"
             uiFont: flow.uiFont
             backEnabled: flow.phase !== "running" && !flow.busy
             onBack: flow.close()
@@ -217,9 +233,21 @@ PageView {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 spacing: 16
+                Loader {
+                    id: operationReview
+                    active: flow.opened && flow.phase === "review"
+                    visible: active
+                    enabled: !flow.busy
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    sourceComponent: OperationReview {
+                        config: flow.config
+                        rotary: true
+                    }
+                }
                 ScrollView {
                     id: codeScroll
-                    visible: flow.phase !== "result" || flow.sourceVisible
+                    visible: flow.phase !== "review" && (flow.phase !== "result" || flow.sourceVisible)
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
@@ -271,7 +299,7 @@ PageView {
                 LabButton {
                     visible: flow.phase === "review"
                     text: flow.busy ? "Preparing…" : "Proceed"
-                    enabled: !flow.busy && flow.reviewID.length > 0
+                    enabled: !flow.busy
                     primary: true
                     Layout.preferredHeight: 64
                     Layout.preferredWidth: 184

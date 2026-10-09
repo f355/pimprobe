@@ -19,6 +19,7 @@ import QtQuick.Controls
 import QtTest
 import ".."
 import "../controls"
+import "../ProbePages.js" as Pages
 
 TestCase {
     id: test
@@ -66,11 +67,13 @@ TestCase {
             })
         property var events
         property var finish
+        property var requests: []
         property int aborts: 0
         property bool rejectRetraction: false
         function refresh() {
         }
         function request(operation, args, done) {
+            requests.push({operation:operation, args:args, position:state.status.machinePosition.slice()});
             var data = {};
             if (operation === "settings.schema") {
                 Object.keys(values).forEach(function (key) {
@@ -87,11 +90,12 @@ TestCase {
             } else if (operation === "routine.review") {
                 data = {
                     id: "review-1",
+                    config: args,
                     program: ["G21 G94 G91", "G38.3 X-10 F300"],
                     simulated: true
                 };
             } else if (operation === "rotary.review") {
-                data = {id: "rotary-1", program: "G21 G94 G91", simulated: true};
+                data = {id: "rotary-1", config: args, program: "G21 G94 G91", simulated: true};
             } else if (operation === "probe.set") {
                 if (!args.extended && rejectRetraction) {
                     done({ok: false, error: "Retraction failed"});
@@ -429,11 +433,12 @@ TestCase {
         compare(embedded.height, 304);
     }
 
-    function test_review_code_remains_a_scrollable_command() {
+    function test_running_log_keeps_complete_commands() {
         var flow = showRoutine();
         var command = "G1 X-999.999 Y-999.999 Z-999.999 A-999.999 F1000 ; "
-            + "complete command with a long review comment ".repeat(8);
-        flow.program = [command];
+            + "complete command with a long comment ".repeat(8);
+        flow.phase = "running";
+        flow.logText = command;
         waitForRendering(flow);
         var code = descendants(flow, TextArea).filter(function(item) { return item.visible; })[0];
         compare(code.text, command);
@@ -462,7 +467,6 @@ TestCase {
             z: false
         });
         compare(routine().opened, true);
-        compare(routine().reviewID, "review-1");
         return routine();
     }
     function save(name) {
@@ -477,6 +481,38 @@ TestCase {
             var p = control.mapToItem(page, 0, 0);
             verify(p.x >= -1 && p.y >= -1 && p.x + control.width <= page.width + 1 && p.y + control.height <= page.height + 1, (control.text || control.toString()) + " outside page");
         });
+    }
+
+    function test_confirmation_uses_position_at_proceed_data() {
+        return [{tag:"routine"}, {tag:"rotary"}];
+    }
+
+    function test_confirmation_uses_position_at_proceed(data) {
+        var before = client.requests.length;
+        var flow;
+        if (data.tag === "routine") {
+            flow = showRoutine();
+        } else {
+            flow = descendants(page, RotaryFlow)[0];
+            flow.showCalibration(Pages.rotaryConfig(client.values, "vertical"));
+        }
+        compare(client.requests.length, before);
+        var original = client.state;
+        var jogged = [-101, -102, -41, 0];
+        client.state = Object.assign({}, original, {
+            status:Object.assign({}, original.status, {machinePosition:jogged})
+        });
+        flow.proceed();
+        compare(flow.phase, "running");
+        compare(client.requests[before].operation, data.tag + ".review");
+        compare(client.requests[before].position, jogged);
+        client.events({type:"error", code:"stopped", message:"Check stopped"});
+        client.finish("");
+        client.state = original;
+    }
+    function init() {
+        client.aborts = 0;
+        client.requests = [];
     }
     function cleanup() {
         page.visible = true;

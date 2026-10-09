@@ -22,11 +22,13 @@ import QtTest
 import ".."
 import "Mock.js" as Mock
 import "../client/Http.js" as Api
+import "../ProbePages.js" as Pages
 
 TestCase {
     id: test
     name: "RotaryFlow"
     when: windowShown
+    property var settings: ({})
     HttpClient { id: http; serviceUrl: "http://127.0.0.1:18137/api/v1"; polling: false }
     ApplicationWindow {
         id: view
@@ -51,18 +53,30 @@ TestCase {
         Api.request("POST", http.serviceUrl + "/probe-actuator", {extended:true}, function(r) { reply = r; });
         tryVerify(function() { return reply !== null; }, 3000);
         verify(reply.ok, reply.error);
+        reply = null;
+        Api.request("GET", http.serviceUrl + "/settings", null, function(r) { reply = r; });
+        tryVerify(function() { return reply !== null; }, 3000);
+        verify(reply.ok, reply.error);
+        settings = reply.data;
     }
     function test_review_measure_and_save() {
-        flow.showCalibration({rodDiameter:6,xDistance:-20});
+        flow.showCalibration(Object.assign(Pages.rotaryConfig(settings), {rodDiameter:6,xDistance:-20}));
         tryVerify(function() { return !flow.busy; }, 3000);
         compare(flow.failure, "");
-        verify(flow.reviewID.length > 0);
-        verify(flow.text.indexOf("G19 G3") !== -1);
+        var fineFeed = findChild(flow, "review-fineFeed");
+        compare(Number(fineFeed.text), 50);
+        var distance = findChild(flow, "review-xDistance");
+        distance.forceActiveFocus();
+        distance.editor.begin(distance);
+        distance.editor.typeKey("2");
+        distance.editor.typeKey("5");
+        distance.editor.typeKey("sign");
         flow.proceed();
-        tryVerify(function() { return flow.phase !== "running"; }, 10000);
+        tryCompare(flow, "phase", "result", 10000);
         compare(flow.failure, "");
         compare(flow.phase, "result");
         compare(flow.result.stations.length, 2);
+        verify(Math.abs(flow.result.stations[1].center[0] - flow.result.stations[0].center[0] + 25) < 0.001);
         verify(Math.abs(flow.result.xyAngle - Math.atan(0.003) * 180 / Math.PI) < 0.02);
         var labels = descendants(flow.contentItem, Label).filter(function(label) { return label.visible; });
         flow.result.stations.forEach(function(station) {
@@ -108,21 +122,33 @@ TestCase {
 
     function test_level_surfaces_and_save_their_axes() {
         ["horizontal", "vertical", "verticalNegative"].forEach(function(operation) {
-            flow.showCalibration({operation:operation,yDistance:10,zDistance:10});
+            flow.showCalibration(Pages.rotaryConfig(settings, operation));
             tryVerify(function() { return !flow.busy; }, 3000);
             compare(flow.failure, "");
-            verify(flow.reviewID.length > 0);
+            var yDistance = findChild(flow, "review-yDistance");
+            yDistance.editor.begin(yDistance);
+            yDistance.editor.typeKey("1");
+            yDistance.editor.typeKey("2");
+            yDistance.editor.accept();
+            var zDistance = findChild(flow, "review-zDistance");
+            zDistance.editor.begin(zDistance);
+            zDistance.editor.typeKey("8");
             flow.proceed();
-            tryVerify(function() { return flow.phase !== "running"; }, 10000);
+            tryCompare(flow, "phase", "result", 10000);
             compare(flow.failure, "");
+            compare(flow.config.yDistance, 12);
+            compare(flow.config.zDistance, 8);
             compare(flow.phase, "result");
             compare(flow.result.level.touches.length, 2);
+            var spacingAxis = operation === "horizontal" ? 1 : 2;
+            var spacing = flow.result.level.touches[1][spacingAxis] - flow.result.level.touches[0][spacingAxis];
+            verify(Math.abs(spacing - (operation === "horizontal" ? 12 : -8)) < 0.001);
             verify(Math.abs(flow.result.level.residual) < 0.05);
             var zero = descendants(flow.contentItem,Button).filter(function(button) {
                 return button.visible && button.text === "Set " + (operation === "horizontal" ? "A/Z" : "A/Y") + " zero";
             })[0];
             verify(zero !== undefined);
-            waitForRendering(flow.contentItem);
+            verify(waitForPolish(view));
             var point = zero.mapToItem(flow.contentItem,0,0);
             verify(point.y + zero.height <= flow.height);
             mouseClick(zero);

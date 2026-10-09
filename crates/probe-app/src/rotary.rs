@@ -20,6 +20,7 @@ use pimprobe_core::{RotaryConfig, RotaryResult};
 #[derive(Debug, Serialize)]
 pub struct RotaryReview {
     pub id: String,
+    pub config: RotaryConfig,
     pub program: String,
     pub simulated: bool,
 }
@@ -42,6 +43,7 @@ impl ProbeApp {
         self.device.configure_rotary(&config)?;
         let state = pimprobe_core::query_rotary_state(self.device.as_ref()).await?;
         let plan = pimprobe_core::review_rotary(state, config)?;
+        let config = plan.config.clone();
         let program = plan.program();
         if session != self.device.session_id() {
             return Err(AppError::conflict(
@@ -52,6 +54,7 @@ impl ProbeApp {
         let id = self.rotary_reviews.lock().await.put(plan, session);
         Ok(RotaryReview {
             id,
+            config,
             program,
             simulated: self.device.is_mock(),
         })

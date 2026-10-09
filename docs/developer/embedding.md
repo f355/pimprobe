@@ -81,6 +81,11 @@ The page uses these operation names:
 | `history.wcs`, `history.zero`, `history.rotation` | Apply a reopened measurement |
 
 Result WCS requests take `{id, wcs}` and return the updated measurement.
+Review requests take a routine or rotary configuration and return
+`{id, config, program, simulated}`. `config` contains all parameters used by
+the plan. The confirmation page edits its options locally. Proceed sends the
+review request using the current machine position, then runs its `{id}`.
+
 `history.open` takes `{id}` and returns `{entry, result, canApply}`. Use
 `entry.id` for its subsequent actions. Work-zero requests take `{id, offsets}`
 with three X/Y/Z offsets; rotary zeros and rotation use `{id}`. History actions

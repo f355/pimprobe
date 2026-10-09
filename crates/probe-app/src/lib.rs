@@ -267,6 +267,7 @@ fn routine_label(config: &RoutineConfig) -> String {
 #[derive(Debug, Serialize)]
 pub struct Review {
     pub id: String,
+    pub config: RoutineConfig,
     pub program: Vec<String>,
     pub simulated: bool,
 }
@@ -443,6 +444,7 @@ impl ProbeApp {
         let mut state = app.device.state();
         state.modes = modes;
         let plan = pimprobe_core::review(state, config)?;
+        let config = plan.config.clone();
         let program = plan.program();
         if app.device.session_id() != session {
             return Err(AppError::conflict(
@@ -453,6 +455,7 @@ impl ProbeApp {
         let id = app.reviews.lock().await.put(plan, session);
         Ok(Review {
             id,
+            config,
             program,
             simulated: app.device.is_mock(),
         })

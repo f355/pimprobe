@@ -656,6 +656,32 @@ async fn settings_schema_matches_accepted_values() {
 }
 
 #[tokio::test]
+async fn reviews_return_the_parameters_used_by_the_plan() {
+    let (_temp, _app, router) = app();
+    let mut routine = config();
+    routine["coarseFeed"] = json!(125);
+    for (path, supplied, expected) in [
+        (
+            "/api/v1/routine/review",
+            routine,
+            json!({"depth": 5.0, "coarseFeed": 125.0, "fineFeed": 10.0, "retract": 0.5}),
+        ),
+        (
+            "/api/v1/rotary/review",
+            json!({"rodDiameter": 6, "xDistance": -20, "rotaryFeed": 420}),
+            json!({"rodDiameter": 6.0, "xDistance": -20.0, "rotaryFeed": 420.0, "fineFeed": 50.0}),
+        ),
+    ] {
+        let (status, body) = request(&router, "POST", path, supplied).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        let review: Value = serde_json::from_str(&body).unwrap();
+        for (key, value) in expected.as_object().unwrap() {
+            assert_eq!(review["config"][key], *value, "{path}: {body}");
+        }
+    }
+}
+
+#[tokio::test]
 async fn feed_settings_and_reviews_follow_machine_limits() {
     let (_temp, _app, router) = app();
     for (key, value) in [

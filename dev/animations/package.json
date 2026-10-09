@@ -1,0 +1,7 @@
+{
+  "name": "pimprobe-illustrations",
+  "private": true,
+  "type": "module",
+  "scripts": { "render": "node render.mjs" },
+  "dependencies": { "three": "0.186.1", "playwright": "1.62.1" }
+}

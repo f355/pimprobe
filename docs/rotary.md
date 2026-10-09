@@ -27,7 +27,7 @@ The probe ball diameter, backoff and feeds come from Settings. **Rotary feed**
 sets the maximum A speed in degrees per minute; XYZ positioning uses the
 positioning feed. Check the probe calibration before taking measurements.
 
-Press the operation's button, review the G-code and press **Proceed**. Saving
+Press the operation's button, review the moves and press **Proceed**. Saving
 zeros or setting work-coordinate rotation is a separate action on the results
 screen, with confirmation.
 

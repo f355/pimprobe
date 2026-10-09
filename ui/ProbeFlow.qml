@@ -155,14 +155,22 @@ PageView {
         zeroRequest.cancel();
         wcsRequest.cancel();
         open();
+    }
+
+    function prepareRun(value) {
+        routine = value;
+        reviewID = "";
+        failure = "";
         reviewRequest.send("routine.review", value, function (reply) {
             if (!reply.ok || !reply.data) {
-                failure = reply.error || "Unable to review this routine";
+                failure = reply.error || "Could not start probing";
                 return;
             }
+            routine = reply.data.config;
             program = reply.data.program;
             reviewID = reply.data.id;
             simulated = reply.data.simulated === true;
+            runReviewed();
         });
     }
 
@@ -222,8 +230,15 @@ PageView {
     }
 
     function proceed() {
-        if (!reviewID || reviewing)
+        if (phase !== "review" || reviewing || !operationReview.item)
             return;
+        var value = operationReview.item.parameters();
+        if (!value)
+            return;
+        prepareRun(value);
+    }
+
+    function runReviewed() {
         var id = reviewID;
         reviewID = "";
         startMotion(id, "run");
@@ -352,7 +367,7 @@ PageView {
             Layout.preferredHeight: Theme.headerHeight
             visible: flow.showHeader
             title: flow.description
-            detail: flow.phase === "failed" ? "Failed" : flow.phase === "result" ? "Complete" : flow.phase === "running" ? "Running" : flow.simulated ? "Simulation" : "Review"
+            detail: flow.phase === "failed" ? "Failed" : flow.phase === "result" ? "Complete" : flow.phase === "running" ? "Running" : "Confirm"
             uiFont: flow.uiFont
             backEnabled: flow.phase !== "running" && !flow.busy
             onBack: flow.close()
@@ -375,8 +390,20 @@ PageView {
                 Layout.fillHeight: true
                 spacing: Theme.groupSpacing
 
+                Loader {
+                    id: operationReview
+                    active: flow.opened && flow.phase === "review"
+                    visible: active
+                    enabled: !flow.reviewing
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    sourceComponent: OperationReview {
+                        config: flow.routine
+                    }
+                }
+
                 Item {
-                    visible: flow.phase !== "result" || flow.sourceVisible
+                    visible: flow.phase !== "review" && (flow.phase !== "result" || flow.sourceVisible)
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     ScrollView {
@@ -387,7 +414,7 @@ PageView {
                         onHeightChanged: Qt.callLater(flow.scrollLogToEnd)
                         TextArea {
                             id: logArea
-                            text: flow.phase === "review" ? flow.program.join("\n") : flow.logText
+                            text: flow.logText
                             readOnly: true
                             selectByMouse: false
                             wrapMode: TextEdit.NoWrap
@@ -466,7 +493,7 @@ PageView {
                 LabButton {
                     visible: flow.phase !== "running"
                     text: flow.phase === "review" ? "Proceed" : "Close"
-                    enabled: !flow.busy && (flow.phase !== "review" || (flow.reviewID.length > 0 && !flow.reviewing))
+                    enabled: !flow.busy && (flow.phase !== "review" || !flow.reviewing)
                     Layout.preferredWidth: 140
                     Layout.preferredHeight: 56
                     font.pixelSize: 20

@@ -70,9 +70,9 @@ QtObject {
             values = Object.assign({}, values, args);
             data = values;
         } else if (operation === "routine.review")
-            data = {id: "screen-review", program: program, simulated: true};
+            data = {id: "screen-review", config: args, program: program, simulated: true};
         else if (operation === "rotary.review")
-            data = {id: "screen-rotary", program: program.join("\n"), simulated: true};
+            data = {id: "screen-rotary", config: args, program: program.join("\n"), simulated: true};
         else if (operation === "history.get") data = history;
         else if (operation === "wcs.select")
             state = Object.assign({}, state, {status: Object.assign({}, state.status, {wcs: args.wcs})});

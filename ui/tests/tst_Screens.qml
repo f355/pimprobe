@@ -172,7 +172,18 @@ TestCase {
             {tag:"52-update-current", kind:"update-current"},
             {tag:"53-update-error", kind:"update-error"},
             {tag:"54-update-installing", kind:"update-installing"},
-            {tag:"55-tool-reference", kind:"tool-reference"}
+            {tag:"55-tool-reference", kind:"tool-reference"},
+            {tag:"56-inside-review", kind:"operation-review", family:"inside", selection:{x:-1,y:-1,z:false}},
+            {tag:"57-hole-review", kind:"operation-review", family:"center", selection:"hole"},
+            {tag:"58-block-review", kind:"operation-review", family:"center", selection:"block"},
+            {tag:"59-z-review", kind:"operation-review", family:"outside", selection:{x:0,y:0,z:true}},
+            {tag:"60-review-keypad", kind:"operation-review", family:"outside", selection:{x:-1,y:-1,z:false}, edit:true},
+            {tag:"61-review-feeds", kind:"operation-review", family:"center", selection:"hole", scroll:true},
+            {tag:"62-level-review", kind:"rotary-review", operation:"horizontal"},
+            {tag:"63-face-review", kind:"rotary-review", operation:"vertical"},
+            {tag:"64-boss-review", kind:"operation-review", family:"center", selection:"boss"},
+            {tag:"65-valley-review", kind:"operation-review", family:"center", selection:"x-valley"},
+            {tag:"66-pocket-z-review", kind:"operation-review", family:"inside", selection:{x:0,y:0,z:true}}
         ];
     }
     function test_layout(data) {
@@ -223,6 +234,19 @@ TestCase {
                     config:Pages.routine(client.values,"outside",{x:0,y:0,z:true},54),error:"No contact"}
             ];
             component(HistoryFlow).showHistory();
+        } else if (kind === "operation-review") {
+            page.openRoutineReview(data.family,data.selection);
+            var review = component(OperationReview);
+            if (data.edit) {
+                var input = findChild(review,"review-xSearchDistance");
+                mouseClick(input);
+                input.editor.typeKey("2");
+                input.editor.typeKey("5");
+            }
+            if (data.scroll) {
+                var optionScroll = findChild(review,"reviewOptions");
+                optionScroll.contentY = optionScroll.contentHeight - optionScroll.height;
+            }
         } else if (["review","running","failed"].indexOf(kind) >= 0) {
             page.openRoutineReview("outside",{x:-1,y:-1,z:false});
             var flow = component(ProbeFlow);
@@ -232,7 +256,7 @@ TestCase {
                 if (kind === "failed") flow.failure = "No contact on Y+. Move the probe closer to the surface and check the search distance.";
             }
         } else if (kind.indexOf("rotary") === 0 || ["level","face"].indexOf(kind) >= 0) {
-            var operation = kind === "level" ? "horizontal" : kind === "face" ? "vertical" : "axis";
+            var operation = data.operation || (kind === "level" ? "horizontal" : kind === "face" ? "vertical" : "axis");
             var rotary = showRotary(operation);
             if (kind !== "rotary-review") {
                 rotary.phase = "result";

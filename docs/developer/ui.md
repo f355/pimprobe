@@ -31,6 +31,28 @@ Give command buttons clear verbs. Use captions on diagrams when the drawing
 alone could be mistaken for another operation. Keep labels next to their
 inputs and use the same input width within a form.
 
+## Motion previews
+
+`OperationReview` shows a looping motion illustration beside the distances and
+feeds. Its number fields edit a local draft. Proceed accepts the active field.
+`ProbeFlow` and `RotaryFlow` then send the options to the application, which
+prepares the moves from the current machine position. The pages run the returned
+token. Saved settings are unchanged.
+
+`MotionIllustration` plays PNG frame sheets from `ui/animations`. The scenes
+use Three.js in `dev/animations`; QML plays the rendered frames. Rendering
+requires Node.js and Chrome:
+
+```sh
+npm ci --prefix dev/animations
+npm run render --prefix dev/animations
+node dev/animations/gallery.mjs
+```
+
+The gallery is saved as `build/ui-review/motion-loops.html`. The renderer checks
+for movement, visible pixels and probe framing. Each frame sheet fits inside a
+2048 × 2048 texture.
+
 ## Checking screens
 
 Run `./dev/test-ui.sh` after changing shared controls or layouts. The screen

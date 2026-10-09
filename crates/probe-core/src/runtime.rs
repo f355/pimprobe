@@ -490,7 +490,13 @@ async fn write_zero<C: Controller + ?Sized>(
             .filter(|v| v.is_finite())
             .ok_or_else(|| Error::Compensation(format!("missing {a} result")))?;
         let surface = point + p.start.position[i] - p.start.work_position[i] + offsets[i];
-        desired[i] = quantize(state.position[i] - surface);
+        // G10 L20 takes tool-compensated WPos; the probe measurement is fixed in G53.
+        let tool_offset = if a == Axis::Z {
+            state.tool_length_offset
+        } else {
+            0.
+        };
+        desired[i] = quantize(state.position[i] - surface - tool_offset);
         words.push(format!("{a}{:.3}", desired[i]));
     }
     let duration = t

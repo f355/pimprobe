@@ -58,6 +58,48 @@ async fn state_exposes_both_dro_reference_points() {
 }
 
 #[tokio::test]
+async fn probe_zero_and_last_tool_tip_agree_at_the_measured_surface() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut state = MockController::new().state();
+    state.probe_extended = true;
+    state.tool_length_offset = 12.;
+    let app = App::new(
+        Device::Mock(Box::new(MockController::with_state(state))),
+        settings::open(temp.path().join("settings.json")).unwrap(),
+        None,
+        LogStore::open(temp.path().join("logs")).unwrap(),
+    );
+    let router = pimprobe_service::http::router(app.clone());
+    let (_, body) = request(&router, "POST", "/api/v1/routine/review", config()).await;
+    let review: Value = serde_json::from_str(&body).unwrap();
+    let token = json!({"id":review["id"]});
+    let (_, body) = request(&router, "POST", "/api/v1/routine/run", token.clone()).await;
+    let last: Value = serde_json::from_str(body.lines().last().unwrap()).unwrap();
+    assert_eq!(last["type"], "result", "{body}");
+    let surface = last["result"]["machinePoint"][2].as_f64().unwrap();
+    let (_, body) = request(&router, "POST", "/api/v1/routine/zero", token).await;
+    let result: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(result["zeroed"], true, "{body}");
+    let state = app.device.state();
+    app.device
+        .send(&format!("G90 G53 G0 Z{}", surface + state.probe_offset[2]))
+        .await
+        .unwrap();
+    let probe = app.probe.state().coordinates.probe.unwrap();
+    assert!(probe.work_position[2].abs() < 0.002, "{probe:?}");
+    app.device
+        .send(&format!(
+            "G90 G53 G0 Z{}",
+            surface + state.tool_length_offset
+        ))
+        .await
+        .unwrap();
+    let spindle = app.probe.state().coordinates.spindle.unwrap();
+    assert!(spindle.work_position[2].abs() < 0.002, "{spindle:?}");
+    assert!((spindle.machine_position[2] - probe.machine_position[2]).abs() < 0.002);
+}
+
+#[tokio::test]
 async fn rotary_result_can_be_applied_to_a_selected_wcs() {
     let (_temp, app, router) = app();
     let (_, body) = request(

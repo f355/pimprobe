@@ -271,18 +271,7 @@ impl MockController {
     }
     pub fn with_state(mut state: State) -> Self {
         if state.wcs_origin.is_none() {
-            let angle = state.wcs_rotation.unwrap_or(0.).to_radians();
-            let x = state.work_position[0] + state.coordinate_offset[0];
-            let y = state.work_position[1] + state.coordinate_offset[1];
-            state.wcs_origin = Some([
-                state.position[0] - angle.cos() * x + angle.sin() * y,
-                state.position[1] - angle.sin() * x - angle.cos() * y,
-                state.position[2]
-                    - state.work_position[2]
-                    - state.coordinate_offset[2]
-                    - state.tool_length_offset,
-                state.position[3] - state.work_position[3] - state.coordinate_offset[3],
-            ]);
+            state.wcs_origin = Some(Self::origin_from_work(&state));
         }
         let (events, _) = broadcast::channel(256);
         Self {
@@ -295,6 +284,20 @@ impl MockController {
             events,
             command_delay: std::time::Duration::ZERO,
         }
+    }
+    fn origin_from_work(state: &State) -> Position {
+        let (sin, cos) = state.wcs_rotation.unwrap_or(0.).to_radians().sin_cos();
+        let x = state.work_position[0] + state.coordinate_offset[0];
+        let y = state.work_position[1] + state.coordinate_offset[1];
+        [
+            state.position[0] - cos * x + sin * y,
+            state.position[1] - sin * x - cos * y,
+            state.position[2]
+                - state.work_position[2]
+                - state.coordinate_offset[2]
+                - state.tool_length_offset,
+            state.position[3] - state.work_position[3] - state.coordinate_offset[3],
+        ]
     }
     /// Pace preview submission without holding a lock or leaving simulated motion
     /// pending when the caller cancels the send future.
@@ -592,9 +595,7 @@ impl Controller for MockController {
             for (a, v) in axes {
                 inner.state.work_position[a.index()] = v;
             }
-            inner.state.wcs_origin = Some(std::array::from_fn(|i| {
-                inner.state.position[i] - inner.state.work_position[i]
-            }));
+            inner.state.wcs_origin = Some(Self::origin_from_work(&inner.state));
             self.publish(&inner.state);
             return Ok(());
         }

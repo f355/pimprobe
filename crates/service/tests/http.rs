@@ -37,6 +37,27 @@ fn config() -> Value {
 }
 
 #[tokio::test]
+async fn state_exposes_both_dro_reference_points() {
+    let (_temp, app, router) = app();
+    let (_, body) = request(&router, "GET", "/api/v1/state", Value::Null).await;
+    let state: Value = serde_json::from_str(&body).unwrap();
+    let raw = app.device.state();
+    assert_eq!(
+        state["coordinates"]["spindle"]["workPosition"],
+        json!(raw.work_position)
+    );
+    assert_eq!(
+        state["coordinates"]["probe"]["machinePosition"],
+        json!([
+            raw.position[0] + raw.probe_offset[0],
+            raw.position[1] + raw.probe_offset[1],
+            raw.position[2] - raw.probe_offset[2],
+            raw.position[3],
+        ])
+    );
+}
+
+#[tokio::test]
 async fn rotary_result_can_be_applied_to_a_selected_wcs() {
     let (_temp, app, router) = app();
     let (_, body) = request(

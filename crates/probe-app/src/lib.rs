@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+pub mod coordinates;
 pub mod device;
 pub mod history;
 pub mod host;
@@ -299,6 +300,7 @@ pub enum Motion {
 pub struct AppState {
     #[serde(flatten)]
     pub device: DeviceSnapshot,
+    pub coordinates: coordinates::Coordinates,
     pub contact_active: bool,
     pub recovery_failed: bool,
 }
@@ -342,8 +344,10 @@ fn queue_progress(
 
 impl ProbeApp {
     pub fn state(&self) -> AppState {
+        let device = self.device.snapshot();
         AppState {
-            device: self.device.snapshot(),
+            coordinates: coordinates::Coordinates::from_snapshot(&device),
+            device,
             contact_active: self.active.load(Ordering::SeqCst),
             recovery_failed: self.recovery_failed.load(Ordering::SeqCst),
         }

@@ -29,8 +29,8 @@ use axum::{
     routing::{get, post},
 };
 use pimprobe_app::{
-    AppError, ErrorKind, Motion, Operation, ProbeApp, Token, ZeroRequest, history::Records,
-    settings::Settings,
+    AppError, ErrorKind, Motion, Operation, ProbeApp, ResultWcsRequest, Token, ZeroRequest,
+    history::Records, settings::Settings,
 };
 use pimprobe_core::{Controller, RepeatabilityOptions, RoutineConfig};
 use serde::Deserialize;
@@ -88,11 +88,13 @@ pub fn router(app: Arc<App>) -> Router {
         .route("/api/v1/routine/review", post(review))
         .route("/api/v1/routine/run", post(run))
         .route("/api/v1/routine/zero", post(zero))
+        .route("/api/v1/routine/wcs", post(result_wcs))
         .route("/api/v1/routine/return", post(return_start))
         .route("/api/v1/routine/measured", post(go_to_measured))
         .route("/api/v1/rotary/review", post(rotary::review))
         .route("/api/v1/rotary/run", post(rotary::run))
         .route("/api/v1/rotary/zero", post(rotary::zero))
+        .route("/api/v1/rotary/wcs", post(rotary::wcs))
         .route("/api/v1/rotary/rotation", post(rotary::rotation))
         .route("/api/v1/repeatability/run", post(repeatability))
         .route("/api/v1/repeatability/stop", post(stop_repeatability))
@@ -318,6 +320,12 @@ async fn zero(
     ApiJson(token): ApiJson<ZeroRequest>,
 ) -> Result<Json<pimprobe_core::RoutineResult>, ApiError> {
     Ok(Json(app.probe.zero(token).await?))
+}
+async fn result_wcs(
+    State(app): State<Arc<App>>,
+    ApiJson(request): ApiJson<ResultWcsRequest>,
+) -> Result<Json<pimprobe_core::RoutineResult>, ApiError> {
+    Ok(Json(app.probe.select_result_wcs(request).await?))
 }
 async fn repeatability(
     State(app): State<Arc<App>>,

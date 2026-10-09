@@ -18,6 +18,7 @@ pub mod device;
 pub mod history;
 pub mod host;
 pub mod operations;
+mod results;
 mod reviews;
 mod rotary;
 pub mod settings;
@@ -277,6 +278,13 @@ pub struct ZeroRequest {
     pub id: String,
     #[serde(default)]
     pub offsets: [f64; 3],
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultWcsRequest {
+    pub id: String,
+    pub wcs: i32,
 }
 
 #[derive(Clone, Copy)]

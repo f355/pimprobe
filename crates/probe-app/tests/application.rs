@@ -15,7 +15,8 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use pimprobe_app::{
-    AppError, MeasurementResult, Motion, OperationEvent, ProbeApp, Token, ZeroRequest,
+    AppError, MeasurementResult, Motion, OperationEvent, ProbeApp, ResultWcsRequest, Token,
+    ZeroRequest,
     device::{ActionGuard, DeviceSnapshot, ProbeDevice},
     history::{DiagnosticEvent, Diagnostics, HistoryRecord, HistoryStore, Records},
     host::{ExportResult, HostActions, SoftwareInfo},
@@ -230,6 +231,68 @@ fn config() -> RoutineConfig {
         y: 0,
         ..RoutineConfig::default()
     }
+}
+
+#[tokio::test]
+async fn completed_measurement_can_zero_another_wcs_without_probing_again() {
+    let (app, device, _) = app();
+    let review = app.review(config()).await.unwrap();
+    let mut run = app
+        .start_motion(
+            Token {
+                id: review.id.clone(),
+            },
+            Motion::Run,
+        )
+        .await
+        .unwrap();
+    let mut measured = None;
+    while let Some(event) = run.recv().await {
+        if let OperationEvent::Result {
+            result: MeasurementResult::Routine(result),
+        } = event
+        {
+            measured = Some(result);
+        }
+    }
+    let measured = measured.unwrap();
+    let position = device.state().position;
+    assert!(
+        app.select_result_wcs(ResultWcsRequest {
+            id: review.id.clone(),
+            wcs: 60,
+        })
+        .await
+        .is_err()
+    );
+    let result = app
+        .select_result_wcs(ResultWcsRequest {
+            id: review.id.clone(),
+            wcs: 55,
+        })
+        .await
+        .unwrap();
+    assert_eq!(result.wcs, 55);
+    assert_eq!(result.machine_point, measured.machine_point);
+    assert_eq!(device.state().wcs, 55);
+    assert_eq!(device.state().position, position);
+    let zero = app
+        .zero(ZeroRequest {
+            id: review.id,
+            offsets: [0.0; 3],
+        })
+        .await
+        .unwrap();
+    assert!(zero.zeroed);
+    assert_eq!(zero.wcs, 55);
+    assert_eq!(device.state().position, position);
+    assert!(
+        device
+            .mock
+            .commands()
+            .iter()
+            .any(|s| s.starts_with("G10 L20 P2 "))
+    );
 }
 
 #[tokio::test]

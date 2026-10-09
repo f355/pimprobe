@@ -37,6 +37,41 @@ fn config() -> Value {
 }
 
 #[tokio::test]
+async fn rotary_result_can_be_applied_to_a_selected_wcs() {
+    let (_temp, app, router) = app();
+    let (_, body) = request(
+        &router,
+        "POST",
+        "/api/v1/rotary/review",
+        json!({"operation":"horizontal","yDistance":10,"zDistance":10}),
+    )
+    .await;
+    let review: Value = serde_json::from_str(&body).unwrap();
+    let token = json!({"id":review["id"]});
+    let (_, body) = request(&router, "POST", "/api/v1/rotary/run", token.clone()).await;
+    let last: Value = serde_json::from_str(body.lines().last().unwrap()).unwrap();
+    assert_eq!(last["type"], "result", "{body}");
+    request(&router, "POST", "/api/v1/rotary/zero", token.clone()).await;
+    let position = app.device.state().position;
+    let (_, body) = request(
+        &router,
+        "POST",
+        "/api/v1/rotary/wcs",
+        json!({"id":review["id"],"wcs":55}),
+    )
+    .await;
+    let result: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(result["wcs"], 55, "{body}");
+    assert_eq!(result["zeroed"], false);
+    assert_eq!(result["level"], last["result"]["level"]);
+    assert_eq!(app.device.state().position, position);
+    let (_, body) = request(&router, "POST", "/api/v1/rotary/zero", token).await;
+    let result: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(result["zeroed"], true, "{body}");
+    assert_eq!(result["wcs"], 55);
+}
+
+#[tokio::test]
 async fn rotary_surfaces_are_aligned_rechecked_and_zeroed() {
     for operation in ["horizontal", "vertical", "verticalNegative"] {
         let (_temp, app, router) = app();

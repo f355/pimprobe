@@ -79,25 +79,30 @@ impl RotaryConfig {
     pub fn validate(&self) -> Result<(), Error> {
         let validate = |name, value: f64, lo: f64, hi: f64| {
             if !value.is_finite() || !(lo..=hi).contains(&value) {
+                let requirement = if hi == f64::MAX {
+                    format!("at least {lo}")
+                } else {
+                    format!("between {lo} and {hi}")
+                };
                 Err(Error::InvalidConfig(format!(
-                    "{name} must be between {lo} and {hi}"
+                    "{name} must be {requirement}."
                 )))
             } else {
                 Ok(())
             }
         };
         for (name, value, lo, hi) in [
-            ("rotary feed", self.rotary_feed, 1.0, f64::MAX),
-            ("probe diameter", self.diameter, 0.1, 20.0),
-            ("backoff", self.retract, 0.1, 10.0),
-            ("positioning feed", self.positioning_feed, 1.0, f64::MAX),
-            ("coarse feed", self.coarse_feed, 1.0, f64::MAX),
-            ("fine feed", self.fine_feed, 1.0, f64::MAX),
+            ("Rotary feed", self.rotary_feed, 1.0, f64::MAX),
+            ("Probe ball diameter", self.diameter, 0.1, 20.0),
+            ("Backoff", self.retract, 0.1, 10.0),
+            ("Positioning feed", self.positioning_feed, 1.0, f64::MAX),
+            ("Coarse feed", self.coarse_feed, 1.0, f64::MAX),
+            ("Fine feed", self.fine_feed, 1.0, f64::MAX),
         ] {
             validate(name, value, lo, hi)?;
         }
         if self.operation == RotaryOperation::Axis {
-            validate("rod diameter", self.rod_diameter, 3., 100.)?;
+            validate("Rod diameter", self.rod_diameter, 3., 100.)?;
             if !self.x_distance.is_finite() || !(1.0..=200.0).contains(&self.x_distance.abs()) {
                 return Err(Error::InvalidConfig(
                     "X distance must be between 1 and 200 mm in either direction".into(),
@@ -142,7 +147,7 @@ pub fn rotary_station(
         || radius <= 0.0
     {
         return Err(Error::Compensation(
-            "rotated side measurements do not define a positive radius".into(),
+            "The side measurements give a zero or negative radius. Check the rod diameter and probe calibration.".into(),
         ));
     }
     Ok(RotaryStation {
@@ -175,7 +180,7 @@ impl RotaryResult {
         let d: [f64; 3] = std::array::from_fn(|i| stations[1].center[i] - stations[0].center[i]);
         if !d.iter().all(|v| v.is_finite()) || d[0].abs() < 1.0 {
             return Err(Error::Compensation(
-                "rotary stations must be separated in X".into(),
+                "Measure the axis center at two different X positions.".into(),
             ));
         }
         Ok(Self {
@@ -199,17 +204,18 @@ pub fn review_rotary(start: State, config: RotaryConfig) -> Result<RotaryPlan, E
     preflight(&start)?;
     if !start.homed || !start.modes.valid() {
         return Err(Error::Preflight(
-            "home the machine before calibrating the rotary axis".into(),
+            "Home the machine before calibrating the rotary axis.".into(),
         ));
     }
     if !matches!(start.plane, 17..=19) {
         return Err(Error::Preflight(
-            "arc plane is unavailable; read controller modes again".into(),
+            "The machine did not report the active G-code plane. Reconnect and try again.".into(),
         ));
     }
     if rotary_supported(&start.firmware_version) && start.wcs_rotation.is_none() {
         return Err(Error::Preflight(
-            "work rotation is unavailable; read controller coordinates again".into(),
+            "The machine did not report the work coordinate rotation. Reconnect and try again."
+                .into(),
         ));
     }
     if config.operation != RotaryOperation::Axis {
@@ -268,7 +274,7 @@ pub(crate) async fn query_rotary_frame<C: Controller + ?Sized>(c: &C) -> Result<
         Ok(c.state())
     })
     .await
-    .map_err(|_| Error::Preflight("controller did not report work-coordinate data".into()))?
+    .map_err(|_| Error::Preflight("The machine did not report its work coordinates.".into()))?
 }
 
 fn comment(observe: &impl Fn(Progress), text: impl Into<String>) {
@@ -499,7 +505,7 @@ async fn station<C: Controller + ?Sized>(
         comment(observe, format!("Rotated crest pair {}", pass + 1));
         if clearance_z <= crest_z {
             return Err(Error::Preflight(
-                "position the probe above the rod's crest before calibration".into(),
+                "Position the probe above the top of the rod before calibration.".into(),
             ));
         }
         let apex = [original[0], crest_y, clearance_z, a];
@@ -537,7 +543,7 @@ async fn station<C: Controller + ?Sized>(
         if pass == 3 && error >= 0.003 {
             track(c, center, apex, -90.0, 0.0, config, native).await?;
             return Err(Error::Compensation(
-                "rotary center did not converge; check rod diameter and starting height".into(),
+                "Repeated measurements did not agree on the rotary center. Check the rod diameter and starting height.".into(),
             ));
         }
         center = refined;
@@ -559,7 +565,7 @@ pub async fn run_rotary<C: Controller + ?Sized>(
         || !within(machine.state().probe_offset, plan.start.probe_offset, 0.001)
     {
         return Err(Error::Preflight(
-            "machine position or calibration changed; review again".into(),
+            "The machine position or probe calibration changed. Start the operation again.".into(),
         ));
     }
     let guarded = Cancellable {
@@ -651,7 +657,9 @@ pub async fn restore_rotary_state<C: Controller + ?Sized>(
     c.send(&format!("G{}", plan.start.plane)).await?;
     query_modes(c).await?;
     if c.state().plane != plan.start.plane {
-        return Err(Error::Controller("arc plane not confirmed".into()));
+        return Err(Error::Controller(
+            "The machine did not confirm the requested G-code plane.".into(),
+        ));
     }
     set_modes(c, plan.start.modes).await
 }
@@ -689,7 +697,9 @@ pub(crate) async fn write_coordinate_data<C: Controller + ?Sized>(
                     .iter()
                     .any(|&(axis, value)| (origin[axis] - value).abs() > 0.0015)
                 {
-                    return Err(Error::Controller("work zero not confirmed".into()));
+                    return Err(Error::Controller(
+                        "The machine did not confirm the new work zero.".into(),
+                    ));
                 }
                 origin_received = true;
             }
@@ -700,7 +710,9 @@ pub(crate) async fn write_coordinate_data<C: Controller + ?Sized>(
             {
                 let difference = (actual - expected + 180.0).rem_euclid(360.0) - 180.0;
                 if difference.abs() > 0.0015 {
-                    return Err(Error::Controller("work rotation not confirmed".into()));
+                    return Err(Error::Controller(
+                        "The machine did not confirm the new work coordinate rotation.".into(),
+                    ));
                 }
                 rotation_received = true;
             }
@@ -720,7 +732,7 @@ pub async fn write_rotary_rotation<C: Controller + ?Sized>(
         || !angle.is_finite()
     {
         return Err(Error::Preflight(
-            "this firmware does not support work-coordinate rotation".into(),
+            "This firmware does not support work coordinate rotation.".into(),
         ));
     }
     write_coordinate_data(c, wcs, &[], Some(angle)).await
@@ -733,14 +745,20 @@ pub async fn zero_rotary<C: Controller + ?Sized>(
     if let Some(level) = &result.level {
         if c.state().wcs != result.wcs {
             return Err(Error::Preflight(
-                "select the measured WCS before setting work zero".into(),
+                "Select the measured work coordinate system before setting work zero.".into(),
             ));
         }
         return level::zero(c, result.wcs, level).await;
     }
-    if result.stations.len() != 2 || c.state().wcs != result.wcs {
+    if c.state().wcs != result.wcs {
+        return Err(Error::Preflight(format!(
+            "Select G{} before setting work zero.",
+            result.wcs
+        )));
+    }
+    if result.stations.len() != 2 {
         return Err(Error::Preflight(
-            "no matching completed rotary calibration".into(),
+            "No completed rotary calibration is available.".into(),
         ));
     }
     let state = query_rotary_frame(c).await?;
@@ -770,11 +788,11 @@ async fn write_rotary_zero<C: Controller + ?Sized>(
 fn y_origin_for_point(state: &State, point: [f64; 3], angle: f64) -> Result<f64, Error> {
     let (sin, cos) = angle.to_radians().sin_cos();
     if cos.abs() < 1e-6 {
-        return Err(Error::Preflight("cannot set Y zero while preserving X zero with this XY rotation; remove the rotation or select another WCS".into()));
+        return Err(Error::Preflight("Cannot set Y zero without changing X zero at this rotation. Remove the rotation or select another work coordinate system.".into()));
     }
     let origin = state
         .wcs_origin
-        .ok_or_else(|| Error::Preflight("work origin is unavailable".into()))?;
+        .ok_or_else(|| Error::Preflight("Could not read the work zero from the machine.".into()))?;
     Ok(point[1] - sin / cos * (point[0] - origin[0]) - state.coordinate_offset[1] / cos)
 }
 
@@ -785,12 +803,12 @@ pub async fn align_rotary<C: Controller + ?Sized>(
     preflight_machine(&c.state())?;
     if result.stations.len() != 2 || c.state().wcs != result.wcs {
         return Err(Error::Preflight(
-            "select the measured WCS before applying alignment".into(),
+            "Select the measured work coordinate system before setting X/Y rotation.".into(),
         ));
     }
     if !rotary_supported(&c.state().firmware_version) {
         return Err(Error::Preflight(
-            "this firmware does not support work-coordinate rotation".into(),
+            "This firmware does not support work coordinate rotation.".into(),
         ));
     }
     if result.zeroed {

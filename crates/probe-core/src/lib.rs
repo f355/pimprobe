@@ -39,35 +39,35 @@ pub type Position = [f64; 4];
 
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum Error {
-    #[error("cancelled; machine stop must be confirmed by the owner")]
+    #[error("Probing cancelled. Check that the machine has stopped.")]
     Cancelled,
-    #[error("check stopped")]
+    #[error("Check stopped.")]
     Stopped,
-    #[error("preflight: {0}")]
+    #[error("{0}")]
     Preflight(String),
-    #[error("invalid configuration: {0}")]
+    #[error("{0}")]
     InvalidConfig(String),
-    #[error("controller: {0}")]
+    #[error("{0}")]
     Controller(String),
-    #[error("controller disconnected")]
+    #[error("Lost connection to the machine.")]
     Disconnected,
-    #[error("controller events lost")]
+    #[error("Machine status messages were lost. Probing stopped.")]
     EventLagged,
-    #[error("motion blocked")]
+    #[error("The machine has an alarm. Clear it before continuing.")]
     MotionBlocked,
-    #[error("position: {0}")]
+    #[error("{0}")]
     Position(String),
-    #[error("coarse search made no contact")]
+    #[error("The probe reached the search distance without touching. Move closer or increase the search distance.")]
     CoarseNoContact,
-    #[error("fine search made no contact")]
+    #[error("The probe did not touch again on the slow pass. Check that the workpiece is secure and the probe works.")]
     NoContact,
-    #[error("unexpected contact; released={retracted}")]
+    #[error("The probe touched something while positioning. Check the path before trying again.")]
     UnexpectedContact { position: Position, retracted: bool },
-    #[error("deadline exceeded")]
+    #[error("The machine did not confirm completion in time.")]
     Timeout,
-    #[error("compensation: {0}")]
+    #[error("{0}")]
     Compensation(String),
-    #[error("{cause}; recovery: {recovery}")]
+    #[error("{cause}\n{recovery}")]
     Recovery {
         cause: Box<Error>,
         recovery: Box<Error>,
@@ -207,7 +207,7 @@ pub(crate) fn within(a: Position, b: Position, t: f64) -> bool {
 pub(crate) fn preflight(s: &State) -> Result<(), Error> {
     preflight_machine(s)?;
     if !s.probe_extended {
-        return Err(Error::Preflight("probe not extended".into()));
+        return Err(Error::Preflight("Extend the probe before probing.".into()));
     }
     Ok(())
 }
@@ -216,24 +216,24 @@ pub(crate) fn preflight_machine(s: &State) -> Result<(), Error> {
         return Err(Error::MotionBlocked);
     }
     for (ok, why) in [
-        (s.connected, "Controller is disconnected"),
-        (s.ready, "Machine is not ready"),
-        (s.spindle_stopped, "Stop the spindle before probing"),
+        (s.connected, "The machine is disconnected."),
+        (s.ready, "Wait for the machine to finish moving."),
+        (s.spindle_stopped, "Stop the spindle before probing."),
         (
             !s.probe_triggered,
-            "The probe is already touching something",
+            "The probe is already touching something. Move it clear before probing.",
         ),
         (
             s.probe_offset_known,
-            "Probe calibration is unavailable; reconnect the controller",
+            "Could not read the probe calibration from the machine. Reconnect and try again.",
         ),
         (
             s.travel_limits_known,
-            "Machine travel limits are unavailable; reconnect the controller",
+            "Could not read the machine travel limits. Reconnect and try again.",
         ),
         (
             finite(s.position),
-            "Machine position is unavailable; reconnect the controller",
+            "Could not read the machine position. Reconnect and try again.",
         ),
     ] {
         if !ok {

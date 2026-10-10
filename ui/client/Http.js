@@ -16,6 +16,11 @@
 
 .pragma library
 
+function responseError(status) {
+    return status === 0 ? "Could not connect to the probing service."
+                        : "The probing service could not complete the request (HTTP " + status + ")."
+}
+
 function request(method, url, body, done) {
     var xhr = new XMLHttpRequest()
     xhr.onreadystatechange = function() {
@@ -25,17 +30,17 @@ function request(method, url, body, done) {
         if (xhr.responseText.length) {
             try { response.data = JSON.parse(xhr.responseText) }
             catch (error) {
-                response.error = response.ok ? "Invalid service response" : xhr.responseText.trim()
+                response.error = response.ok ? "The probing service sent an unreadable response." : responseError(xhr.status)
                 response.ok = false
             }
         }
         if (response.data && response.data.error === true) {
             response.ok = false
-            response.error = response.data.message || "Service error"
+            response.error = response.data.message || responseError(xhr.status)
         }
         if (!response.ok && !response.error)
             response.error = response.data && response.data.message
-                           ? response.data.message : "Service unavailable"
+                           ? response.data.message : responseError(xhr.status)
         done(response)
     }
     xhr.open(method, url)
@@ -66,14 +71,14 @@ function stream(url, body, onEvent, onFinished) {
             try {
                 event = JSON.parse(line)
                 if (event.error === true) {
-                    finish(event.message || "Service error")
+                    finish(event.message || "The probing service could not complete the operation.")
                     xhr.abort()
                     return
                 }
                 onEvent(event)
             }
             catch (error) {
-                finish("Invalid routine response")
+                finish("The probing service sent an unreadable progress report.")
                 xhr.abort()
                 return
             }
@@ -81,17 +86,17 @@ function stream(url, body, onEvent, onFinished) {
         if (xhr.readyState === XMLHttpRequest.DONE) {
             var tail = text.substring(consumed).trim()
             if (xhr.status !== 200) {
-                var message = "Service unavailable"
+                var message = responseError(xhr.status)
                 try { message = JSON.parse(text).message || message } catch (_) {}
                 finish(message)
             }
             else if (tail.length) {
                 try {
                     var envelope = JSON.parse(tail)
-                    finish(envelope.error === true ? envelope.message || "Service error"
-                                                   : "Incomplete routine response")
+                    finish(envelope.error === true ? envelope.message || responseError(xhr.status)
+                                                   : "The connection ended before the probing result arrived.")
                 } catch (_) {
-                    finish("Incomplete routine response")
+                    finish("The connection ended before the probing result arrived.")
                 }
             }
             else finish("")

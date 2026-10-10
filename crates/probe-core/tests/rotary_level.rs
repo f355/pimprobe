@@ -155,7 +155,9 @@ async fn rotary_rotation_rejects_a_write_that_did_not_take_effect() {
     let machine = ParsedController::new(inner, true);
     let error = write_rotary_rotation(&machine, 54, 0.).await.unwrap_err();
     assert!(matches!(error, Error::Controller(_)), "{error}");
-    assert!(error.to_string().contains("work rotation not confirmed"));
+    assert!(error
+        .to_string()
+        .contains("did not confirm the new work coordinate rotation"));
     assert_eq!(machine.state().wcs_rotation, Some(2.5));
 }
 

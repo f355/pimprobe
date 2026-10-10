@@ -131,7 +131,7 @@ pub fn plan_contact(c: ContactConfig) -> Result<ContactPlan, Error> {
         || quantize(c.retract_distance) < 0.1
     {
         return Err(Error::InvalidConfig(
-            "invalid contact travel, direction, retract or feed".into(),
+            "Check the probing direction, search distance, backoff and feeds.".into(),
         ));
     }
     let d = c.direction as f64;
@@ -182,14 +182,19 @@ impl TimingPolicy {
         let feed = s.feed;
         if !positive(feed) || !positive(s.distance) {
             return Err(Error::InvalidConfig(
-                "invalid timing feed or distance".into(),
+                "The movement distance and feed must be positive numbers.".into(),
             ));
         }
         // Safety mode can cap a programmed feed at 1000 mm/min.
         Duration::try_from_secs_f64(s.distance / feed.min(1000.0) * 60.0)
             .ok()
             .and_then(|d| d.checked_add(self.response_margin))
-            .ok_or_else(|| Error::InvalidConfig("deadline overflow".into()))
+            .ok_or_else(|| {
+                Error::InvalidConfig(
+                    "The movement would take too long. Increase the feed or reduce the distance."
+                        .into(),
+                )
+            })
     }
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -253,7 +258,9 @@ pub(crate) async fn receive(rx: &mut broadcast::Receiver<Event>) -> Result<Event
         if n == -1 {
             return Err(Error::Disconnected);
         }
-        return Err(Error::Controller(format!("error:{n}")));
+        return Err(Error::Controller(format!(
+            "The machine reported error {n}."
+        )));
     }
     if e.status.as_ref().is_some_and(|s| s.motion_blocked) {
         return Err(Error::MotionBlocked);
@@ -262,7 +269,9 @@ pub(crate) async fn receive(rx: &mut broadcast::Receiver<Event>) -> Result<Event
 }
 pub(crate) fn segment(s: &Stage, start: Position, p: Position) -> Result<(), Error> {
     if !finite(p) || !finite(start) {
-        return Err(Error::Position("non-finite report".into()));
+        return Err(Error::Position(
+            "The machine reported an invalid position.".into(),
+        ));
     }
     let distance = s.distance;
     let along = (0..4)
@@ -272,7 +281,9 @@ pub(crate) fn segment(s: &Stage, start: Position, p: Position) -> Result<(), Err
         || along > distance + 0.05
         || (0..4).any(|i| (p[i] - start[i] - along * s.delta[i] / distance).abs() > 0.05)
     {
-        return Err(Error::Position("report outside commanded segment".into()));
+        return Err(Error::Position(
+            "The machine reported a position outside the commanded move.".into(),
+        ));
     }
     Ok(())
 }
@@ -315,8 +326,11 @@ pub(crate) async fn execute<C: Controller + ?Sized>(
         loop {
             let e = receive(&mut rx).await?;
             if let Some(status) = &e.status {
-                if !finite(status.position) || status.wcs != state.wcs {
-                    return Err(Error::Position("invalid position or changed WCS".into()));
+                if !finite(status.position) {
+                    return Err(Error::Position("The machine reported an invalid position.".into()));
+                }
+                if status.wcs != state.wcs {
+                    return Err(Error::Position("The work coordinate system changed while moving.".into()));
                 }
                 if !status.ready {
                     moving = true;
@@ -363,7 +377,7 @@ pub(crate) async fn execute<C: Controller + ?Sized>(
                     });
                 }
                 if !within(end, position, 0.05) {
-                    return Err(Error::Position("guarded move stopped short".into()));
+                    return Err(Error::Position("The positioning move stopped before reaching its target.".into()));
                 }
                 if failed {
                     return Ok((None, position));
@@ -376,7 +390,7 @@ pub(crate) async fn execute<C: Controller + ?Sized>(
                 }
                 segment(s, start, position)?;
                 if s.no_error && !within(end, position, 0.05) {
-                    return Err(Error::Position("coarse miss stopped short".into()));
+                    return Err(Error::Position("The probe stopped before reaching the search distance without reporting contact.".into()));
                 }
                 return Err(if s.no_error {
                     Error::CoarseNoContact
@@ -393,7 +407,7 @@ pub(crate) async fn execute<C: Controller + ?Sized>(
                     let d = (coordinate - hit.position[j])
                         * if j == i { s.delta[i].signum() } else { 1.0 };
                     if (j == i && !(-0.05..=0.10).contains(&d)) || (j != i && d.abs() > 0.05) {
-                        return Err(Error::Position("stop inconsistent with trigger".into()));
+                        return Err(Error::Position("The stopping position does not match the reported probe contact.".into()));
                     }
                 }
             }
@@ -403,9 +417,9 @@ pub(crate) async fn execute<C: Controller + ?Sized>(
     .await
     .map_err(|_| {
         if inconsistent_ready {
-            Error::Position("move did not reach expected endpoint".into())
+            Error::Position("The machine did not reach the requested position.".into())
         } else if probe_ready {
-            Error::Position("probe report missing after motion completed".into())
+            Error::Position("The machine finished moving without reporting the probe result.".into())
         } else {
             Error::Timeout
         }
@@ -438,7 +452,9 @@ pub async fn run_contact_with_reading<C: Controller + ?Sized>(
     let mut p = c.state().position;
     for s in plan_contact(config)?.stages {
         if c.state().wcs != wcs || !within(p, c.state().position, 0.05) {
-            return Err(Error::Position("stage start changed".into()));
+            return Err(Error::Position(
+                "The machine moved or changed work coordinates between probing moves.".into(),
+            ));
         }
         let (contact, pos) = execute(
             c,
@@ -480,7 +496,9 @@ pub fn plan_guarded_move(config: GuardedMoveConfig) -> Result<Stage, Error> {
         || !positive(config.retract_distance)
         || config.retract_distance < 0.1
     {
-        return Err(Error::InvalidConfig("invalid guarded move".into()));
+        return Err(Error::InvalidConfig(
+            "Check the positioning distance, feed and backoff.".into(),
+        ));
     }
     Ok(Stage::new(
         StageKind::GuardedMove,
@@ -528,7 +546,7 @@ pub(crate) async fn run_position_stage<C: Controller + ?Sized>(
             let latest = c.state();
             if latest.wcs != start.wcs || !within(latest.position, position, 0.05) {
                 return Err(Error::Position(
-                    "state changed before contact release".into(),
+                    "The machine moved or changed work coordinates before the probe could back off.".into(),
                 ));
             }
             let distance = quantize(

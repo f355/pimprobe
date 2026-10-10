@@ -313,7 +313,7 @@ PageView {
             activeRequest = null;
             if (!terminal) {
                 phase = "failed";
-                failure = error || "Routine connection ended without a confirmed result";
+                failure = error || "The connection ended before the probing result arrived.";
             }
         });
     }

@@ -161,14 +161,14 @@ fn preflight_errors_explain_what_needs_attention() {
                 connected: false,
                 ..base.clone()
             },
-            "Controller is disconnected",
+            "The machine is disconnected",
         ),
         (
             State {
                 ready: false,
                 ..base.clone()
             },
-            "Machine is not ready",
+            "Wait for the machine to finish moving",
         ),
         (
             State {

@@ -70,7 +70,10 @@ impl ProbeApp {
             .await
             .take(&token.id, session)
             .ok_or_else(|| {
-                AppError::conflict("review", "Review expired; review the calibration again")
+                AppError::conflict(
+                    "review",
+                    "This operation is no longer available. Open it again, then press Proceed.",
+                )
             })?;
         let mut config = json!(plan.config);
         config["wcs"] = json!(plan.start.wcs);

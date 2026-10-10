@@ -64,7 +64,9 @@ impl super::ProbeApp {
                     .await
                     .map_err(|_| pimprobe_core::Error::Disconnected)?;
                 if let Some(code) = event.controller_error {
-                    return Err(pimprobe_core::Error::Controller(format!("error:{code}")));
+                    return Err(pimprobe_core::Error::Controller(format!(
+                        "The machine reported error {code}."
+                    )));
                 }
                 if let Some((key, value)) = event.setting {
                     settings.insert(key, value);
@@ -110,10 +112,17 @@ impl super::ProbeApp {
             })
             .contains(value)
             {
+                let label = match key {
+                    "positioningFeed" => "Positioning feed",
+                    "coarseFeed" => "Coarse feed",
+                    "fineFeed" => "Fine feed",
+                    "rotaryFeed" => "Rotary feed",
+                    _ => unreachable!(),
+                };
                 return Err(super::AppError::invalid(
                     "settings",
                     format!(
-                        "{key} must be between 1 and {maximum} {} (machine limit)",
+                        "{label} must be between 1 and {maximum} {} (machine limit).",
                         if key == "rotaryFeed" {
                             "degrees/min"
                         } else {
@@ -129,9 +138,9 @@ impl super::ProbeApp {
 
 #[derive(Debug, thiserror::Error)]
 pub enum SettingsError {
-    #[error("invalid setting: {0}")]
+    #[error("Invalid value for setting {0}.")]
     Invalid(String),
-    #[error("settings store: {0}")]
+    #[error("Could not save settings: {0}")]
     Store(#[from] std::io::Error),
 }
 

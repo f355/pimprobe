@@ -62,9 +62,11 @@ impl Expr {
         if let Some(values) = values {
             let mut v = self.constant;
             for (n, k) in &self.terms {
-                v += k * values
-                    .get(n)
-                    .ok_or_else(|| Error::Compensation(format!("missing script value {n}")))?;
+                v += k * values.get(n).ok_or_else(|| {
+                    Error::Compensation(format!(
+                        "The value {n} needed for the next move is missing."
+                    ))
+                })?;
             }
             return Ok(number(v));
         }
@@ -145,10 +147,9 @@ impl Line {
             LineText::Declaration { name, description } => Ok(format!(
                 "; #<{name}> := {}",
                 if let Some(v) = values {
-                    number(
-                        *v.get(name)
-                            .ok_or_else(|| Error::Compensation(format!("missing {name}")))?,
-                    )
+                    number(*v.get(name).ok_or_else(|| {
+                        Error::Compensation(format!("The {name} measurement is missing."))
+                    })?)
                 } else {
                     description.clone()
                 }

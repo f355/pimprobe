@@ -91,7 +91,7 @@ pub struct SocketController {
 }
 
 fn failure(e: impl std::fmt::Display) -> Error {
-    Error::Controller(e.to_string())
+    Error::Controller(format!("Could not communicate with the machine: {e}"))
 }
 
 impl SocketController {
@@ -196,7 +196,9 @@ impl SocketController {
     pub async fn send(&self, command: &str) -> Result<(), Error> {
         let command = command.strip_suffix('\n').unwrap_or(command);
         if command.is_empty() || command.contains(['\n', '\r', '\0']) {
-            return Err(failure("expected one nonempty command"));
+            return Err(Error::Controller(
+                "Send one nonempty command at a time.".into(),
+            ));
         }
         self.write(b'Q', format!("{command}\n").as_bytes()).await
     }
@@ -205,7 +207,9 @@ impl SocketController {
     }
     async fn write(&self, kind: u8, data: &[u8]) -> Result<(), Error> {
         if data.len() > frame::MAX_FRAME_SIZE {
-            return Err(failure("oversize bridge frame"));
+            return Err(Error::Controller(
+                "The command is too long to send to the machine.".into(),
+            ));
         }
         let mut writer = self.inner.writer.lock().await;
         // Remove the socket until the whole frame succeeds; cancellation poisons it.
@@ -250,7 +254,7 @@ impl SocketController {
                         if last_status.elapsed() > Duration::from_secs(1) { settled = None; }
                         last_status = tokio::time::Instant::now();
                         if !status.ready && !status.motion_blocked { settled = None; continue; }
-                        if !status.position.iter().all(|v| v.is_finite()) { return Err(failure("non-finite stopped position")); }
+                        if !status.position.iter().all(|v| v.is_finite()) { return Err(Error::Position("The machine reported an invalid stopping position.".into())); }
                         if !settled.is_some_and(|(pos,_)| pos.iter().zip(status.position).all(|(a,b)| (a-b).abs() <= 0.005)) {
                             settled = Some((status.position, tokio::time::Instant::now()));
                         } else if settled.is_some_and(|(_, at)| at.elapsed() >= Duration::from_millis(500)) {
@@ -262,15 +266,13 @@ impl SocketController {
         }).await.map_err(|_| Error::Timeout)?
     }
     pub async fn set_probe_extended(&self, extended: bool) -> Result<(), Error> {
-        let _action = self
-            .inner
-            .action
-            .try_lock()
-            .map_err(|_| failure("controller action busy"))?;
+        let _action = self.inner.action.try_lock().map_err(|_| {
+            Error::Controller("Another machine action is running. Wait for it to finish.".into())
+        })?;
         let snapshot = self.snapshot();
         let status = snapshot
             .status
-            .ok_or_else(|| failure("machine status unavailable"))?;
+            .ok_or_else(|| Error::Controller("Could not read the machine status.".into()))?;
         if !snapshot.connected
             || !snapshot.status_fresh
             || snapshot.actuator_pending
@@ -279,14 +281,19 @@ impl SocketController {
             || !status.complete
             || !status.probe_actuator_known
         {
-            return Err(failure("probe actuator unavailable"));
+            return Err(Error::Controller(
+                "Cannot move the probe. The machine must be connected, idle and clear of alarms."
+                    .into(),
+            ));
         }
         let target = i32::from(extended);
         if status.probe_actuator == target {
             return Ok(());
         }
         if extended && status.probe_actuator != 0 {
-            return Err(failure("probe moving or intermediate"));
+            return Err(Error::Controller(
+                "The probe has not finished retracting. Wait before extending it.".into(),
+            ));
         }
         {
             let mut stored = self.inner.stored.write().unwrap();
@@ -302,17 +309,17 @@ impl SocketController {
     }
     pub async fn select_wcs(&self, wcs: i32) -> Result<(), Error> {
         if !(54..=59).contains(&wcs) {
-            return Err(failure("invalid WCS"));
+            return Err(Error::Controller(
+                "Select a work coordinate system from G54 to G59.".into(),
+            ));
         }
-        let _action = self
-            .inner
-            .action
-            .try_lock()
-            .map_err(|_| failure("controller action busy"))?;
+        let _action = self.inner.action.try_lock().map_err(|_| {
+            Error::Controller("Another machine action is running. Wait for it to finish.".into())
+        })?;
         let mut events = self.subscribe();
         let initial = self.state();
         if !initial.connected || !initial.ready || initial.motion_blocked {
-            return Err(failure("controller not ready"));
+            return Err(Error::Controller("Cannot select work coordinates. The machine must be connected, idle and clear of alarms.".into()));
         }
         if initial.wcs == wcs {
             return Ok(());
@@ -322,7 +329,9 @@ impl SocketController {
             loop {
                 let event = events.recv().await.map_err(failure)?;
                 if let Some(code) = event.controller_error {
-                    return Err(failure(format!("controller error:{code}")));
+                    return Err(Error::Controller(format!(
+                        "The machine reported error {code}."
+                    )));
                 }
                 if let Some(status) = event.status {
                     if status.motion_blocked {
@@ -334,7 +343,9 @@ impl SocketController {
                         .zip(initial.position)
                         .all(|(a, b)| a.is_finite() && (a - b).abs() <= 0.05)
                     {
-                        return Err(failure("position changed during WCS selection"));
+                        return Err(Error::Controller(
+                            "The machine moved while selecting work coordinates.".into(),
+                        ));
                     }
                     if status.ready && status.wcs == wcs {
                         return Ok(());
@@ -762,7 +773,10 @@ mod tests {
         data(&mut socket, "<Ready|MPos:bad>\n").await;
         assert!(task.await.unwrap().is_err());
         assert!(!c.snapshot().connected);
-        assert!(c.snapshot().connection_error.contains("controller"));
+        assert!(c
+            .snapshot()
+            .connection_error
+            .contains("invalid number: bad"));
         c.shutdown().await;
     }
     #[tokio::test]

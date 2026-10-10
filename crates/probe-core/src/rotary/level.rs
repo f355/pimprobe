@@ -158,7 +158,7 @@ pub(super) async fn run<C: Controller + ?Sized>(
     for pass in 0..3 {
         if angle.abs() > 20. {
             return Err(Error::Preflight(
-                "position the surface within 20 degrees of its final orientation".into(),
+                "Position the surface within 20 degrees of its final orientation.".into(),
             ));
         }
         comment(observe, format!("A correction {angle:.4} degrees"));
@@ -193,7 +193,7 @@ pub(super) async fn run<C: Controller + ?Sized>(
         }
     }
     Err(Error::Compensation(format!(
-        "surface remains tilted by {angle:.4} degrees after rechecking"
+        "The surface is still tilted by {angle:.4} degrees after rechecking."
     )))
 }
 

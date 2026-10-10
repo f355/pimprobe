@@ -31,7 +31,10 @@ impl ProbeApp {
         request: ResultWcsRequest,
     ) -> Result<RoutineResult, AppError> {
         if !(54..=59).contains(&request.wcs) {
-            return Err(AppError::invalid("wcs", "Invalid WCS"));
+            return Err(AppError::invalid(
+                "wcs",
+                "Select a work coordinate system from G54 to G59.",
+            ));
         }
         let guard = self.acquire()?;
         let app = self.clone();
@@ -80,7 +83,10 @@ impl ProbeApp {
         request: ResultWcsRequest,
     ) -> Result<RotaryResult, AppError> {
         if !(54..=59).contains(&request.wcs) {
-            return Err(AppError::invalid("wcs", "Invalid WCS"));
+            return Err(AppError::invalid(
+                "wcs",
+                "Select a work coordinate system from G54 to G59.",
+            ));
         }
         let guard = self.acquire()?;
         let app = self.clone();

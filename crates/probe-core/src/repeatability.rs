@@ -45,7 +45,7 @@ impl RepeatabilityOptions {
     pub fn validate(&self) -> Result<(), Error> {
         if !self.axes.iter().any(|v| *v) || !(1..=100).contains(&self.repetitions) {
             return Err(Error::InvalidConfig(
-                "select at least one axis and 1..100 repetitions".into(),
+                "Select at least one axis and between 1 and 100 repetitions.".into(),
             ));
         }
         Ok(())
@@ -71,7 +71,7 @@ impl RepeatabilitySettings {
         ] {
             if !parameter.range().contains(value) {
                 return Err(Error::InvalidConfig(
-                    "invalid repeatability probing settings".into(),
+                    "Check the probe ball diameter, backoff and feeds in Settings.".into(),
                 ));
             }
         }
@@ -168,7 +168,9 @@ pub fn check_repeatability<C: RepeatabilityController + ?Sized>(
     let state = c.state();
     preflight_machine(&state)?;
     if !state.homed || !finite(state.probe_offset) {
-        return Err(Error::Preflight("home the machine before checking".into()));
+        return Err(Error::Preflight(
+            "Home the machine before starting the check.".into(),
+        ));
     }
     let target = measurement_start(&state);
     for axis in [Axis::X, Axis::Y, Axis::Z] {
@@ -273,7 +275,7 @@ async fn jog_home<C: Controller + ?Sized>(c: &C, stop: &CancellationToken) -> Re
                 if let Some(status) = receive(&mut events).await?.status {
                     if status.wcs != state.wcs {
                         return Err(Error::Position(
-                            "WCS changed while jogging near home".into(),
+                            "The work coordinate system changed while moving near home.".into(),
                         ));
                     }
                     moving |= !status.ready;
@@ -423,7 +425,7 @@ async fn repeat_inner<C: RepeatabilityController + ?Sized>(
             let state = c.state();
             if !within(start.probe_offset, state.probe_offset, 0.001) {
                 return Err(Error::Preflight(
-                    "probe calibration changed during the check".into(),
+                    "The probe calibration changed during the check.".into(),
                 ));
             }
             preflight_machine(&c.state())?;

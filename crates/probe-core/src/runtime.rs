@@ -48,7 +48,9 @@ pub async fn query_modes<C: Controller + ?Sized>(c: &C) -> Result<Modes, Error> 
         loop {
             if let Some(m) = receive(&mut rx).await?.modes {
                 if !m.valid() {
-                    return Err(Error::Preflight("incomplete parser modes".into()));
+                    return Err(Error::Preflight(
+                        "The machine did not report all active G-code modes.".into(),
+                    ));
                 }
                 return Ok(m);
             }
@@ -59,7 +61,9 @@ pub async fn query_modes<C: Controller + ?Sized>(c: &C) -> Result<Modes, Error> 
 }
 pub(crate) async fn set_modes<C: Controller + ?Sized>(c: &C, m: Modes) -> Result<(), Error> {
     if !m.valid() {
-        return Err(Error::Preflight("invalid modes".into()));
+        return Err(Error::Preflight(
+            "The machine reported unsupported G-code modes.".into(),
+        ));
     }
     if c.state().motion_blocked {
         return Err(Error::MotionBlocked);
@@ -68,7 +72,9 @@ pub(crate) async fn set_modes<C: Controller + ?Sized>(c: &C, m: Modes) -> Result
         .await
         .map_err(|_| Error::Timeout)??;
     if query_modes(c).await? != m {
-        return Err(Error::Controller("parser modes not confirmed".into()));
+        return Err(Error::Controller(
+            "The machine did not confirm the requested G-code modes.".into(),
+        ));
     }
     Ok(())
 }
@@ -89,7 +95,9 @@ pub fn surface_machine_coordinate(
         || !positive(diameter)
         || !matches!(direction, -1 | 1)
     {
-        return Err(Error::Compensation("invalid contact".into()));
+        return Err(Error::Compensation(
+            "The probe contact or calibration contains an invalid coordinate.".into(),
+        ));
     }
     let i = axis.index();
     if axis == Axis::Z {
@@ -249,7 +257,9 @@ async fn run_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
 ) -> Result<RoutineResult, Error> {
     // Reject caller-mutated plans before any command is submitted.
     if review(p.start.clone(), p.config.clone())? != *p {
-        return Err(Error::Preflight("plan modified since review".into()));
+        return Err(Error::Preflight(
+            "The probing moves do not match the selected options. Open the operation again.".into(),
+        ));
     }
     p.check_state(&c.state(), p.start.position)?;
     let scripted = AtomicBool::new(false);
@@ -285,7 +295,7 @@ async fn run_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
                     let high = refs[&format!("surface_{n}_high")];
                     if high <= low {
                         return Err(Error::Compensation(format!(
-                            "opposing {axis} contacts have non-positive width"
+                            "The two {axis} contacts give a zero or negative width. Check the probe calibration and workpiece."
                         )));
                     }
                     let center = (low + high) / 2.0;
@@ -314,7 +324,7 @@ async fn run_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
                     for stage in plan_contact(config)?.stages {
                         let latest = c.state();
                         if latest.wcs != p.start.wcs || !within(position, latest.position, 0.05) {
-                            return Err(Error::Position("contact stage state changed".into()));
+                            return Err(Error::Position("The machine moved or changed work coordinates between probing moves.".into()));
                         }
                         stream.command(index as isize, &refs, observe)?;
                         result.motion_started = true;
@@ -380,7 +390,7 @@ async fn run_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
                             position[axis.index()]
                         } else {
                             *refs.get(target).ok_or_else(|| {
-                                Error::Compensation("missing motion target".into())
+                                Error::Compensation("A measurement needed for the next move is missing.".into())
                             })?
                         };
                         delta[axis.index()] = quantize(target + offset - position[axis.index()]);
@@ -428,7 +438,9 @@ async fn run_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
             let return_result = async {
                 p.check_state(&state, state.position)?;
                 if (0..4).any(|i| i != 2 && (state.position[i] - position[i]).abs() > 0.05) {
-                    return Err(Error::Position("cross-axis move on coarse miss".into()));
+                    return Err(Error::Position(
+                        "X or Y moved unexpectedly during the Z search.".into(),
+                    ));
                 }
                 let delta = quantize(p.start.position[2] - state.position[2]);
                 if delta != 0.0 {
@@ -488,7 +500,7 @@ async fn write_zero<C: Controller + ?Sized>(
         let i = a.index();
         let surface = result.machine_point[i]
             .filter(|v| v.is_finite())
-            .ok_or_else(|| Error::Compensation(format!("missing {a} result")))?
+            .ok_or_else(|| Error::Compensation(format!("No {a} measurement is available.")))?
             + offsets[i];
         // G10 L20 takes tool-compensated WPos; the probe measurement is fixed in G53.
         let tool_offset = if a == Axis::Z {
@@ -502,7 +514,7 @@ async fn write_zero<C: Controller + ?Sized>(
     let duration = t
         .response_margin
         .checked_add(Duration::from_secs(3))
-        .ok_or_else(|| Error::InvalidConfig("zero timeout overflow".into()))?;
+        .ok_or_else(|| Error::InvalidConfig("The configured wait time is too long.".into()))?;
     tokio::time::timeout(duration, async {
         c.send(&format!(
             "G10 L20 P{} {}",
@@ -514,7 +526,8 @@ async fn write_zero<C: Controller + ?Sized>(
             if let Some(s) = receive(&mut rx).await?.status {
                 if s.wcs != p.config.wcs || !within(s.position, state.position, 0.05) {
                     return Err(Error::Position(
-                        "machine moved or WCS changed while zeroing".into(),
+                        "The machine moved or changed work coordinates while setting work zero."
+                            .into(),
                     ));
                 }
                 if s.ready && within(s.work_position, desired, 0.05) {
@@ -554,12 +567,12 @@ pub async fn zero_recorded_result<C: Controller + ?Sized>(
     preflight_machine(&c.state())?;
     if c.state().wcs != result.wcs || !(54..=59).contains(&result.wcs) {
         return Err(Error::Preflight(
-            "select the result WCS before setting work zero".into(),
+            "Select the result's work coordinate system before setting work zero.".into(),
         ));
     }
     if offsets.iter().any(|v| !v.is_finite() || v.abs() > 1000.) {
         return Err(Error::InvalidConfig(
-            "offsets must be finite and within -1000..1000 mm".into(),
+            "Offsets must be numbers between -1000 and 1000 mm.".into(),
         ));
     }
     let state = crate::rotary::query_rotary_frame(c).await?;
@@ -569,12 +582,14 @@ pub async fn zero_recorded_result<C: Controller + ?Sized>(
         if !result.axes.iter().any(|measured| measured == axis) {
             target[i] = None;
         } else if !target[i].is_some_and(f64::is_finite) {
-            return Err(Error::Compensation(format!("missing {axis} result")));
+            return Err(Error::Compensation(format!(
+                "No {axis} measurement is available."
+            )));
         }
     }
     let origin = state
         .wcs_origin
-        .ok_or_else(|| Error::Preflight("work origin is unavailable".into()))?;
+        .ok_or_else(|| Error::Preflight("Could not read the work zero from the machine.".into()))?;
     let (sin, cos) = state.wcs_rotation.unwrap_or(0.).to_radians().sin_cos();
     let mut axes = Vec::new();
     match (target[0], target[1]) {
@@ -591,7 +606,8 @@ pub async fn zero_recorded_result<C: Controller + ?Sized>(
         (Some(x), None) | (None, Some(x)) => {
             if cos.abs() < 1e-6 {
                 return Err(Error::Preflight(
-                    "select an unrotated WCS to zero a single X/Y axis".into(),
+                    "Select a work coordinate system without rotation to zero a single X/Y axis."
+                        .into(),
                 ));
             }
             if target[0].is_some() {
@@ -614,7 +630,9 @@ pub async fn zero_recorded_result<C: Controller + ?Sized>(
         axes.push((2, z - state.coordinate_offset[2]));
     }
     if axes.is_empty() {
-        return Err(Error::Preflight("no measured axes available".into()));
+        return Err(Error::Preflight(
+            "This result has no measured coordinates.".into(),
+        ));
     }
     let modes = query_modes(c).await?;
     let metric = Modes { units: 21, ..modes };
@@ -680,11 +698,13 @@ async fn measured_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
 ) -> Result<RoutineResult, Error> {
     if p.config.family != "inside" || p.config.z || !result.settled || result.positioned {
         return Err(Error::Preflight(
-            "no matching inside result to position over".into(),
+            "No inside measurement is available to move to. Probe the feature first.".into(),
         ));
     }
     if !Parameter::Travel.range().contains(clearance) {
-        return Err(Error::InvalidConfig("invalid safe Z offset".into()));
+        return Err(Error::InvalidConfig(
+            "Safe Z offset must be between 0.1 and 100 mm.".into(),
+        ));
     }
     let state = c.state();
     let mut check = p.clone();
@@ -700,9 +720,9 @@ async fn measured_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
     xy_target[2] = z_target;
     for axis in p.axes() {
         let i = axis.index();
-        xy_target[i] = result.machine_point[i]
-            .ok_or_else(|| Error::Preflight("measured machine position unavailable".into()))?
-            - p.start.probe_offset[i];
+        xy_target[i] = result.machine_point[i].ok_or_else(|| {
+            Error::Preflight("The measured machine coordinate is missing.".into())
+        })? - p.start.probe_offset[i];
         check_path(
             &state,
             axis,
@@ -797,7 +817,9 @@ async fn return_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
         || result.wcs != p.config.wcs
         || result.axes != p.axes().iter().map(ToString::to_string).collect::<Vec<_>>()
     {
-        return Err(Error::Preflight("no matching result to return from".into()));
+        return Err(Error::Preflight(
+            "No starting position is available for this result.".into(),
+        ));
     }
     let state = c.state();
     let mut check = p.clone();
@@ -894,14 +916,16 @@ async fn zero_inner<C: Controller + ?Sized>(
 ) -> Result<RoutineResult, Error> {
     if offsets.iter().any(|v| !v.is_finite() || v.abs() > 1000.0) {
         return Err(Error::InvalidConfig(
-            "offsets must be finite and within -1000..1000 mm".into(),
+            "Offsets must be numbers between -1000 and 1000 mm.".into(),
         ));
     }
     if !result.settled
         || result.wcs != p.config.wcs
         || result.axes != p.axes().iter().map(ToString::to_string).collect::<Vec<_>>()
     {
-        return Err(Error::Preflight("no matching completed result".into()));
+        return Err(Error::Preflight(
+            "No completed measurement is available.".into(),
+        ));
     }
     let state = c.state();
     p.check_state(&state, state.position)?;

@@ -107,7 +107,10 @@ impl ProbeApp {
         if let HistoryAction::Wcs(wcs) = action
             && !(54..=59).contains(&wcs)
         {
-            return Err(AppError::invalid("wcs", "Invalid WCS"));
+            return Err(AppError::invalid(
+                "wcs",
+                "Select a work coordinate system from G54 to G59.",
+            ));
         }
         let guard = self.acquire()?;
         let app = self.clone();

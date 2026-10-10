@@ -405,7 +405,7 @@ async fn rotary_position_change_rejects_run_without_controller_recovery() {
         panic!("expected a rejected rotary review");
     };
     assert_eq!(code, "failed");
-    assert!(message.contains("machine position or calibration changed"));
+    assert!(message.contains("The machine position or probe calibration changed"));
     assert_eq!(device.mock.commands(), commands_before);
     assert!(!app.state().recovery_failed);
 }

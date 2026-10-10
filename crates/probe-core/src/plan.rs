@@ -67,10 +67,14 @@ impl RoutineConfig {
             || !(-1..=1).contains(&self.y)
             || self.z == (self.x != 0 || self.y != 0)
         {
-            return Err(Error::InvalidConfig("invalid feature selection".into()));
+            return Err(Error::InvalidConfig(
+                "Choose an edge, corner or Z probing operation.".into(),
+            ));
         }
         if !(54..=59).contains(&self.wcs) {
-            return Err(Error::InvalidConfig("invalid WCS".into()));
+            return Err(Error::InvalidConfig(
+                "Select a work coordinate system from G54 to G59.".into(),
+            ));
         }
         if self.family == "center" {
             let expected = match self.feature.as_str() {
@@ -78,15 +82,21 @@ impl RoutineConfig {
                 "x-ridge" | "x-valley" => (1, 0, false),
                 "y-ridge" | "y-valley" => (0, 1, false),
                 "z" => (0, 0, true),
-                _ => return Err(Error::InvalidConfig("unknown center feature".into())),
+                _ => {
+                    return Err(Error::InvalidConfig(
+                        "Choose a feature to measure on the Center tab.".into(),
+                    ))
+                }
             };
             if (self.x, self.y, self.z) != expected {
-                return Err(Error::InvalidConfig("invalid center selection".into()));
+                return Err(Error::InvalidConfig(
+                    "The probing axes do not match the selected feature.".into(),
+                ));
             }
         }
         for (name, value, parameter) in [
-            ("depth", self.depth, Parameter::Travel),
-            ("safe Z offset", self.safe_z_offset, Parameter::Travel),
+            ("Depth", self.depth, Parameter::Travel),
+            ("Safe Z offset", self.safe_z_offset, Parameter::Travel),
             (
                 "X search distance",
                 self.x_search_distance,
@@ -97,18 +107,26 @@ impl RoutineConfig {
                 self.y_search_distance,
                 Parameter::SearchDistance,
             ),
-            ("retract", self.retract, Parameter::Retract),
-            ("diameter", self.diameter, Parameter::Diameter),
+            ("Backoff", self.retract, Parameter::Retract),
+            ("Probe ball diameter", self.diameter, Parameter::Diameter),
             (
-                "positioning feed",
+                "Positioning feed",
                 self.positioning_feed,
                 Parameter::PositioningFeed,
             ),
-            ("coarse feed", self.coarse_feed, Parameter::ProbeFeed),
-            ("fine feed", self.fine_feed, Parameter::ProbeFeed),
+            ("Coarse feed", self.coarse_feed, Parameter::ProbeFeed),
+            ("Fine feed", self.fine_feed, Parameter::ProbeFeed),
         ] {
-            if !parameter.range().contains(value) {
-                return Err(Error::InvalidConfig(format!("invalid {name}")));
+            let range = parameter.range();
+            if !range.contains(value) {
+                let requirement = if range.maximum == f64::MAX {
+                    format!("at least {} mm/min", range.minimum)
+                } else {
+                    format!("between {} and {} mm", range.minimum, range.maximum)
+                };
+                return Err(Error::InvalidConfig(format!(
+                    "{name} must be {requirement}."
+                )));
             }
         }
         Ok(())
@@ -158,14 +176,21 @@ pub struct RoutinePlan {
 pub fn review(state: State, config: RoutineConfig) -> Result<RoutinePlan, Error> {
     preflight(&state)?;
     config.validate()?;
-    if !state.modes.valid()
-        || !finite(state.work_position)
-        || !finite(state.probe_offset)
-        || state.wcs != config.wcs
-    {
+    if !state.modes.valid() {
         return Err(Error::Preflight(
-            "invalid parser modes or coordinate system".into(),
+            "Could not read the active G-code modes from the machine.".into(),
         ));
+    }
+    if !finite(state.work_position) || !finite(state.probe_offset) {
+        return Err(Error::Preflight(
+            "Could not read the work coordinates or probe calibration from the machine.".into(),
+        ));
+    }
+    if state.wcs != config.wcs {
+        return Err(Error::Preflight(format!(
+            "Select G{} before starting this operation.",
+            config.wcs
+        )));
     }
     let mut p = RoutinePlan {
         config,
@@ -346,13 +371,25 @@ impl RoutinePlan {
     }
     pub(crate) fn check_state(&self, s: &State, position: Position) -> Result<(), Error> {
         preflight(s)?;
-        if s.wcs != self.start.wcs
-            || s.tool != self.start.tool
-            || !within(s.position, position, 0.05)
-            || !within(s.probe_offset, self.start.probe_offset, 0.0005)
-        {
+        if s.wcs != self.start.wcs {
+            return Err(Error::Preflight(format!(
+                "The work coordinate system changed. Select G{} to continue.",
+                self.start.wcs
+            )));
+        }
+        if s.tool != self.start.tool {
             return Err(Error::Preflight(
-                "machine state changed since review".into(),
+                "The loaded tool changed during this operation.".into(),
+            ));
+        }
+        if !within(s.position, position, 0.05) {
+            return Err(Error::Preflight(
+                "The machine moved from its expected position.".into(),
+            ));
+        }
+        if !within(s.probe_offset, self.start.probe_offset, 0.0005) {
+            return Err(Error::Preflight(
+                "The probe calibration changed during this operation.".into(),
             ));
         }
         if !finite(s.work_position)
@@ -363,7 +400,9 @@ impl RoutinePlan {
                     > 0.05
             })
         {
-            return Err(Error::Preflight("work offset changed since review".into()));
+            return Err(Error::Preflight(
+                "The work zero changed during this operation.".into(),
+            ));
         }
         Ok(())
     }
@@ -423,7 +462,9 @@ impl RoutinePlan {
                             [lo[i], hi[i]]
                         } else {
                             *refs.get(target).ok_or_else(|| {
-                                Error::InvalidConfig(format!("missing target {target}"))
+                                Error::InvalidConfig(format!(
+                                    "The value {target} needed for the next move is missing."
+                                ))
                             })?
                         };
                         let l = r[0] + offset;

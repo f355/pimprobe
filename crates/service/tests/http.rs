@@ -223,7 +223,7 @@ async fn rotary_calibration_streams_and_saves_each_result_action() {
         "/api/v1/rotary/zero",
         token.clone(),
         StatusCode::CONFLICT,
-        "matching completed rotary calibration",
+        "Select G54 before setting work zero",
     )
     .await;
     request(&router, "POST", "/api/v1/wcs", json!({"wcs":54})).await;
@@ -282,7 +282,7 @@ async fn application_errors_use_qt_compatible_envelopes() {
         "/api/v1/settings",
         json!({"coarseFeed":0}),
         StatusCode::BAD_REQUEST,
-        "coarseFeed",
+        "Coarse feed",
     )
     .await;
     assert_api_error(
@@ -291,7 +291,7 @@ async fn application_errors_use_qt_compatible_envelopes() {
         "/api/v1/wcs",
         json!({"wcs":60}),
         StatusCode::BAD_REQUEST,
-        "Invalid WCS",
+        "Select a work coordinate system from G54 to G59",
     )
     .await;
     let mut cfg = config();
@@ -315,7 +315,7 @@ async fn application_errors_use_qt_compatible_envelopes() {
         "/api/v1/routine/run",
         json!({"id":"expired"}),
         StatusCode::CONFLICT,
-        "Review expired",
+        "This operation is no longer available",
     )
     .await;
 }
@@ -615,11 +615,27 @@ async fn reviews_return_the_parameters_used_by_the_plan() {
 #[tokio::test]
 async fn feed_settings_and_reviews_follow_machine_limits() {
     let (_temp, _app, router) = app();
-    for (key, value) in [
-        ("positioningFeed", 6001.),
-        ("coarseFeed", 6001.),
-        ("fineFeed", 6001.),
-        ("rotaryFeed", 7201.),
+    for (key, value, message) in [
+        (
+            "positioningFeed",
+            6001.,
+            "Positioning feed must be between 1 and 6000 mm/min",
+        ),
+        (
+            "coarseFeed",
+            6001.,
+            "Coarse feed must be between 1 and 6000 mm/min",
+        ),
+        (
+            "fineFeed",
+            6001.,
+            "Fine feed must be between 1 and 6000 mm/min",
+        ),
+        (
+            "rotaryFeed",
+            7201.,
+            "Rotary feed must be between 1 and 7200 degrees/min",
+        ),
     ] {
         assert_api_error(
             &router,
@@ -627,7 +643,7 @@ async fn feed_settings_and_reviews_follow_machine_limits() {
             "/api/v1/settings",
             json!({key: value}),
             StatusCode::BAD_REQUEST,
-            "machine limit",
+            message,
         )
         .await;
     }
@@ -678,7 +694,7 @@ async fn settings_contract_and_validation() {
         "/api/v1/settings",
         json!({"coarseFeed":0}),
         StatusCode::BAD_REQUEST,
-        "coarseFeed",
+        "Coarse feed",
     )
     .await;
     let (code, body) = request(&router, "GET", "/api/v1/settings", Value::Null).await;
@@ -769,7 +785,7 @@ async fn review_run_stream_and_late_zero() {
         "/api/v1/routine/run",
         token,
         StatusCode::CONFLICT,
-        "Review expired",
+        "This operation is no longer available",
     )
     .await;
 }
@@ -895,7 +911,7 @@ async fn new_review_invalidates_old_token() {
         "/api/v1/routine/run",
         json!({"id":first["id"]}),
         StatusCode::CONFLICT,
-        "Review expired",
+        "This operation is no longer available",
     )
     .await;
 }
@@ -1106,7 +1122,7 @@ async fn dropping_execution_stream_cancels_before_motion_and_consumes_review() {
         "/api/v1/routine/run",
         token,
         StatusCode::CONFLICT,
-        "Review expired",
+        "This operation is no longer available",
     )
     .await;
     let (_, body) = request(&router, "GET", "/api/v1/state", Value::Null).await;
@@ -1130,7 +1146,7 @@ async fn failed_late_zero_attempt_cannot_be_replayed() {
         "/api/v1/routine/zero",
         token.clone(),
         StatusCode::CONFLICT,
-        "machine state changed",
+        "The work coordinate system changed. Select G54",
     )
     .await;
     app.device.select_wcs(54).await.unwrap();

@@ -416,7 +416,10 @@ impl ProbeApp {
     }
     pub async fn select_wcs(self: &Arc<Self>, wcs: i32) -> Result<(), AppError> {
         if !(54..=59).contains(&wcs) {
-            return Err(AppError::invalid("wcs", "Invalid WCS"));
+            return Err(AppError::invalid(
+                "wcs",
+                "Select a work coordinate system from G54 to G59.",
+            ));
         }
         let guard = self.acquire()?;
         let app = self.clone();
@@ -594,7 +597,7 @@ impl ProbeApp {
                     .await
                     .take(&token.id, session)
                     .ok_or_else(|| {
-                        AppError::conflict("review", "Review expired; review the routine again")
+                        AppError::conflict("review", "This operation is no longer available. Open it again, then press Proceed.")
                     })?,
                 None,
             ),

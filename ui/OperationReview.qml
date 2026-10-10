@@ -90,7 +90,7 @@ RowLayout {
                         }
                         Label {
                             Layout.fillWidth: true
-                            text: step.modelData
+                            text: I18n.tr(step.modelData)
                             font.pixelSize: 18
                             wrapMode: Text.WordWrap
                             color: step.active ? Theme.text : Theme.textMuted
@@ -127,7 +127,7 @@ RowLayout {
             width: parameterScroll.width - (bar.visible ? 12 : 0)
             spacing: 12
             Label {
-                text: "Options for this run"
+                text: I18n.tr('Options for this run')
                 Layout.fillWidth: true
                 font.pixelSize: 20
                 color: Theme.text
@@ -143,7 +143,7 @@ RowLayout {
                         visible: !!option.modelData.section
                         Layout.fillWidth: true
                         Layout.topMargin: 8
-                        text: option.modelData.section || ""
+                        text: option.modelData.section ? I18n.tr(option.modelData.section) : ""
                         font.pixelSize: 16
                         color: Theme.textMuted
                     }
@@ -151,7 +151,7 @@ RowLayout {
                         Layout.fillWidth: true
                         spacing: 12
                         Label {
-                            text: option.modelData.label
+                            text: I18n.tr(option.modelData.label)
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap
                             font.pixelSize: 20
@@ -159,7 +159,7 @@ RowLayout {
                         }
                         NumberField {
                             objectName: "review-" + option.modelData.key
-                            Accessible.name: option.modelData.label
+                            Accessible.name: I18n.tr(option.modelData.label)
                             Layout.preferredWidth: 112
                             Layout.preferredHeight: 56
                             editor: editor
@@ -169,7 +169,7 @@ RowLayout {
                             onCommitted: function(value) { review.setValue(option.modelData.key, value); }
                         }
                         Label {
-                            text: option.modelData.unit
+                            text: I18n.tr(option.modelData.unit)
                             Layout.preferredWidth: 68
                             font.pixelSize: 16
                             color: Theme.textMuted

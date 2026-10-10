@@ -21,7 +21,7 @@ Label {
     id: label
     property string heading
     property string confirmation: ""
-    text: confirmation || heading
+    text: confirmation ? I18n.tr(confirmation) : heading
     color: confirmation ? Theme.accentBright : Theme.text
     font.pixelSize: 22
     elide: Text.ElideRight

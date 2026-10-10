@@ -33,7 +33,7 @@ jobs:
       - name: Install test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build fonts-dejavu-core netcat-openbsd
+          sudo apt-get install -y cmake ninja-build fonts-dejavu-core fonts-noto-cjk netcat-openbsd
       - name: Install Qt 6.9.1
         uses: jurplel/install-qt-action@v4
         with:
@@ -48,7 +48,7 @@ jobs:
           cargo clippy --locked --workspace --all-targets -- -D warnings
           cargo test --locked --workspace
       - name: Check assets
-        run: node --test dev/test-assets.mjs
+        run: node --test dev/test-assets.mjs dev/test-i18n.mjs
       - name: Run UI tests
         run: |
           QT_DECLARATIVE_PREFIX="$QT_ROOT_DIR" \

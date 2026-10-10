@@ -1,35 +1,31 @@
 # Outside
 
+The four side pictures measure a stock edge; the four corner pictures measure X and Y. The middle picture measures a top surface.
+
 <!-- guide-only -->
-![outside controls](images/outside.png)
+![Outside measurement buttons and distances](images/outside.png)
 <!-- /guide-only -->
 
-## Where to start
+## Edge or corner
 
-Extend the probe with the switch beside the tabs, then position the ball above the stock, near the edge or corner you want to measure. The arrows show the directions of the measuring strokes; the green dot marks the measured point.
+Place the ball above the stock, slightly inward from the chosen edge or corner. Starting Z is the clearance height for all moves across the stock.
 
-Tap a button to review the moves. Nothing moves until you press Proceed.
+1. Move outward by **X search distance** or **Y search distance**, measured from the start. Choose enough distance to put the whole ball beyond the edge.
+2. Lower by **Depth** from starting Z. Include the gap above the stock plus how far below its top you want the side touch.
+3. Probe inward toward the starting X or Y.
 
-![Outside probing movements](images/outside.svg)
+![Outside edge: outward move 1, lowering move 2, inward touch 3](images/outside.svg)
 
-## X search distance and Y search distance
+For a corner, X is measured first. The probe rises to starting Z and returns to starting X before approaching the Y edge. Use both search distances; a single edge uses only its axis's distance.
 
-How far to move the probe ball out from its starting X or Y before lowering beside the stock. The probe then searches back towards the starting coordinate. Corners do this separately for X and Y.
+After measuring, the ball rises to starting Z and moves above the measured edge or corner.
 
-For example, X search distance 10 puts the lowering position 10 mm from starting X. Choose a distance that puts the whole ball beyond the edge, with room for positioning error. Check that the outward position clears clamps and stays within machine travel.
+## Top surface
 
-## Depth
+Place the ball above the point you want to measure. **Depth** is the maximum downward search from there. X/Y search distances are unused.
 
-For an edge or corner, how far below starting Z to touch the side. Starting Z -60 with Depth 5 gives a probing height of G53 Z-65.
+The probe returns to starting Z after the touch.
 
-For Z, this is the maximum downward search distance. Z probing always returns to its starting height.
-
-[Results and work zero](results.md)
-
-## Where it finishes
-
-After measuring, the probe raises to starting Z, then moves the ball over the measured edge or corner. An unmeasured axis stays where it is. Z probing returns to its starting height.
-
-Sideways positioning before and between measurements also uses starting Z. Choose a starting height that clears the stock and fixtures along the whole route.
-
-[Clearance and failed probing](safety.md)
+<!-- guide-only -->
+[Set work zero from the result](results.md)
+<!-- /guide-only -->

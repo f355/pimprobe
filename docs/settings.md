@@ -1,54 +1,44 @@
 # Settings
 
+Settings are saved when you accept a value and survive restarts. Distances use mm; linear feeds use mm/min.
+
 <!-- guide-only -->
-![Settings and keypad](images/settings.png)
+![Probe settings](images/settings.png)
 <!-- /guide-only -->
 
-[Editing values](editing.md)
+## Ball diameter and backoff
 
-Distances are in millimeters and linear feeds are in millimeters per minute, even if the machine was in inch mode before probing.
+**Probe ball diameter** corrects the touched surface by the ball's radius. It is separate from the machine's probe-to-spindle calibration.
 
-Linear feeds are limited to the lowest X/Y/Z maximum feed in the machine settings.
-Rotary feed is limited to the A-axis maximum feed. An invalid value has a red border.
+**Retract distance** is the backoff after each coarse and fine touch. It must let the probe release. The fine search goes back to the coarse contact, allowing another 0.5 mm beyond it.
 
-## Probe ball diameter
+## Feeds
 
-The diameter of the probe ball. The measured surface is corrected by half this value in the touch direction. A wrong diameter gives a wrong surface coordinate.
+- **Coarse feed:** the first search for a surface.
+- **Fine feed:** the second touch, used for the measurement. Lower speeds reduce probe deflection and stopping error.
+- **Positioning feed:** travel between touches and backoff moves.
+- **Rotary feed:** A rotation in degrees/min.
 
-The probe's offset from the spindle comes from the machine calibration.
+## Language
 
-## Retract distance
+Choose English, Simplified Chinese or Swedish. Until you choose, the interface uses the CNC screen's language, or the computer's language in a local preview.
 
-How far to back away along the measuring axis after each touch: once after the coarse touch and again after the fine touch.
+## Updates
 
-It must be enough for the probe to release. The fine stroke searches back to the coarse contact position, with another 0.5 mm allowed beyond it.
+**Check for updates** opens the release notes and installer. **Development releases** selects the rolling build instead of stable releases; that choice stays selected after installation.
 
-## Positioning feed
+**Check automatically** checks the selected channel each time the interface opens. A green dot on Settings and the update button means a new version is available. Installing it restarts the interface.
 
-Speed for moves between touches and for backing off after a touch. Keep it low enough for the probe and the available clearance.
+## Utilities
 
-Upward Z moves and releases from a measured surface use G1. Positioning along a vertical face uses G38.3 in both Z directions. Other positioning moves also use G38.3 and fail the routine if contact occurs.
+**Probe history** reopens saved measurements. **Export logs** copies history and diagnostic logs to a mounted USB drive. **Clear logs** deletes them after confirmation.
 
-## Coarse feed
+**Probe repeatability** measures the L bracket walls and bed repeatedly to compare readings, with optional probe retraction and homing between runs.
 
-Speed of the first search for each surface. It finds an approximate contact position. The probe then backs off by Retract distance.
+<!-- guide-only -->
+[History and logs](history.md)
 
-## Fine feed
+[Repeatability check](repeatability.md)
 
-Speed of the second touch. This touch supplies the measurement. A slower feed reduces the effect of deflection and stopping delay. If the fine touch fails, the firmware can raise an alarm that must be cleared on the main screen.
-
-## Rotary feed
-
-Maximum chuck rotation speed in degrees per minute during rotary operations. XYZ movement uses the positioning feed.
-
-[Clearance and failed probing](safety.md)
-
-[Utilities](history.md)
-
-## Software update
-
-**Check for updates** shows the notes for the newest version in your selected channel. Turn on **Development releases** for the rolling development build, or turn it off for releases. The choice is saved across updates and restarts.
-
-**Check automatically** checks GitHub each time the interface starts. It is on by default. A green dot on the Settings tab and Check for updates button means a new version is available in the selected channel.
-
-**Install update** downloads and verifies the release installer, then restarts the interface to install it. Leave the machine idle with the spindle stopped while updating.
+[Editing numbers](editing.md)
+<!-- /guide-only -->

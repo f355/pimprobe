@@ -42,6 +42,10 @@ Pass `uiFontFamily` and `monoFontFamily` for text. A `controls/Style.qml` object
 sets colors, control sizes and layout spacing through the page's `style`
 property. The controls share that style within the QML engine.
 
+The `controls/I18n` singleton selects the interface language. Set
+`systemLanguage` to `en`, `zh_CN` or `sv` to supply a host default. A saved
+`language` setting takes precedence. Labels update when the language changes.
+
 `ProbeWindow` supplies the standalone window, HTTP client, fonts, update page
 and application exit handling.
 
@@ -97,8 +101,8 @@ page additionally uses `updates.check`, `updates.install` and `updates.status`.
 
 ## Assets
 
-Include the `ui` QML files, `controls` and `client` directories. Generate
-`HelpPages.js` and the help images with `buildHelp(outputDirectoryURL)` from
+Include the `ui` QML files, `controls`, `client` and `i18n` directories. Generate
+the translation catalog, `HelpPages.js` and help images with `buildHelp(outputDirectoryURL)` from
 `dev/build-help.mjs`. The output directory contains the staged QML files.
 Hosts supply their own fonts; the standalone build fetches its fonts with
 `dev/fetch-fonts.mjs`.

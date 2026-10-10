@@ -33,7 +33,7 @@ Pane {
         ProbeSwitch {
             id: probeSwitch
             implicitWidth: 158
-            text: page.actuatorRequestPending || page.machineState.actuatorPending ? "Moving" : page.probeState((page.machineState.status || {}).probeActuator, (page.machineState.status || {}).probeActuatorKnown)
+            text: page.actuatorRequestPending || page.machineState.actuatorPending ? I18n.tr('Moving') : I18n.tr(page.probeState((page.machineState.status || {}).probeActuator, (page.machineState.status || {}).probeActuatorKnown))
             checked: (page.machineState.status || {}).probeActuatorKnown === true && (page.machineState.status || {}).probeActuator !== 0
             enabled: page.machineState.connected && (page.machineState.status || {}).mode === "Ready" && (page.machineState.status || {}).probeActuatorKnown && !page.actuatorRequestPending && !page.machineState.actuatorPending && !page.interactionLocked()
             font.family: page.uiFontFamily
@@ -66,7 +66,15 @@ Pane {
         return top;
     }
     readonly property bool subpageOpen: topPage !== null
-    readonly property string pageTitle: topPage === wcsPicker ? "Work coordinates" : topPage === helpPage ? ["Outside", "Inside", "Center", "Rotary", "Settings"][helpIndex] + " help" : topPage === historyDialog ? "Probe history" : topPage === repeatabilityDialog ? "Probe repeatability" : topPage === confirmDialog ? confirmDialog.description : topPage === rotaryDialog ? rotaryDialog.title : topPage === settingsPage ? "Probe settings" : topPage === utilitiesPage ? "Utilities" : "Probing"
+    readonly property string helpTitle: I18n.tr(["Outside help", "Inside help", "Center help", "Rotary help", "Settings help"][helpIndex])
+    readonly property string pageTitle: topPage === wcsPicker ? I18n.tr('Work coordinates')
+        : topPage === helpPage ? helpTitle
+        : topPage === historyDialog ? I18n.tr('Probe history')
+        : topPage === repeatabilityDialog ? I18n.tr('Probe repeatability')
+        : topPage === confirmDialog ? confirmDialog.description
+        : topPage === rotaryDialog ? rotaryDialog.title
+        : topPage === settingsPage ? I18n.tr('Probe settings')
+        : topPage === utilitiesPage ? I18n.tr('Utilities') : I18n.tr('Probing')
     property int helpIndex: tabs.currentIndex
     onVisibleChanged: if (!visible)
         exitDialog.close()
@@ -410,7 +418,7 @@ Pane {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Theme.headerHeight
                 visible: page.showHeader
-                title: "Work coordinates"
+                title: I18n.tr('Work coordinates')
                 uiFont: page.uiFontFamily
                 onBack: wcsPicker.close()
             }
@@ -419,7 +427,7 @@ Pane {
                 Layout.fillWidth: true
                 Layout.leftMargin: 24
                 visible: wcsPicker.errorText.length > 0
-                text: wcsPicker.errorText
+                text: I18n.tr(wcsPicker.errorText)
                 color: Theme.danger
                 font.pixelSize: 18
             }
@@ -455,7 +463,7 @@ Pane {
         id: helpPage
         onOpening: {
             page.helpIndex = settingsPage.opened ? 4 : tabs.currentIndex;
-            helpScroll.contentItem.contentY = 0;
+            helpScroll.reset();
         }
         parent: page
         x: 0
@@ -476,29 +484,17 @@ Pane {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Theme.headerHeight
                 visible: page.showHeader
-                title: ["Outside", "Inside", "Center", "Rotary", "Settings"][page.helpIndex] + " help"
+                title: page.helpTitle
                 uiFont: page.uiFontFamily
                 onBack: helpPage.close()
             }
 
-            ScrollView {
+            HelpDocument {
                 id: helpScroll
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                clip: true
-                contentWidth: availableWidth
-                TextArea {
-                    readOnly: true
-                    textFormat: TextEdit.MarkdownText
-                    baseUrl: Qt.resolvedUrl("help/")
-                    text: HelpPages.pages[page.helpIndex]
-                    color: Theme.text
-                    font.family: page.uiFontFamily
-                    font.pixelSize: 19
-                    wrapMode: TextEdit.WordWrap
-                    padding: 16
-                    background: null
-                }
+                sections: HelpPages.forLanguage(I18n.language)[page.helpIndex]
+                uiFont: page.uiFontFamily
             }
         }
     }
@@ -542,7 +538,7 @@ Pane {
         client: page.client
         uiFont: page.uiFontFamily
         onResultRequested: function (opened) {
-            var details = historyDialog.detail(opened.entry);
+            var details = function () { return historyDialog.detail(opened.entry); };
             historyDialog.close();
             if (opened.entry.category === "rotary")
                 rotaryDialog.showHistory(opened, details);
@@ -590,13 +586,13 @@ Pane {
         id: exitDialog
         objectName: "exitDialog"
         font.family: page.uiFontFamily
-        title: "Probe extended"
-        message: page.exitAfterRetract ? "Retracting probe..." : "Retract the probe before leaving?"
+        title: I18n.tr('Probe extended')
+        message: page.exitAfterRetract ? I18n.tr('Retracting probe...') : I18n.tr('Retract the probe before leaving?')
         errorText: page.actionError
         busy: page.exitAfterRetract
         closeOnAccept: false
-        alternateText: "Leave extended"
-        acceptText: "Retract and exit"
+        alternateText: I18n.tr('Leave extended')
+        acceptText: I18n.tr('Retract and exit')
         onRejected: page.exitCancelled()
         // Keep the prompt visible until retraction is confirmed.
         onAlternate: page.leaveRequested()
@@ -619,12 +615,12 @@ Pane {
             visible: page.settings.error.length > 0
             Label {
                 Layout.fillWidth: true
-                text: page.settings.error
+                text: I18n.tr(page.settings.error)
                 color: Theme.danger
                 font.pixelSize: 18
             }
             LabButton {
-                text: "Retry"
+                text: I18n.tr('Retry')
                 primary: true
                 onClicked: page.settings.loaded ? page.settings.save() : page.settings.load()
             }
@@ -635,7 +631,7 @@ Pane {
             Layout.leftMargin: 16
             Layout.rightMargin: 16
             visible: !page.machineState.connected || page.actionError.length > 0
-            text: page.actionError || page.requestError || "Controller disconnected"
+            text: page.actionError || page.requestError ? I18n.tr(page.actionError || page.requestError) : I18n.tr('Controller disconnected')
             textColor: Theme.danger
         }
 
@@ -665,7 +661,7 @@ Pane {
                         required property string modelData
                         implicitHeight: 56
                         height: tabs.height
-                        text: modelData
+                        text: I18n.tr(modelData)
                         notification: modelData === "Settings" && page.updateAvailable
                         font.family: page.uiFontFamily
                     }

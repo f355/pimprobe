@@ -29,7 +29,7 @@ RowLayout {
         Layout.fillHeight: true
         spacing: 8
         Label {
-            text: view.flow.leveling ? "Surface alignment" : "Rotary axis"
+            text: view.flow.leveling ? I18n.tr('Surface alignment') : I18n.tr('Rotary axis')
             font.pixelSize: 24
             color: Theme.text
         }
@@ -68,7 +68,7 @@ RowLayout {
             Layout.fillWidth: true
             ConfirmationLabel {
                 id: heading
-                heading: "Work zero · " + view.flow.zeroAxes
+                heading: I18n.tr('Work zero · %1', [view.flow.zeroAxes])
                 Layout.fillWidth: true
             }
             MenuButton {
@@ -77,7 +77,7 @@ RowLayout {
                 enabled: !view.flow.busy && view.flow.reviewID.length > 0
                 Layout.preferredWidth: 112
                 onClicked: wcsPicker.open()
-                Accessible.name: "Choose result work coordinates"
+                Accessible.name: I18n.tr('Choose result work coordinates')
             }
         }
         ScrollView {
@@ -90,7 +90,7 @@ RowLayout {
                 width: details.availableWidth
                 spacing: 8
                 Label {
-                    text: (view.flow.leveling ? "Touches" : "Axis centers") + " · G53 · mm"
+                    text: view.flow.leveling ? I18n.tr('Touches · G53 · mm') : I18n.tr('Axis centers · G53 · mm')
                     color: Theme.textMuted
                     font.pixelSize: 18
                 }
@@ -164,13 +164,13 @@ RowLayout {
                         required property var modelData
                         Layout.fillWidth: true
                         Label {
-                            text: parent.modelData.label
+                            text: I18n.tr(parent.modelData.label)
                             Layout.fillWidth: true
                             color: Theme.text
                             font.pixelSize: 20
                         }
                         Label {
-                            text: Number(parent.modelData.value || 0).toFixed(4) + "°"
+                            text: I18n.tr('%1°', [Number(parent.modelData.value || 0).toFixed(4)])
                             color: Theme.text
                             font.family: view.flow.codeFont
                             font.pixelSize: 24
@@ -178,7 +178,7 @@ RowLayout {
                     }
                 }
                 Label {
-                    text: view.flow.leveling ? "Zero uses the measured surface and A angle." : "Zero uses the first axis center."
+                    text: view.flow.leveling ? I18n.tr('Zero uses the measured surface and A angle.') : I18n.tr('Zero uses the first axis center.')
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
                     color: Theme.textMuted
@@ -190,7 +190,7 @@ RowLayout {
     WorkCoordinatePicker {
         id: wcsPicker
         currentWcs: view.flow.result.wcs || 54
-        title: "Save result to work coordinates"
+        title: I18n.tr('Save result to work coordinates')
         onSelected: function (wcs) {
             view.flow.resultWcsRequested(wcs);
         }

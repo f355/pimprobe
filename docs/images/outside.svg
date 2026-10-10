@@ -1,46 +1,23 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="680" height="450" viewBox="0 0 680 450" role="img" aria-label="Outside edge, corner and Z probing">
-<title>Outside edge, corner and Z probing</title>
-<rect width="680" height="450" fill="#f5f6f7"/>
-<g font-family="DejaVu Sans, sans-serif" fill="#25292c">
-<text x="20" y="28" font-size="20">Outside edge: side view</text>
-<rect x="80" y="155" width="215" height="70" fill="#b9bdc0" stroke="#6a7074" stroke-width="2"/>
-<circle cx="260" cy="110" r="8" fill="#fff" stroke="#555b60" stroke-width="2"/>
-<path d="M248 110L272 110" fill="none" stroke="#555b60" stroke-width="2.5"/>
-<path d="M260 98L260 122" fill="none" stroke="#555b60" stroke-width="2.5"/>
-<path d="M274 110L355 110" fill="none" stroke="#186699" stroke-width="2.5"/>
-<polygon fill="#186699" points="355,110 346,106 346,114"/>
-<path d="M355 115L355 178" fill="none" stroke="#186699" stroke-width="2.5"/>
-<polygon fill="#186699" points="355,178 359,169 351,169"/>
-<path d="M343 178L296 178" fill="none" stroke="#33383b" stroke-width="2.5"/>
-<polygon fill="#33383b" points="296,178 305,182 305,174"/>
-<circle cx="295" cy="178" r="5" fill="#008544"/>
-<text x="390" y="65" font-size="16">1. Move out by search distance</text>
-<text x="390" y="100" font-size="16">2. Lower to starting Z - Depth</text>
-<text x="390" y="135" font-size="16">3. Touch back towards stock</text>
-<text x="390" y="170" font-size="16">4. Fine touch, then back off</text>
-<text x="390" y="205" font-size="16">5. Raise to starting Z</text>
-<text x="90" y="115" font-size="16">Start above stock</text>
-<text x="20" y="265" font-size="20">Outside corner: top view</text>
-<rect x="155" y="300" width="140" height="95" fill="#b9bdc0" stroke="#6a7074" stroke-width="2"/>
-<circle cx="180" cy="320" r="8" fill="#fff" stroke="#555b60" stroke-width="2"/>
-<path d="M168 320L192 320" fill="none" stroke="#555b60" stroke-width="2.5"/>
-<path d="M180 308L180 332" fill="none" stroke="#555b60" stroke-width="2.5"/>
-<path d="M115 338L153 338" fill="none" stroke="#33383b" stroke-width="2.5"/>
-<polygon fill="#33383b" points="153,338 144,334 144,342"/>
-<path d="M190 275L190 298" fill="none" stroke="#33383b" stroke-width="2.5"/>
-<polygon fill="#33383b" points="190,298 194,289 186,289"/>
-<circle cx="155" cy="300" r="5" fill="#008544"/>
-<text x="22" y="430" font-size="14">Measure X, return above stock, then Y.</text>
-<text x="398" y="265" font-size="20">Z surface: side view</text>
-<rect x="440" y="360" width="200" height="45" fill="#b9bdc0" stroke="#6a7074" stroke-width="2"/>
-<circle cx="520" cy="305" r="8" fill="#fff" stroke="#555b60" stroke-width="2"/>
-<path d="M508 305L532 305" fill="none" stroke="#555b60" stroke-width="2.5"/>
-<path d="M520 293L520 317" fill="none" stroke="#555b60" stroke-width="2.5"/>
-<path d="M520 319L520 357" fill="none" stroke="#33383b" stroke-width="2.5"/>
-<polygon fill="#33383b" points="520,357 524,348 516,348"/>
-<circle cx="520" cy="360" r="5" fill="#008544"/>
-<path d="M549 352L549 305" fill="none" stroke="#186699" stroke-width="2.5"/>
-<polygon fill="#186699" points="549,305 545,314 553,314"/>
-<text x="400" y="430" font-size="14">Touch down; return to starting Z.</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="280" viewBox="0 0 720 280" role="img" aria-labelledby="title">
+<title id="title">X/Z</title>
+<defs>
+  <marker id="move" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#186699"/></marker>
+  <marker id="touch" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#33383b"/></marker>
+</defs>
+<rect width="720" height="280" fill="#f5f6f7"/>
+<path d="M55 135H420V240H55" fill="#b9bdc0" stroke="#6a7074" stroke-width="2"/>
+<g fill="none" stroke-width="3">
+  <path d="M335 75H540" stroke="#186699" marker-end="url(#move)"/>
+  <path d="M540 82V185" stroke="#186699" marker-end="url(#move)"/>
+  <path d="M525 190H429" stroke="#33383b" marker-end="url(#touch)"/>
+  <path d="M320 75H50" stroke="#929a9f" stroke-width="1.5" stroke-dasharray="6 5"/>
+  <circle cx="320" cy="75" r="9" fill="#fff" stroke="#555b60" stroke-width="2"/>
+  <path d="M306 75H334M320 61V89" stroke="#555b60" stroke-width="2"/>
 </g>
+<circle cx="420" cy="190" r="6" fill="#008544"/>
+<g font-family="DejaVu Sans, sans-serif" font-size="28" fill="#25292c">
+  <text x="429" y="58">1</text><text x="555" y="140">2</text><text x="470" y="225">3</text>
+  <text x="649" y="246" font-size="20">X+</text><text x="595" y="201" font-size="20">Z+</text>
+</g>
+<path d="M605 240H640M605 240V207" fill="none" stroke="#33383b" stroke-width="2" marker-end="url(#touch)"/>
 </svg>

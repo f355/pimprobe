@@ -31,6 +31,7 @@ PageView {
         selectResultWcs(wcs);
     }
     property bool historical: false
+    property var historyDetails: null
     property string uiFont
     property string codeFont
     property string phase: "review"
@@ -46,7 +47,7 @@ PageView {
     property var config: ({})
     readonly property bool leveling: operation !== "axis"
     readonly property string zeroAxes: operation === "horizontal" ? "A/Z" : operation === "axis" ? "Y/Z" : "A/Y"
-    readonly property string title: operation === "horizontal" ? "Level horizontal surface" : operation === "vertical" ? "Align vertical surface toward Y+" : operation === "verticalNegative" ? "Align vertical surface toward Y−" : "Calibrate rotary axis"
+    readonly property string title: operation === "horizontal" ? I18n.tr('Level horizontal surface') : operation === "vertical" ? I18n.tr('Align vertical surface toward Y+') : operation === "verticalNegative" ? I18n.tr('Align vertical surface toward Y−') : I18n.tr('Calibrate rotary axis')
     readonly property bool busy: reviewRequest.pending || actionRequest.pending
     ServiceRequest {
         id: reviewRequest
@@ -97,6 +98,7 @@ PageView {
         });
     }
     function showHistory(opened, details) {
+        historyDetails = details;
         reviewRequest.cancel();
         actionRequest.cancel();
         historical = true;
@@ -105,7 +107,7 @@ PageView {
         reviewID = opened.canApply ? opened.entry.id : "";
         phase = "result";
         failure = opened.entry.error || "";
-        text = details;
+        text = "";
         sourceVisible = false;
         open();
     }
@@ -213,7 +215,7 @@ PageView {
             Layout.preferredHeight: Theme.headerHeight
             visible: flow.showHeader
             title: flow.title
-            detail: flow.phase === "failed" ? "Failed" : flow.phase === "result" ? "Measured · G53" : flow.phase === "running" ? "Running" : "Confirm"
+            detail: flow.phase === "failed" ? I18n.tr('Failed') : flow.phase === "result" ? I18n.tr('Measured · G53') : flow.phase === "running" ? I18n.tr('Running') : I18n.tr('Confirm')
             uiFont: flow.uiFont
             backEnabled: flow.phase !== "running" && !flow.busy
             onBack: flow.close()
@@ -226,7 +228,7 @@ PageView {
             MessageStrip {
                 Layout.fillWidth: true
                 visible: flow.failure.length > 0
-                text: flow.failure
+                text: I18n.tr(flow.failure)
                 textColor: Theme.danger
             }
             RowLayout {
@@ -254,7 +256,8 @@ PageView {
                     contentWidth: codeText.implicitWidth
                     TextArea {
                         id: codeText
-                        text: flow.text
+                        text: flow.historical
+                            ? flow.historyDetails() + (flow.text ? "\n" + flow.text : "") : flow.text
                         readOnly: true
                         selectByMouse: false
                         font.family: flow.codeFont
@@ -280,8 +283,8 @@ PageView {
                 spacing: 10
                 LabButton {
                     visible: flow.phase === "result"
-                    text: flow.sourceVisible ? "Result" : flow.historical ? "Details" : "Log"
-                    Layout.preferredWidth: 96
+                    text: flow.sourceVisible ? I18n.tr('Result') : flow.historical ? I18n.tr('Details') : I18n.tr('Log')
+                    Layout.preferredWidth: 112
                     Layout.preferredHeight: 64
                     onClicked: flow.sourceVisible = !flow.sourceVisible
                 }
@@ -290,7 +293,7 @@ PageView {
                 }
                 LabButton {
                     visible: flow.phase === "review"
-                    text: "Cancel"
+                    text: I18n.tr('Cancel')
                     Layout.preferredHeight: 64
                     Layout.preferredWidth: 144
                     font.pixelSize: 20
@@ -298,7 +301,7 @@ PageView {
                 }
                 LabButton {
                     visible: flow.phase === "review"
-                    text: flow.busy ? "Preparing…" : "Proceed"
+                    text: flow.busy ? I18n.tr('Preparing…') : I18n.tr('Proceed')
                     enabled: !flow.busy
                     primary: true
                     Layout.preferredHeight: 64
@@ -308,7 +311,7 @@ PageView {
                 }
                 LabButton {
                     visible: flow.phase === "result"
-                    text: "Set " + flow.zeroAxes + " zero"
+                    text: I18n.tr('Set %1 zero', [flow.zeroAxes])
                     enabled: !flow.busy && flow.reviewID.length > 0
                     primary: true
                     Layout.preferredHeight: 64
@@ -318,7 +321,7 @@ PageView {
                 }
                 LabButton {
                     visible: flow.phase === "result" && !flow.leveling && flow.result.rotationSupported === true
-                    text: "Set X/Y rotation"
+                    text: I18n.tr('Set X/Y rotation')
                     enabled: !flow.busy && flow.reviewID.length > 0
                     Layout.preferredHeight: 64
                     Layout.preferredWidth: 216
@@ -327,7 +330,7 @@ PageView {
                 }
                 LabButton {
                     visible: flow.phase === "result" || flow.phase === "failed"
-                    text: "Close"
+                    text: I18n.tr('Close')
                     enabled: !flow.busy
                     Layout.preferredHeight: 64
                     Layout.preferredWidth: 144
@@ -339,8 +342,12 @@ PageView {
     }
     TouchDialog {
         id: confirmation
-        title: flow.requestedAction === "zero" ? "Set work zero" : "Set X/Y rotation"
-        message: flow.requestedAction === "zero" ? "Set G" + flow.result.wcs + " " + flow.zeroAxes + " zero " + (flow.leveling ? "to the measured surface and current A angle?" : "to the first measured axis center?") : "Set G" + flow.result.wcs + " X/Y rotation to " + Number(flow.result.xyAngle).toFixed(4) + "°?"
+        title: flow.requestedAction === "zero" ? I18n.tr('Set work zero') : I18n.tr('Set X/Y rotation')
+        message: flow.requestedAction === "zero"
+            ? (flow.leveling
+                ? I18n.tr('Set G%1 %2 zero to the measured surface and current A angle?', [flow.result.wcs, flow.zeroAxes])
+                : I18n.tr('Set G%1 %2 zero to the first measured axis center?', [flow.result.wcs, flow.zeroAxes]))
+            : I18n.tr('Set G%1 X/Y rotation to %2°?', [flow.result.wcs, Number(flow.result.xyAngle).toFixed(4)])
         font.family: flow.uiFont
         onAccepted: flow.applyAction()
     }

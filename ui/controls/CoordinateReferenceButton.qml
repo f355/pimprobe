@@ -21,13 +21,13 @@ import QtQuick.Layouts
 LabButton {
     id: control
     property bool probeSelected: true
-    text: probeSelected ? "Probe" : "Tool"
+    text: probeSelected ? I18n.tr('Probe') : I18n.tr('Tool')
     implicitWidth: 96
     implicitHeight: 56
     padding: 4
     font.pixelSize: 18
     background: null
-    Accessible.name: "Coordinate reference: " + text
+    Accessible.name: I18n.tr('Coordinate reference: %1', [text])
     onClicked: probeSelected = !probeSelected
 
     contentItem: ColumnLayout {
@@ -47,7 +47,7 @@ LabButton {
                 Label {
                     id: label
                     anchors.fill: parent
-                    text: parent.modelData
+                    text: I18n.tr(parent.modelData)
                     color: parent.active ? Theme.accentBright : Theme.textMuted
                     font.family: control.font.family
                     font.pixelSize: control.font.pixelSize

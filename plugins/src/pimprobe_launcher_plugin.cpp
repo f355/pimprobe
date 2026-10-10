@@ -35,6 +35,7 @@
 #include <QMainWindow>
 #include <QProcess>
 #include <QPushButton>
+#include <QSettings>
 #include <QTimer>
 
 namespace pimprobe {
@@ -66,8 +67,14 @@ void PimProbeLauncherPlugin::tryInstallLauncher() {
             continue;
         }
         button_ = installLauncherButton(window, [] {
+            const QSettings settings(QStringLiteral("/userdata/.nestpad/config/settings.ini"),
+                                     QSettings::IniFormat);
+            const bool chinese = settings.value(QStringLiteral("language")).toString()
+                                 == QStringLiteral("\u4e2d\u6587");
+            const QString language = chinese ? QStringLiteral("zh_CN") : QStringLiteral("en");
             if (!QProcess::startDetached(
-                    QStringLiteral("/userdata/pimprobe/bin/pimprobe-ui"), {})) {
+                    QStringLiteral("/userdata/pimprobe/bin/pimprobe-ui"),
+                    {QStringLiteral("--language=") + language})) {
                 qWarning() << "PimProbe launcher could not start UI";
             }
         });

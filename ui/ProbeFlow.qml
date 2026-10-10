@@ -59,6 +59,7 @@ PageView {
     readonly property bool zeroing: zeroRequest.pending
     readonly property bool busy: zeroing || wcsRequest.pending
     property bool historical: false
+    property var historyDetails: null
     property string logText: ""
     property var result: []
     property var spans: [null, null, null]
@@ -68,7 +69,7 @@ PageView {
             return spans[i] !== null;
         }).map(function (i) {
             var ridge = routine.feature === "y-ridge" || routine.feature === "y-valley";
-            var label = round ? "Span " + ["X", "Y"][i] : i === 0 ? "Width X" : ridge ? "Width Y" : "Length Y";
+            var label = round ? ["Span X", "Span Y"][i] : i === 0 ? "Width X" : ridge ? "Width Y" : "Length Y";
             return {
                 label: label,
                 value: spans[i]
@@ -118,7 +119,28 @@ PageView {
         if (phase === "result" || phase === "failed")
             Qt.callLater(scrollLogToEnd);
     }
-    readonly property string description: routine.family === "center" ? "Probing " + (routine.z ? "Z surface" : routine.feature.replace("-", " ") + " center") + "." : "Probing " + (routine.family || "outside") + " " + (routine.z ? "Z surface" : routine.x && routine.y ? "X/Y corner" : routine.x ? "X" + (routine.x > 0 ? "+" : "-") + " edge" : "Y" + (routine.y > 0 ? "+" : "-") + " edge") + "."
+    readonly property string description: {
+        if (routine.family === "center") {
+            var descriptions = {
+                "boss": "Probing boss center.",
+                "block": "Probing block center.",
+                "hole": "Probing hole center.",
+                "pocket": "Probing pocket center.",
+                "x-ridge": "Probing x ridge center.",
+                "y-ridge": "Probing y ridge center.",
+                "x-valley": "Probing x valley center.",
+                "y-valley": "Probing y valley center."
+            };
+            return routine.z ? I18n.tr('Probing Z surface.') : I18n.tr(descriptions[routine.feature]);
+        }
+        var inside = routine.family === "inside";
+        if (routine.z)
+            return inside ? I18n.tr('Probing inside Z surface.') : I18n.tr('Probing outside Z surface.');
+        if (routine.x && routine.y)
+            return inside ? I18n.tr('Probing inside X/Y corner.') : I18n.tr('Probing outside X/Y corner.');
+        var axis = routine.x ? "X" + (routine.x > 0 ? "+" : "-") : "Y" + (routine.y > 0 ? "+" : "-");
+        return I18n.tr(inside ? 'Probing inside %1 edge.' : 'Probing outside %1 edge.', [axis]);
+    }
 
     x: 0
     y: 0
@@ -175,6 +197,7 @@ PageView {
     }
 
     function showHistory(opened, details) {
+        historyDetails = details;
         reviewRequest.cancel();
         zeroRequest.cancel();
         wcsRequest.cancel();
@@ -188,7 +211,7 @@ PageView {
         failure = opened.entry.error || "";
         reviewID = "";
         program = [];
-        logText = details;
+        logText = "";
         offsets = ((opened.entry.workZero || {}).offsets || [0, 0, 0]).slice();
         returning = false;
         positioning = false;
@@ -367,7 +390,7 @@ PageView {
             Layout.preferredHeight: Theme.headerHeight
             visible: flow.showHeader
             title: flow.description
-            detail: flow.phase === "failed" ? "Failed" : flow.phase === "result" ? "Complete" : flow.phase === "running" ? "Running" : "Confirm"
+            detail: flow.phase === "failed" ? I18n.tr('Failed') : flow.phase === "result" ? I18n.tr('Complete') : flow.phase === "running" ? I18n.tr('Running') : I18n.tr('Confirm')
             uiFont: flow.uiFont
             backEnabled: flow.phase !== "running" && !flow.busy
             onBack: flow.close()
@@ -382,7 +405,7 @@ PageView {
             MessageStrip {
                 Layout.fillWidth: true
                 visible: flow.failure.length > 0 || flow.reviewing
-                text: flow.reviewing ? "Preparing routine..." : flow.failure
+                text: flow.reviewing ? I18n.tr('Preparing routine...') : I18n.tr(flow.failure)
             }
 
             RowLayout {
@@ -414,7 +437,8 @@ PageView {
                         onHeightChanged: Qt.callLater(flow.scrollLogToEnd)
                         TextArea {
                             id: logArea
-                            text: flow.logText
+                            text: flow.historical
+                                ? flow.historyDetails() + (flow.logText ? "\n" + flow.logText : "") : flow.logText
                             readOnly: true
                             selectByMouse: false
                             wrapMode: TextEdit.NoWrap
@@ -443,8 +467,8 @@ PageView {
                 spacing: 12
                 LabButton {
                     visible: flow.phase === "result"
-                    text: flow.sourceVisible ? "Result" : flow.historical ? "Details" : "Log"
-                    Layout.preferredWidth: 96
+                    text: flow.sourceVisible ? I18n.tr('Result') : flow.historical ? I18n.tr('Details') : I18n.tr('Log')
+                    Layout.preferredWidth: 112
                     onClicked: {
                         resultEditor.cancel();
                         flow.sourceVisible = !flow.sourceVisible;
@@ -456,14 +480,14 @@ PageView {
                 }
                 LabButton {
                     visible: flow.phase === "review"
-                    text: "Cancel"
+                    text: I18n.tr('Cancel')
                     Layout.preferredWidth: 140
                     Layout.preferredHeight: 56
                     font.pixelSize: 20
                     onClicked: flow.close()
                 }
                 LabButton {
-                    text: "Set Work Zero"
+                    text: I18n.tr('Set Work Zero')
                     visible: flow.phase === "result"
                     enabled: !flow.busy && flow.completedID.length > 0
                     Layout.preferredWidth: 184
@@ -473,7 +497,7 @@ PageView {
                     onClicked: flow.zeroResult()
                 }
                 LabButton {
-                    text: "Return to start"
+                    text: I18n.tr('Return to start')
                     visible: flow.phase === "result" && !flow.historical && (flow.routine.family !== "inside" || flow.routine.z)
                     enabled: !flow.busy && !flow.returned && flow.completedID.length > 0
                     Layout.preferredWidth: 208
@@ -482,7 +506,7 @@ PageView {
                     onClicked: flow.returnToStart()
                 }
                 LabButton {
-                    text: "Move to measured XY"
+                    text: I18n.tr('Move to measured XY')
                     visible: flow.phase === "result" && !flow.historical && flow.routine.family === "inside" && !flow.routine.z
                     enabled: !flow.busy && !flow.positioned && flow.completedID.length > 0
                     Layout.preferredWidth: 244
@@ -492,7 +516,7 @@ PageView {
                 }
                 LabButton {
                     visible: flow.phase !== "running"
-                    text: flow.phase === "review" ? "Proceed" : "Close"
+                    text: flow.phase === "review" ? I18n.tr('Proceed') : I18n.tr('Close')
                     enabled: !flow.busy && (flow.phase !== "review" || !flow.reviewing)
                     Layout.preferredWidth: 140
                     Layout.preferredHeight: 56
@@ -502,7 +526,7 @@ PageView {
                 }
                 Label {
                     visible: flow.phase === "running"
-                    text: flow.returning ? "Returning to starting position..." : flow.positioning ? "Moving to measured point..." : "Probing..."
+                    text: flow.returning ? I18n.tr('Returning to starting position...') : flow.positioning ? I18n.tr('Moving to measured point...') : I18n.tr('Probing...')
                     color: Theme.text
                     font.pixelSize: 20
                     Layout.preferredHeight: 56

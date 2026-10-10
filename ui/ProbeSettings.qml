@@ -26,6 +26,7 @@ Item {
     readonly property bool saving: saveRequest.pending
     property bool dirty: false
     property string error: ""
+    onValuesChanged: I18n.language = I18n.resolve(values.language, I18n.systemLanguage)
 
     ServiceRequest {
         client: store.client

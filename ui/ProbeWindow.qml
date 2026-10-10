@@ -26,7 +26,7 @@ ApplicationWindow {
     readonly property alias page: probePage
     visible: true
     color: Theme.page
-    title: "Probing"
+    title: I18n.tr('Probing')
     palette.window: Theme.page
     palette.base: Theme.field
     palette.text: Theme.text
@@ -64,7 +64,7 @@ ApplicationWindow {
         onAlarmRequested: Qt.quit()
         settingsContribution: Component {
             LabButton {
-                text: "Check for updates"
+                text: I18n.tr('Check for updates')
                 implicitHeight: 56
                 font.pixelSize: 19
                 primary: true

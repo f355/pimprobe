@@ -33,6 +33,7 @@ To get new versions as they are released, head to the Settings tab and press "Ch
 ## Documentation
 
 [Operator guide](docs/README.md): routines, settings and work zero, with pictures.
+Also available in [简体中文](docs/zh_CN/README.md) and [Svenska](docs/sv/README.md).
 
 ## Development
 
@@ -42,15 +43,15 @@ and Node.js. The development scripts locate Homebrew Qt and rustup on macOS.
 Run `./dev/preview.sh` for an 800 x 480 preview with simulated stock.
 UI tests use an isolated mock service and temporary settings.
 
-Operator text lives in `docs/`; standalone links to shared pages are expanded
-into the contextual help during previews and packaging. Screenshots sit inside
-`guide-only` comment blocks. Refresh them with
+Operator text lives in `docs/`; each probing tab uses its own page as contextual
+help during previews and packaging. Screenshots and guide navigation sit inside
+`guide-only` comment blocks. Refresh screenshots with
 `./dev/test-ui.sh dev/screenshots`.
 
 ```sh
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
-node --test dev/test-assets.mjs
+node --test dev/test-assets.mjs dev/test-i18n.mjs
 ./dev/test-ui.sh
 cmake -S plugins -B build/plugins -DCMAKE_PREFIX_PATH=/opt/homebrew
 cmake --build build/plugins
@@ -167,6 +168,10 @@ The installer file remains available for reinstallation.
 
 The machine installation is in `/userdata/pimprobe`. Service options are in
 `config.json`, and probing settings are in `settings.json`.
+
+Choose English, 简体中文 or Svenska in Settings. The choice is saved.
+Until you choose, PIMProbe follows CNC_Lab's language on the machine and the
+system language in a local preview.
 
 For local use, settings default to `$XDG_CONFIG_HOME/pimprobe/settings.json`
 or `$HOME/.config/pimprobe/settings.json`. Override this with `--settings FILE`.

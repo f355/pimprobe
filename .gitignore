@@ -2,6 +2,7 @@
 /build/
 /dist/
 /ui/HelpPages.js
+/ui/i18n/Catalog.js
 /ui/help/
 /ui/fonts/
 *.user

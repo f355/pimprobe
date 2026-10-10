@@ -37,7 +37,7 @@ PageView {
             Layout.fillWidth: true
             Layout.preferredHeight: Theme.headerHeight
             visible: page.showHeader
-            title: "Probe settings"
+            title: I18n.tr("Probe settings")
             uiFont: page.font.family
             onBack: page.close()
         }

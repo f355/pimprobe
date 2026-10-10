@@ -24,7 +24,7 @@ ProbeButton {
     required property int xApproach
     required property int yApproach
     property bool zApproach: false
-    diagramLabel: zApproach ? "Z surface" : "X " + xApproach + ", Y " + yApproach
+    diagramLabel: zApproach ? I18n.tr('Z surface') : "X " + xApproach + ", Y " + yApproach
 
     contentItem: ProbeDiagram {
         id: diagram

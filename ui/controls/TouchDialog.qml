@@ -23,7 +23,7 @@ Dialog {
     id: dialog
     property string message
     property string errorText
-    property string acceptText: "Apply"
+    property string acceptText: I18n.tr('Apply')
     property string alternateText
     property bool busy: false
     property bool closeOnAccept: true
@@ -77,7 +77,7 @@ Dialog {
         }
         Label {
             visible: text.length > 0
-            text: dialog.errorText
+            text: I18n.tr(dialog.errorText)
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
             font.pixelSize: 18
@@ -87,7 +87,7 @@ Dialog {
             Layout.fillWidth: true
             spacing: 12
             LabButton {
-                text: "Cancel"
+                text: I18n.tr('Cancel')
                 Layout.fillWidth: true
                 Layout.preferredWidth: 1
                 Layout.preferredHeight: 80

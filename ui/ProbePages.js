@@ -43,9 +43,22 @@ var setup = [
 
 function featureName(routine) {
     if (routine.z) return "Z surface";
-    if (routine.family === "center")
-        return routine.feature[0].toUpperCase() + routine.feature.slice(1).replace("-", " ") + " center";
-    return (routine.family === "inside" ? "Inside" : "Outside") + (routine.x && routine.y ? " corner" : " edge");
+    if (routine.family === "center") {
+        var names = {
+            "boss": "Boss center",
+            "block": "Block center",
+            "hole": "Hole center",
+            "pocket": "Pocket center",
+            "x-ridge": "X ridge center",
+            "y-ridge": "Y ridge center",
+            "x-valley": "X valley center",
+            "y-valley": "Y valley center"
+        };
+        return names[routine.feature];
+    }
+    return routine.family === "inside"
+        ? (routine.x && routine.y ? "Inside corner" : "Inside edge")
+        : (routine.x && routine.y ? "Outside corner" : "Outside edge");
 }
 
 function routine(settings, family, selection, wcs) {

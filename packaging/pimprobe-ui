@@ -63,6 +63,6 @@ cleanup() {
 trap cleanup EXIT
 trap 'cleanup; exit 0' INT TERM
 
-QT_QUICK_CONTROLS_STYLE=Basic /usr/bin/qmlscene /userdata/pimprobe/ui/Main.qml 9>&- &
+QT_QUICK_CONTROLS_STYLE=Basic /usr/bin/qmlscene /userdata/pimprobe/ui/Main.qml "$@" 9>&- &
 ui_pid=$!
 wait "$ui_pid"

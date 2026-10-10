@@ -33,7 +33,7 @@ RowLayout {
 
     Label {
         Layout.fillWidth: true
-        text: row.definition.label
+        text: I18n.tr(row.definition.label)
         color: Theme.text
         font.pixelSize: row.labelSize
         wrapMode: Text.WordWrap
@@ -46,7 +46,7 @@ RowLayout {
         NumberField {
             id: input
             objectName: row.definition.key
-            Accessible.name: row.definition.label
+            Accessible.name: I18n.tr(row.definition.label)
             editor: row.editor
             width: row.fieldWidth
             height: row.fieldHeight
@@ -62,7 +62,7 @@ RowLayout {
             anchors.left: input.right
             anchors.leftMargin: 12
             anchors.verticalCenter: parent.verticalCenter
-            text: row.definition.unit || "mm"
+            text: I18n.tr(row.definition.unit || 'mm')
             color: Theme.textMuted
             font.pixelSize: 16
         }

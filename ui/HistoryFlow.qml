@@ -93,15 +93,16 @@ PageView {
     function detail(entry) {
         if (!entry)
             return "";
-        var lines = [dateText(entry.timestampMs), "Status: " + entry.status];
+        var lines = [dateText(entry.timestampMs), I18n.tr('Status: %1', [I18n.tr(entry.status)])];
         if (entry.error)
-            lines.push("Error: " + entry.error);
+            lines.push(I18n.tr('Error: %1', [I18n.tr(entry.error)]));
         if (entry.category === "repeatability") {
             var report = entry.result || {};
             var options = entry.config ? entry.config.options || {} : {};
-            lines.push("Repetitions: " + (options.repetitions || 0) + "   Home: " + (options.home ? "yes" : "no") + "   Retract: " + (options.retract ? "yes" : "no"));
+            lines.push(I18n.tr('Repetitions: %1   Home: %2   Retract: %3', [options.repetitions || 0,
+                options.home ? I18n.tr('yes') : I18n.tr('no'), options.retract ? I18n.tr('yes') : I18n.tr('no')]));
             var measurements = report.measurements || [];
-            lines.push("", "Readings (mm)");
+            lines.push("", I18n.tr('Readings (mm)'));
             for (var i = 0; i < measurements.length; ++i) {
                 var reading = measurements[i];
                 lines.push((i + 1) + ": " + ["X", "Y", "Z"].map(function (axis, index) {
@@ -111,7 +112,8 @@ PageView {
             var stats = report.statistics || [];
             for (var j = 0; j < stats.length; ++j) {
                 if (stats[j])
-                    lines.push(["X", "Y", "Z"][j] + " mean " + number(stats[j].mean) + "   median " + number(stats[j].median) + "   SD " + (stats[j].stddev === null ? "-" : number(stats[j].stddev)));
+                    lines.push(I18n.tr('%1 mean %2   median %3   SD %4', [["X", "Y", "Z"][j],
+                        number(stats[j].mean), number(stats[j].median), stats[j].stddev === null ? "-" : number(stats[j].stddev)]));
             }
         } else if (entry.category === "rotary") {
             var calibration = entry.result || {};
@@ -124,30 +126,37 @@ PageView {
                 var level = calibration.level || {};
                 var axes = (level.operation || setup.operation) === "horizontal" ? "A/Z" : "A/Y";
                 ["initialTouches", "touches"].forEach(function (key) {
-                    lines.push("", key === "touches" ? "Verified touches · G53" : "Initial touches · G53");
+                    lines.push("", key === "touches" ? I18n.tr('Verified touches · G53') : I18n.tr('Initial touches · G53'));
                     (level[key] || []).forEach(function (point, index) {
-                        lines.push("Touch " + (index + 1) + ": " + ["X", "Y", "Z"].map(function (axis, i) {
+                        lines.push(I18n.tr('Touch %1: %2', [index + 1, ["X", "Y", "Z"].map(function (axis, i) {
                             return axis + " " + number(point[i]);
-                        }).join("   "));
+                        }).join("   ")]));
                     });
                 });
                 if (calibration.level) {
-                    lines.push("A correction " + Number(level.correction).toFixed(4) + "°", "Remaining tilt " + Number(level.residual).toFixed(4) + "°", axes + " zero: " + (calibration.zeroed ? "saved" : "unchanged"));
+                    lines.push(I18n.tr('A correction %1°', [Number(level.correction).toFixed(4)]),
+                        I18n.tr('Remaining tilt %1°', [Number(level.residual).toFixed(4)]),
+                        I18n.tr('%1 zero: %2', [axes, calibration.zeroed ? I18n.tr('saved') : I18n.tr('unchanged')]));
                 }
-                lines.push("", "G" + setup.wcs + "   Y distance " + number(setup.yDistance) + " mm", "Z distance " + number(setup.zDistance) + " mm");
+                lines.push("", I18n.tr('G%1   Y distance %2 mm', [setup.wcs, number(setup.yDistance)]),
+                    I18n.tr('Z distance %1 mm', [number(setup.zDistance)]));
             } else {
-                lines.push("", "Axis centers · G53 (mm)");
+                lines.push("", I18n.tr('Axis centers · G53 (mm)'));
                 (calibration.stations || []).forEach(function (station, index) {
-                    lines.push("Axis center " + (index + 1) + ": " + ["X", "Y", "Z"].map(function (axis, i) {
+                    lines.push(I18n.tr('Axis center %1: %2', [index + 1, ["X", "Y", "Z"].map(function (axis, i) {
                         return axis + " " + number(station.center[i]);
-                    }).join("   "));
+                    }).join("   ")]));
                 });
                 if ((calibration.stations || []).length === 2) {
-                    lines.push("Axis angle in X/Y " + Number(calibration.xyAngle).toFixed(4) + "°", "Axis angle in X/Z " + Number(calibration.xzAngle).toFixed(4) + "°", "Y/Z zero: " + (calibration.zeroed ? "saved" : "unchanged"), "X/Y rotation: " + (calibration.rotationApplied ? "saved" : "unchanged"));
+                    lines.push(I18n.tr('Axis angle in X/Y %1°', [Number(calibration.xyAngle).toFixed(4)]),
+                        I18n.tr('Axis angle in X/Z %1°', [Number(calibration.xzAngle).toFixed(4)]),
+                        I18n.tr('Y/Z zero: %1', [calibration.zeroed ? I18n.tr('saved') : I18n.tr('unchanged')]),
+                        I18n.tr('X/Y rotation: %1', [calibration.rotationApplied ? I18n.tr('saved') : I18n.tr('unchanged')]));
                 }
-                lines.push("", "G" + setup.wcs + "   rod " + number(setup.rodDiameter) + " mm", "X distance " + number(setup.xDistance) + " mm");
+                lines.push("", I18n.tr('G%1   rod %2 mm', [setup.wcs, number(setup.rodDiameter)]),
+                    I18n.tr('X distance %1 mm', [number(setup.xDistance)]));
             }
-            lines.push("Rotary feed " + number(setup.rotaryFeed) + "°/min");
+            lines.push(I18n.tr('Rotary feed %1°/min', [number(setup.rotaryFeed)]));
         } else {
             var result = entry.result || {};
             var config = entry.config || {};
@@ -155,7 +164,7 @@ PageView {
             if (point.some(function (value) {
                 return value !== null && value !== undefined;
             })) {
-                lines.push("", "Measured G53 (mm)");
+                lines.push("", I18n.tr('Measured G53 (mm)'));
                 for (var axis = 0; axis < 3; ++axis) {
                     if (point[axis] !== null && point[axis] !== undefined)
                         lines.push(["X", "Y", "Z"][axis] + "  " + number(point[axis]));
@@ -164,20 +173,20 @@ PageView {
             var spans = result.spans || [];
             for (var span = 0; span < 2; ++span) {
                 if (spans[span] !== null && spans[span] !== undefined)
-                    lines.push("Span " + ["X", "Y"][span] + "  " + number(spans[span]) + " mm");
+                    lines.push(I18n.tr('Span %1  %2 mm', [["X", "Y"][span], number(spans[span])]));
             }
             if (entry.workZero) {
-                lines.push("", "Work zero set in G" + (entry.workZero.result || result).wcs);
+                lines.push("", I18n.tr('Work zero set in G%1', [(entry.workZero.result || result).wcs]));
                 var offsets = entry.workZero.offsets || [];
                 for (var offset = 0; offset < 3; ++offset) {
                     if (point[offset] !== null && point[offset] !== undefined)
-                        lines.push(["X", "Y", "Z"][offset] + " offset " + number(offsets[offset] || 0) + " mm");
+                        lines.push(I18n.tr('%1 offset %2 mm', [["X", "Y", "Z"][offset], number(offsets[offset] || 0)]));
                 }
             }
-            lines.push("", "Settings", "G" + config.wcs + "   ball " + number(config.diameter) + " mm" + "   depth " + number(config.depth) + " mm");
+            lines.push("", I18n.tr('Settings'), I18n.tr('G%1   ball %2 mm   depth %3 mm', [config.wcs, number(config.diameter), number(config.depth)]));
             if (!config.z)
-                lines.push("X search " + number(config.xSearchDistance) + " mm   Y search " + number(config.ySearchDistance) + " mm");
-            lines.push("Feeds: " + number(config.positioningFeed) + " / " + number(config.coarseFeed) + " / " + number(config.fineFeed) + " mm/min");
+                lines.push(I18n.tr('X search %1 mm   Y search %2 mm', [number(config.xSearchDistance), number(config.ySearchDistance)]));
+            lines.push(I18n.tr('Feeds: %1 / %2 / %3 mm/min', [number(config.positioningFeed), number(config.coarseFeed), number(config.fineFeed)]));
         }
         return lines.join("\n");
     }
@@ -194,8 +203,8 @@ PageView {
             Layout.fillWidth: true
             Layout.preferredHeight: Theme.headerHeight
             visible: flow.showHeader
-            title: "Probe history"
-            detail: flow.entries.length ? flow.entries.length + " attempts" : ""
+            title: I18n.tr('Probe history')
+            detail: flow.entries.length ? I18n.tr('%1 attempts', [flow.entries.length]) : ""
             uiFont: flow.uiFont
             backEnabled: !openRequest.pending
             onBack: flow.close()
@@ -205,7 +214,7 @@ PageView {
             Layout.fillWidth: true
             Layout.fillHeight: flow.entries.length === 0
             Layout.margins: 16
-            text: flow.errorText || "No probing attempts yet"
+            text: flow.errorText ? I18n.tr(flow.errorText) : I18n.tr('No probing attempts yet')
             color: flow.errorText ? Theme.warning : Theme.textMuted
             font.pixelSize: 20
             horizontalAlignment: Text.AlignHCenter
@@ -241,14 +250,14 @@ PageView {
                         spacing: 3
                         Label {
                             width: parent.width
-                            text: entryRow.modelData.label
+                            text: I18n.tr(entryRow.modelData.label)
                             color: Theme.text
                             font.pixelSize: 20
                             elide: Text.ElideRight
                         }
                         Label {
                             width: parent.width
-                            text: flow.dateText(entryRow.modelData.timestampMs) + "  " + entryRow.modelData.status
+                            text: flow.dateText(entryRow.modelData.timestampMs) + "  " + I18n.tr(entryRow.modelData.status)
                             color: entryRow.modelData.status === "success" ? Theme.accentBright : entryRow.modelData.status === "failed" ? Theme.danger : Theme.warning
                             font.pixelSize: 18
                             elide: Text.ElideRight
@@ -285,7 +294,7 @@ PageView {
                 }
                 LabButton {
                     objectName: "historyOpenResult"
-                    text: "Open result"
+                    text: I18n.tr('Open result')
                     Layout.fillWidth: true
                     enabled: !openRequest.pending && flow.selected !== null && flow.selected.result && (flow.selected.result.machinePoint !== undefined || flow.selected.category === "rotary")
                     primary: true

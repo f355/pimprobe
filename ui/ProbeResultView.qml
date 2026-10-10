@@ -36,7 +36,7 @@ RowLayout {
             visible: !view.editing
             spacing: 12
             Label {
-                text: Pages.featureName(view.flow.routine)
+                text: I18n.tr(Pages.featureName(view.flow.routine))
                 Layout.fillWidth: true
                 font.pixelSize: 24
                 wrapMode: Text.WordWrap
@@ -49,7 +49,7 @@ RowLayout {
                     Layout.fillWidth: true
                     spacing: 12
                     Label {
-                        text: parent.modelData.label + " · mm"
+                        text: I18n.tr('%1 · mm', [I18n.tr(parent.modelData.label)])
                         Layout.fillWidth: true
                         font.pixelSize: 18
                         color: Theme.textMuted
@@ -117,7 +117,7 @@ RowLayout {
             Layout.fillWidth: true
             ConfirmationLabel {
                 id: heading
-                heading: "Work zero"
+                heading: I18n.tr('Work zero')
                 Layout.fillWidth: true
             }
             MenuButton {
@@ -127,7 +127,7 @@ RowLayout {
                 Layout.preferredWidth: 112
                 Layout.preferredHeight: 56
                 onClicked: wcsPicker.open()
-                Accessible.name: "Choose result work coordinates"
+                Accessible.name: I18n.tr('Choose result work coordinates')
             }
         }
         ScrollView {
@@ -143,15 +143,16 @@ RowLayout {
                     Layout.fillWidth: true
                     Label {
                         Layout.fillWidth: true
-                        text: "Measured · G53 · mm"
+                        text: I18n.tr('Measured · G53 · mm')
                         color: Theme.textMuted
                         font.pixelSize: 18
                     }
                     Label {
                         Layout.preferredWidth: 112
-                        text: "Offset · mm"
+                        text: I18n.tr('Offset · mm')
                         color: Theme.textMuted
                         font.pixelSize: 18
+                        wrapMode: Text.WordWrap
                         horizontalAlignment: Text.AlignRight
                     }
                 }
@@ -189,7 +190,7 @@ RowLayout {
                             value: view.flow.offsets[axis.modelData]
                             Layout.preferredWidth: 112
                             Layout.preferredHeight: 56
-                            Accessible.name: ["X", "Y", "Z"][axis.modelData] + " origin offset"
+                            Accessible.name: I18n.tr('%1 origin offset', [["X", "Y", "Z"][axis.modelData]])
                             onCommitted: function (value) {
                                 view.flow.setOffset(axis.modelData, value);
                             }
@@ -201,7 +202,7 @@ RowLayout {
                     Layout.fillWidth: true
                     Label {
                         Layout.fillWidth: true
-                        text: "Safe Z lift · mm"
+                        text: I18n.tr('Safe Z lift · mm')
                         color: Theme.text
                         font.pixelSize: 20
                     }
@@ -225,7 +226,7 @@ RowLayout {
         id: wcsPicker
         objectName: "resultWcsPicker"
         currentWcs: view.flow.routine.wcs || 54
-        title: "Save result to work coordinates"
+        title: I18n.tr('Save result to work coordinates')
         onSelected: function (wcs) {
             view.flow.resultWcsRequested(wcs);
         }

@@ -1,39 +1,37 @@
 # Inside
 
+The four side pictures measure an internal wall; the four corner pictures measure X and Y. The middle picture measures the bottom.
+
 <!-- guide-only -->
-![inside controls](images/inside.png)
+![Inside measurement buttons and distances](images/inside.png)
 <!-- /guide-only -->
 
-## Where to start
+## Wall or corner
 
-Put the extended probe ball inside the opening, near the wall or corner you want to measure, at the height where you want the X/Y touches.
+Place the ball inside the opening, at the height where you want to touch the walls.
 
-The arrows point towards the walls being measured. X/Y touches happen at starting Z. Corners measure X, return to starting X at that height, then measure Y.
+**X search distance** and **Y search distance** are the furthest the ball may travel from its start toward each wall. Make them long enough to reach the wall. A corner uses both; a single wall uses only its axis's distance.
 
-![Inside probing movements](images/inside.svg)
+For a corner:
 
-## X search distance and Y search distance
+1. Touch the X wall.
+2. Return to starting X.
+3. Touch the Y wall.
 
-How far from starting X or Y the probe may search towards a wall. With X search distance 10, an X+ search ends at starting X + 10 if it reaches the limit before touching. An X- search ends at starting X - 10.
+All these moves stay at starting Z; **Depth** is unused.
 
-Choose enough distance to reach the wall along each measuring axis.
+![Inside corner: X touch, return to start, then Y touch](images/inside.svg)
 
-## Depth
+The probe finishes at starting X/Y and Z.
 
-For Z, the maximum downward search distance to find the bottom. After a successful Z touch, the probe returns to its starting Z.
+## Bottom surface
 
-[Results and work zero](results.md)
+Place the ball above the bottom. **Depth** is the maximum downward search from that position. The probe returns to starting Z afterward.
 
-## Where it finishes
+## Move above the measured point
 
-After the last touch and backoff, the probe returns directly to its starting X/Y and stays at probing height.
+The result page's **Move to measured XY** raises the ball by **Safe Z lift**, then moves it above the measured wall or corner. Set the lift high enough to clear the pocket top and any clamps on that route. It is a distance up from the current Z, not an absolute height.
 
-[Safe Z offset and moving to the measured point](safe-z.md)
-
-Z always returns to its starting height.
-
-## Watch the route
-
-A return across a pocket can hit an island or an overhang even when both endpoints are clear.
-
-[Clearance and failed probing](safety.md)
+<!-- guide-only -->
+[Set work zero from the result](results.md)
+<!-- /guide-only -->

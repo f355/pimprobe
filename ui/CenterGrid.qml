@@ -73,7 +73,7 @@ GridLayout {
             Layout.minimumWidth: 48
             Layout.minimumHeight: 48
             feature: modelData.feature
-            label: modelData.label
+            label: modelData.feature === "z" ? modelData.label : I18n.tr(modelData.label)
             onClicked: grid.selected(feature)
         }
     }

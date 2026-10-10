@@ -45,7 +45,7 @@ TestCase {
             uiFontFamily: host.font.family
             monoFontFamily: "DejaVu Sans Mono"
             settingsContribution: Component {
-                LabButton { text: "Check for updates"; primary: true; notification: updates.updateAvailable; onClicked: updates.show() }
+                LabButton { text: I18n.tr("Check for updates"); primary: true; notification: updates.updateAvailable; onClicked: updates.show() }
             }
         }
         UpdateFlow { id: updates; client: client; settings: page.settings; uiFont: host.font.family }
@@ -67,7 +67,7 @@ TestCase {
         return children(page, type)[0];
     }
     function button(item, label) {
-        var found = children(item, Button).filter(function(b) { return b.visible && b.text === label; })[0];
+        var found = children(item, Button).filter(function(b) { return b.visible && b.text === I18n.tr(label); })[0];
         verify(found !== undefined, label + " button");
         return found;
     }
@@ -92,7 +92,11 @@ TestCase {
         children(page, NumberField).forEach(function(field) { field.editor.cancel(); field.deselect(); });
         children(page, TabBar)[0].currentIndex = 0;
         findChild(page, "droReference").probeSelected = true;
+        children(page, Flickable).forEach(function(view) { view.contentY = 0; view.contentX = 0; });
         verify(waitForPolish(host));
+    }
+    function cleanup() {
+        I18n.language = "en";
     }
     function showResult(family, selection, axes, spans) {
         page.openRoutineReview(family, selection);
@@ -120,7 +124,7 @@ TestCase {
         return flow;
     }
     function test_layout_data() {
-        return [
+        var screens = [
             {tag:"01-outside", kind:"tab", tab:0},
             {tag:"02-inside", kind:"tab", tab:1},
             {tag:"03-center", kind:"tab", tab:2},
@@ -188,10 +192,21 @@ TestCase {
             {tag:"65-valley-review", kind:"operation-review", family:"center", selection:"x-valley"},
             {tag:"66-pocket-z-review", kind:"operation-review", family:"inside", selection:{x:0,y:0,z:true}},
             {tag:"67-update-marker", kind:"update-marker", tab:0},
-            {tag:"68-settings-update-marker", kind:"update-marker", tab:4}
+            {tag:"68-settings-update-marker", kind:"update-marker", tab:4},
+            {tag:"69-outside-help-details", kind:"help-details", tab:0},
+            {tag:"70-rotary-help-details", kind:"help-details", tab:3},
+            {tag:"71-settings-help-details", kind:"help-details", tab:4},
+            {tag:"72-help-path", kind:"help-image", tab:0}
         ];
+        return ["en", "zh_CN", "sv"].reduce(function(rows, language) {
+            return rows.concat(screens.map(function(screen) {
+                return Object.assign({}, screen, {tag: language + "-" + screen.tag, language: language});
+            }));
+        }, []);
     }
     function test_layout(data) {
+        client.values = Object.assign({}, client.values, {language:data.language});
+        page.settings.values = client.values;
         var tabs = children(page, TabBar)[0];
         var kind = data.kind;
         if (data.tab !== undefined) tabs.currentIndex = data.tab;
@@ -222,7 +237,27 @@ TestCase {
             compare(reference.probeSelected, false);
             compare(page.droCoordinates.workPosition, client.state.coordinates.spindle.workPosition);
         } else if (kind === "wcs") page.openWcs();
-        else if (kind === "help") page.openHelp();
+        else if (kind === "help" || kind === "help-details" || kind === "help-image") {
+            page.openHelp();
+            if (kind === "help-details" || kind === "help-image") {
+                var document = component(HelpDocument);
+                verify(waitForPolish(host));
+                var sections = children(document, MenuButton).filter(function(b) { return b.visible; });
+                verify(sections.length > 0);
+                var opened = kind === "help-image" ? sections : [sections[0]];
+                opened.forEach(function(section) {
+                    section.clicked();
+                    compare(section.expanded, true);
+                });
+                verify(waitForPolish(host));
+                if (kind === "help-image") {
+                    var illustration = children(document, Image).filter(function(item) { return item.visible; })[0];
+                    tryCompare(illustration, "status", Image.Ready);
+                    document.contentItem.contentY = illustration.mapToItem(document.contentItem, 0, 0).y;
+                }
+                compare(document.contentWidth, document.availableWidth);
+            }
+        }
         else if (kind.indexOf("exit") === 0) {
             page.requestExit();
             if (kind === "exit-error") page.actionError = "Probe retraction failed. Check the actuator.";

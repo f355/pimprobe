@@ -1,72 +1,54 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="720" viewBox="0 0 960 720" role="img" aria-labelledby="title desc">
-<title id="title">Rotary axis calibration: two axis centers and rotated crest measurements</title>
-<desc id="desc">Top view of a rod held in a chuck, with two measured axis centers separated by X distance. End views show the initial side touches, the true crest touch, and the same crest rotated to each side to find the rotary center.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="768" height="368" viewBox="0 65 960 460" role="img" aria-labelledby="title">
+<title id="title">X/Y, X/Z, A</title>
 <defs>
   <path id="arrow" d="M-14-6L0 0L-14 6Z" fill="#343a3e"/>
   <path id="dimension" d="M-8-4L0 0L-8 4Z" fill="#343a3e"/>
+  <path id="blue" d="M-12-5L0 0L-12 5Z" fill="#246c94"/>
   <g id="start" fill="#fff" stroke="#555d62" stroke-width="2"><circle r="8"/><path d="M-13 0H13M0-13V13"/></g>
   <g id="zero" fill="#008544" stroke="#008544" stroke-width="2"><circle r="5"/><path d="M-11 0H11M0-11V11"/></g>
 </defs>
-<rect width="960" height="720" fill="#f5f6f7"/>
-<g font-family="DejaVu Sans, sans-serif" fill="#25292c" font-size="16">
-  <text x="24" y="34" font-size="23">Find the axis at two places along the rod</text>
-  <text x="24" y="63" fill="#626a70">Top view · X runs along the rod; Y runs across it</text>
+<rect y="65" width="960" height="460" fill="#f5f6f7"/>
+<g font-family="DejaVu Sans, sans-serif" fill="#25292c" font-size="24">
   <path d="M65 97H145V111H166V130H194V149H166V180H194V199H166V218H145V232H65Z" fill="#b9bdc0" stroke="#6a7074" stroke-width="2"/>
   <rect x="39" y="128" width="26" height="73" fill="#b9bdc0" stroke="#6a7074" stroke-width="2"/>
   <rect x="168" y="146" width="676" height="36" fill="#d5d8da" stroke="#6a7074" stroke-width="2"/>
   <path d="M180 164H887" stroke="#929a9f" stroke-dasharray="7 6"/>
   <path d="M315 124V205M705 124V205" stroke="#555d62" stroke-dasharray="4 4"/>
-  <use href="#start" x="315" y="164"/><use href="#start" x="705" y="164"/>
-  <text x="264" y="231">First axis center</text><text x="642" y="231">Second axis center</text>
+  <use href="#zero" x="315" y="164"/><use href="#zero" x="705" y="164"/>
+
   <path d="M315 105H705" stroke="#343a3e" stroke-width="1.5"/>
   <use href="#dimension" transform="translate(315 105) rotate(180)"/><use href="#dimension" transform="translate(705 105)"/>
-  <text x="462" y="94">X distance</text>
-  <text x="63" y="260">Chuck</text>
-  <text x="238" y="260">Start with the ball above the crest, clear of the jaws and tailstock.</text>
-  <path d="M850 218H908M850 218V192" fill="none" stroke="#343a3e"/>
+  <text text-anchor="middle" x="510" y="94">X</text>
+  <path d="M850 218H908M850 218V192" fill="none" stroke="#343a3e" stroke-width="1.5"/>
   <use href="#dimension" transform="translate(908 218)"/><use href="#dimension" transform="translate(850 192) rotate(-90)"/>
-  <text x="913" y="224">X+</text><text x="837" y="186">Y+</text>
-  <path d="M24 283H936" stroke="#d4d8db"/>
-  <text x="24" y="320" font-size="21">At each measuring point, looking along X</text>
-  <text x="24" y="351">1. Find the Y midpoint</text>
-  <text x="342" y="351">2. Touch the true crest</text>
-  <text x="661" y="351">3. Rotate that crest to each side</text>
-  <g fill="#d5d8da" stroke="#6a7074" stroke-width="2">
-    <circle cx="160" cy="478" r="74"/><circle cx="480" cy="478" r="74"/><circle cx="800" cy="478" r="74"/>
+  <text x="913" y="225">X+</text><text x="829" y="184">Y+</text>
+  <path d="M24 255H936" stroke="#d4d8db"/>
+  <g transform="translate(0 -75)">
+
+    <g fill="#d5d8da" stroke="#6a7074" stroke-width="2"><circle cx="160" cy="478" r="74"/><circle cx="480" cy="478" r="74"/><circle cx="800" cy="478" r="74"/></g>
+    <path d="M63 430H257M160 398V550" stroke="#929a9f" stroke-dasharray="4 4"/>
+    <path d="M58 430H95M262 430H225M160 394V398" stroke="#343a3e" stroke-width="2.5"/>
+    <use href="#arrow" transform="translate(95 430)"/><use href="#arrow" transform="translate(225 430) rotate(180)"/><use href="#arrow" transform="translate(160 398) rotate(90)"/>
+    <circle cx="101" cy="430" r="5" fill="#008544"/><circle cx="219" cy="430" r="5" fill="#008544"/><circle cx="160" cy="404" r="5" fill="#008544"/>
+    <use href="#start" x="160" y="381"/>
+    <path d="M480 383V398" stroke="#343a3e" stroke-width="2.5"/>
+    <use href="#arrow" transform="translate(480 398) rotate(90)"/><use href="#start" x="480" y="369"/>
+    <circle cx="480" cy="404" r="5" fill="#008544"/>
+    <path d="M480 409V552" stroke="#929a9f" stroke-dasharray="4 4"/>
+    <path d="M703 478A97 97 0 0 1 897 478" fill="none" stroke="#246c94" stroke-width="2" stroke-dasharray="5 4"/>
+    <use href="#blue" transform="translate(703 478) rotate(90)"/><use href="#blue" transform="translate(897 478) rotate(90)"/>
+    <use href="#start" x="800" y="381"/>
+    <path d="M697 478H720M903 478H880" stroke="#343a3e" stroke-width="2.5"/>
+    <use href="#arrow" transform="translate(720 478)"/><use href="#arrow" transform="translate(880 478) rotate(180)"/>
+    <circle cx="726" cy="478" r="5" fill="#008544"/><circle cx="874" cy="478" r="5" fill="#008544"/><circle cx="800" cy="404" r="5" fill="#008544"/>
+    <use href="#zero" x="800" y="478"/>
+    <path d="M800 409V466" stroke="#343a3e" stroke-width="1.5"/>
+    <use href="#dimension" transform="translate(800 409) rotate(-90)"/><use href="#dimension" transform="translate(800 466) rotate(90)"/>
+    <text x="677" y="401" fill="#246c94">+90°</text><text x="878" y="401" fill="#246c94">-90°</text>
+    <text x="825" y="369" fill="#246c94">A</text>
+    <path d="M878 575H916M878 575V547" fill="none" stroke="#343a3e" stroke-width="1.5"/>
+    <use href="#dimension" transform="translate(916 575)"/><use href="#dimension" transform="translate(878 547) rotate(-90)"/>
+    <text x="922" y="582">Y+</text><text x="841" y="540">Z+</text>
   </g>
-  <path d="M63 430H257" stroke="#929a9f" stroke-dasharray="4 4"/>
-  <path d="M58 430H95" stroke="#343a3e" stroke-width="2.5"/>
-  <path d="M262 430H225" stroke="#343a3e" stroke-width="2.5"/>
-  <use href="#arrow" transform="translate(95 430)"/><use href="#arrow" transform="translate(225 430) rotate(180)"/>
-  <circle cx="101" cy="430" r="4" fill="#a64247"/><circle cx="219" cy="430" r="4" fill="#a64247"/>
-  <path d="M160 398V550" stroke="#929a9f" stroke-dasharray="4 4"/>
-  <use href="#start" x="160" y="381"/>
-  <text x="34" y="578">Touch both sides above center.</text>
-  <text x="34" y="602">Their midpoint locates the crest.</text>
-  <path d="M480 371V400" stroke="#343a3e" stroke-width="2.5"/>
-  <use href="#arrow" transform="translate(480 398) rotate(90)"/>
-  <use href="#start" x="480" y="369"/>
-  <circle cx="480" cy="404" r="5" fill="#a64247"/>
-  <path d="M480 409V552" stroke="#929a9f" stroke-dasharray="4 4"/>
-  <text x="355" y="578">Probe down at the Y midpoint.</text>
-  <text x="355" y="602">Record the top surface Z.</text>
-  <path d="M703 478A97 97 0 0 1 897 478" fill="none" stroke="#246c94" stroke-width="2" stroke-dasharray="5 4"/>
-  <use href="#start" x="800" y="381"/>
-  <path d="M697 478H720" stroke="#343a3e" stroke-width="2.5"/>
-  <path d="M903 478H880" stroke="#343a3e" stroke-width="2.5"/>
-  <use href="#arrow" transform="translate(720 478)"/><use href="#arrow" transform="translate(880 478) rotate(180)"/>
-  <circle cx="726" cy="478" r="5" fill="#a64247"/><circle cx="874" cy="478" r="5" fill="#a64247"/>
-  <circle cx="800" cy="404" r="5" fill="#a64247"/>
-  <use href="#zero" x="800" y="478"/>
-  <path d="M800 409V466" stroke="#343a3e" stroke-width="1.5"/>
-  <use href="#dimension" transform="translate(800 409) rotate(-90)"/><use href="#dimension" transform="translate(800 466) rotate(90)"/>
-  <text x="810" y="447">Radius</text>
-  <text x="674" y="401" fill="#246c94" font-size="14">90°</text><text x="899" y="401" fill="#246c94" font-size="14">90°</text>
-  <text x="674" y="575" fill="#246c94" font-size="14">Probe follows the clearance arc.</text>
-  <text x="674" y="598" font-size="14">Radius = half the side span</text>
-  <text x="674" y="619" font-size="14">Y center = midpoint of side touches</text>
-  <text x="674" y="640" font-size="14">Z center = top Z − radius</text>
-  <text x="24" y="677" font-size="16">Repeat at the second point. The two centers give the axis angles in X/Y and X/Z.</text>
-  <text x="24" y="704" fill="#626a70" font-size="14">White crosshair: probe start · Red dots: surface touches · Green crosshair: axis center · Schematic, not to scale</text>
 </g>
 </svg>

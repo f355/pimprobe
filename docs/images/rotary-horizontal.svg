@@ -1,6 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="465" viewBox="0 0 960 465" role="img" aria-labelledby="title desc">
-<title id="title">Horizontal surface leveling: two downward touches and A correction</title>
-<desc id="desc">End view along X. Start above the Y minus point, probe down, return to the starting height and move by Y distance to probe the second point. Rotate the surface until level, remeasure and save A and Z zero at the mean height.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="768" height="256" viewBox="0 65 960 320" role="img" aria-labelledby="title">
+<title id="title">Y/Z, A</title>
 <defs>
   <path id="arrow" d="M-14-6L0 0L-14 6Z" fill="#343a3e"/>
   <path id="dimension" d="M-8-4L0 0L-8 4Z" fill="#343a3e"/>
@@ -8,45 +7,36 @@
   <g id="start" fill="#fff" stroke="#555d62" stroke-width="2"><circle r="8"/><path d="M-13 0H13M0-13V13"/></g>
   <g id="chuck" fill="#e5e8ea" stroke="#d6dbde" stroke-width="2"><circle r="105"/><path d="M-24-102H24V-48H-24ZM-24 102H24V48H-24ZM-102-24V24H-48V-24ZM102-24V24H48V-24Z"/></g>
 </defs>
-<rect width="960" height="465" fill="#f5f6f7"/>
-<g font-family="DejaVu Sans, sans-serif" fill="#25292c" font-size="16">
-  <text x="24" y="34" font-size="23">Level a flat face · looking along X toward the chuck</text>
-  <text x="24" y="67">1. Measure two points across Y</text><text x="513" y="67">2. Rotate A, then measure both points again</text>
+<rect y="65" width="960" height="320" fill="#f5f6f7"/>
+<g font-family="DejaVu Sans, sans-serif" fill="#25292c" font-size="24">
   <use href="#chuck" x="237" y="258"/><use href="#chuck" x="736" y="258"/>
   <path d="M102 230L365 266L359 301L96 265Z" fill="#b9bdc0" stroke="#6a7074" stroke-width="2"/>
   <path d="M103 248H365V282H103Z" fill="none" stroke="#6a7074" stroke-width="1.5" stroke-dasharray="6 5"/>
-  <path d="M143 124H319" fill="none" stroke="#246c94" stroke-width="2" stroke-dasharray="5 4"/>
-  <use href="#blue" transform="translate(305 124)"/>
+  <path d="M143 124H319M166 229V124M343 253V124" fill="none" stroke="#246c94" stroke-width="2" stroke-dasharray="5 4"/>
+  <use href="#blue" transform="translate(305 124)"/><use href="#blue" transform="translate(166 124) rotate(-90)"/><use href="#blue" transform="translate(343 124) rotate(-90)"/>
   <use href="#start" x="143" y="124"/><use href="#start" x="319" y="124"/>
-  <path d="M143 146V230" stroke="#343a3e" stroke-width="2.5"/>
-  <path d="M319 146V254" stroke="#343a3e" stroke-width="2.5"/>
+  <path d="M143 146V230M319 146V254" stroke="#343a3e" stroke-width="2.5"/>
   <use href="#arrow" transform="translate(143 230) rotate(90)"/><use href="#arrow" transform="translate(319 254) rotate(90)"/>
-  <circle cx="143" cy="236" r="5" fill="#a64247"/><circle cx="319" cy="260" r="5" fill="#a64247"/>
-  <text x="126" y="222" font-size="14">1</text><text x="329" y="244" font-size="14">2</text>
+  <circle cx="143" cy="236" r="5" fill="#008544"/><circle cx="319" cy="260" r="5" fill="#008544"/>
+
   <path d="M143 99H319" stroke="#343a3e" stroke-width="1.5"/>
   <use href="#dimension" transform="translate(143 99) rotate(180)"/><use href="#dimension" transform="translate(319 99)"/>
-  <text x="188" y="91" font-size="15">Y distance</text>
+  <text text-anchor="middle" x="231" y="91">Y</text>
   <path d="M405 124V297" stroke="#343a3e" stroke-width="1.5"/>
   <use href="#dimension" transform="translate(405 124) rotate(-90)"/><use href="#dimension" transform="translate(405 297) rotate(90)"/>
-  <text x="421" y="196" font-size="14">Z</text><text x="421" y="216" font-size="14">distance</text>
-  <text x="54" y="155" font-size="14" fill="#246c94">Starting Z</text>
+  <text x="421" y="217">Z</text>
   <path d="M606 248H868V283H606Z" fill="#b9bdc0" stroke="#6a7074" stroke-width="2"/>
-  <path d="M650 124V242" stroke="#343a3e" stroke-width="2.5"/>
-  <path d="M823 124V242" stroke="#343a3e" stroke-width="2.5"/>
+  <path d="M650 146V242M823 146V242" stroke="#343a3e" stroke-width="2.5"/>
   <use href="#arrow" transform="translate(650 242) rotate(90)"/><use href="#arrow" transform="translate(823 242) rotate(90)"/>
-  <circle cx="650" cy="248" r="5" fill="#a64247"/><circle cx="823" cy="248" r="5" fill="#a64247"/>
-  <path d="M736 234V262M722 248H750" stroke="#008544" stroke-width="2.5"/>
-  <circle cx="736" cy="248" r="5" fill="#008544"/>
-  <text x="683" y="309" fill="#008544">A0 / Z0</text>
-  <text x="622" y="337" font-size="14">Z zero is the mean surface height.</text>
-  <path d="M718 178A78 78 0 0 1 794 197" fill="none" stroke="#246c94" stroke-width="2"/>
-  <use href="#blue" transform="translate(794 197) rotate(42)"/>
-  <text x="759" y="158" fill="#246c94" font-size="15">A correction</text>
-  <path d="M870 358H914M870 358V320" fill="none" stroke="#343a3e"/>
+  <use href="#start" x="650" y="124"/><use href="#start" x="823" y="124"/>
+  <circle cx="650" cy="248" r="5" fill="#008544"/><circle cx="823" cy="248" r="5" fill="#008544"/>
+
+  <path d="M736 234V262M722 248H750" stroke="#008544" stroke-width="2.5"/><circle cx="736" cy="248" r="5" fill="#008544"/>
+  <text text-anchor="middle" x="736" y="316" fill="#008544">A0/Z0</text>
+  <path d="M794 197A78 78 0 0 0 718 178" fill="none" stroke="#246c94" stroke-width="2"/>
+  <use href="#blue" transform="translate(718 178) rotate(170)"/><text x="759" y="158" fill="#246c94">A</text>
+  <path d="M870 358H914M870 358V320" fill="none" stroke="#343a3e" stroke-width="1.5"/>
   <use href="#dimension" transform="translate(914 358)"/><use href="#dimension" transform="translate(870 320) rotate(-90)"/>
-  <text x="918" y="365">Y+</text><text x="858" y="311">Z+</text>
-  <text x="24" y="392">Return to the starting Z between touches; return to the start before turning A.</text>
-  <text x="24" y="419">Choose a starting height that clears the workpiece throughout rotation.</text>
-  <text x="24" y="449" fill="#626a70" font-size="14">Solid: measured face · Dotted: level face · White crosshair: probe start · Green: zero to save · Not to scale</text>
+  <text x="918" y="365">Y+</text><text x="846" y="311">Z+</text>
 </g>
 </svg>

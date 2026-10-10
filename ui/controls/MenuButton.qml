@@ -19,6 +19,8 @@ import QtQuick.Controls
 
 LabButton {
     id: control
+    property bool expanded: false
+    property int textAlignment: Text.AlignHCenter
 
     contentItem: Item {
         implicitWidth: label.implicitWidth + 24
@@ -30,7 +32,7 @@ LabButton {
             text: control.text
             font: control.font
             color: control.enabled ? control.textColor : Theme.textMuted
-            horizontalAlignment: Text.AlignHCenter
+            horizontalAlignment: control.textAlignment
             verticalAlignment: Text.AlignVCenter
             elide: Text.ElideRight
         }
@@ -39,6 +41,7 @@ LabButton {
             anchors.verticalCenter: parent.verticalCenter
             width: 12
             height: 8
+            rotation: control.expanded ? 180 : 0
             property color stroke: label.color
             onStrokeChanged: requestPaint()
             onPaint: {

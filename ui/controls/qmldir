@@ -15,3 +15,4 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 singleton Theme 1.0 Theme.qml
+singleton I18n 1.0 I18n.qml

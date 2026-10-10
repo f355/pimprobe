@@ -1,50 +1,30 @@
-# Probe repeatability
+# Repeatability check
 
-Open **Settings → Utilities → Probe repeatability** to measure the same reference surfaces several times.
+Open **Settings → Utilities → Probe repeatability**. Fit the tall L bracket at the lower-left corner of the bed and home the machine. The routine uses machine coordinates to reach it, so it does not need a work zero.
 
-## Prepare
-
-Home the machine with the L bracket installed at the bottom left of the table. Clear the path to the bracket and leave room for the probe to extend, then confirm **Fixture is ready**. The selected work coordinate system can stay as it is.
-
-The routine uses approximate machine-coordinate references for the bracket walls (G53 X-232.5 and Y-204.3) and bed (Z-62.9), adjusted for the machine's probe calibration. The measuring point puts the probe tip about 15 mm from each wall and 5 mm above the bed. With Jog home off, X/Y travel happens at the current height before Z lowers.
+Without a home-area move, the first X/Y approach happens at the current Z. Start high enough to clear the bed fixtures.
 
 ## Options
 
-<!-- guide-only -->
-![Repeatability options](images/repeatability-options.png)
-<!-- /guide-only -->
+- **Axes:** choose which bracket walls and/or bed surface to measure.
+- **Repetitions:** readings per axis; default 5.
+- **Retract each time:** include variation from retracting and extending the probe.
+- **Jog home each time:** retract, travel to G53 Z0 then X−20 Y−5, and return before measuring.
+- **Home each time:** also re-home on each visit to the home area.
 
-- **Axes:** choose X, Y and/or Z. All three are selected initially.
-- **Repetitions:** how many times to measure each selected surface. The default is 5.
-- **Jog home each time:** move to machine Z0, then X-20 Y-5 before every repetition, including the first. This exercises the travel to and from the home area and turns on retraction. Starts off.
-- **Home each time:** jog home, then home before every repetition. This includes homing variation. Turning it on also turns on Jog home. Starts off.
-- **Retract each time:** retract and extend the probe between repetitions. This includes deployment variation. Starts on.
+The two home options include retraction. Without them, retraction happens at the bracket's measuring position.
 
-The check uses the ball diameter, feeds and retract distance from Settings.
+The ball approaches 15 mm from each wall and 5 mm above the bed, then touches the selected surfaces. **Stop** ends the test after the current move or touch finishes. The last readings are kept.
 
-## Running
+## Read the results
 
-Press **Start check**. With Jog home off, an already-extended probe stays extended for the initial approach. A retracted probe extends after reaching the measuring point.
+Rows show G53 readings during the test, then deviations from each axis's mean afterward. The summary updates after every touch.
 
-With Jog home selected, an extended probe first moves to the measuring X/Y at its current height and retracts there. The machine then rapids to machine Z0, then machine X-20 Y-5. Home each time adds the homing cycle after those moves. It extends the probe near home and returns to the measuring point using contact-guarded moves. Between repetitions, retraction happens at the measuring point before any Z lift.
-
-The probe moves to the bracket in X/Y, then lowers toward the bed. X probes toward X-, Y toward Y-, and Z toward the bed. The coarse search covers 20 mm in X/Y or 10 mm in Z. Each selected axis gets a fine touch and returns to the measuring point before the next axis. After the last repetition, the probe stays extended at the measuring point.
-
-If a movement or measurement fails, the check stops and keeps the readings collected so far.
-
-Press **Stop** to end the check early. The current positioning move, homing cycle, or probe touch and backoff finishes before the check stops. The readings collected so far remain on the results page.
-
-## Results
+- **Mean G53:** average coordinate.
+- **Median:** middle value after sorting, or the average of the middle two for an even count.
+- **Std dev:** sample standard deviation; needs at least two readings.
+- **Range:** highest minus lowest reading.
 
 <!-- guide-only -->
-![Repeatability results](images/repeatability-results.png)
+![Repeatability readings and statistics](images/repeatability-results.png)
 <!-- /guide-only -->
-
-While running, each row shows the measured G53 coordinates in millimeters. When the check ends, the rows show each measurement's deviation from that axis's mean. A positive value is above the mean; a negative value is below it.
-
-- **Mean G53:** the average measured coordinate.
-- **Median:** the middle reading after sorting; for an even number, the average of the middle two.
-- **Std dev:** sample standard deviation, showing how much the readings scatter. It needs at least two readings.
-- **Range:** highest reading minus lowest reading.
-
-The summary updates after every measurement, using the readings collected so far for each axis. Mean and median are G53 coordinates. Jog home, homing and retraction choices are shown below the results.

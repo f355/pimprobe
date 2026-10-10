@@ -198,6 +198,11 @@ fn rules() -> Vec<Rule> {
             range: None,
         });
     }
+    rules.push(Rule {
+        key: "language",
+        default: json!(""),
+        range: None,
+    });
     rules
 }
 
@@ -217,6 +222,9 @@ pub fn schema() -> Map<String, Value> {
 fn valid(rule: &Rule, value: &Value) -> bool {
     match rule.range {
         Some(range) => value.as_f64().is_some_and(|n| range.contains(n)),
+        None if rule.key == "language" => value
+            .as_str()
+            .is_some_and(|language| ["", "en", "zh_CN", "sv"].contains(&language)),
         None => value.is_boolean(),
     }
 }
@@ -362,5 +370,33 @@ mod tests {
         settings.update(patch).unwrap();
         assert_eq!(settings.snapshot()["coarseFeed"], 123);
         assert_eq!(Settings::load(store).unwrap().snapshot()["coarseFeed"], 123);
+    }
+
+    #[test]
+    fn language_preferences_are_validated_and_persisted() {
+        let store = Arc::new(Store::default());
+        let mut settings = Settings::load(store.clone()).unwrap();
+        for language in ["en", "zh_CN", "sv", ""] {
+            settings
+                .update(json!({"language": language}).as_object().unwrap().clone())
+                .unwrap();
+            assert_eq!(
+                Settings::load(store.clone()).unwrap().snapshot()["language"],
+                language
+            );
+        }
+        for language in [json!("de"), json!(true), json!(null)] {
+            assert!(
+                settings
+                    .update(json!({"language": language}).as_object().unwrap().clone())
+                    .is_err()
+            );
+        }
+        assert_eq!(settings.snapshot()["language"], "");
+        assert_eq!(
+            ProbeSettings::from_saved(json!({"language":"unknown"}).as_object().unwrap().clone())
+                .snapshot()["language"],
+            ""
+        );
     }
 }

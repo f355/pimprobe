@@ -62,3 +62,23 @@ fit, and save numbered 800 × 480 captures in `build/ui-captures`.
 
 Inspect those captures as well as the test results. Check alignment, readable
 labels, scrolling, visible actions and whether diagrams explain the operation.
+
+## Languages and help
+
+Use `I18n.tr` for labels and complete messages, with `%1`, `%2` placeholders
+for values. Translate service messages when displaying them. Keep
+commands, measurement values and saved records in their original form.
+
+The Chinese and Swedish catalogs are in `ui/i18n`. `dev/build-i18n.mjs`
+checks their parameters and generates the catalog used by QML. The screen
+tests check all three languages at 800 × 480.
+
+Operator Markdown in `docs`, `docs/zh_CN` and `docs/sv` also supplies the help
+pages. Keep the introduction short. `##` headings become expandable sections;
+illustrations scale to the available width. Use short paragraphs and lists
+instead of wide tables.
+
+Explain where the ball starts, what each input changes, and where it finishes.
+Name the control or picture the operator needs. Keep each tab's help about its
+own routines; place links to other guide pages inside `guide-only` blocks.
+Use numbered moves in diagrams only when the text identifies those moves.

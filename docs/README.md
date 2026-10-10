@@ -1,68 +1,49 @@
-# Operator guide
+# Probing guide
 
-Use the probe to find an edge, corner, surface or center, then set work zero from the measurement.
+Choose a measurement:
 
-![Outside probing screen](images/outside.png)
+- [Outside](outside.md): stock edge, outside corner or top surface.
+- [Inside](inside.md): pocket wall, inside corner or bottom surface.
+- [Center](center.md): boss, block, hole, pocket, ridge or valley center.
+- [Rotary](rotary.md): rotary axis center or a face's angle.
 
-## First measurement
+The crosshair on each button marks where to start the **probe ball**, not the spindle. Arrows point toward the surfaces it will touch; the green dot marks the result.
 
-1. Home the machine, stop the spindle and secure the stock.
-2. Open probing with the probe-ball button beside Wi-Fi.
-3. Leave room for the probe to extend, then use the switch beside the tabs.
-4. Check **Settings**, especially the ball diameter and feeds. Position the ball with the machine's controls or MPG.
-5. Choose a tab and enter the distances for your feature. Use the guides below to check the starting position.
-6. Tap the picture of the surface or feature you want. Check the moves, then press **Proceed**.
-7. Read the result. To use it as work zero, enter any offsets and press **Set Work Zero**. Use the positioning button when needed, then press **Close**.
+<!-- guide-only -->
+![Outside probing controls](images/outside.png)
+<!-- /guide-only -->
 
-## Pick a routine
+## Starting a measurement
 
-| Tab | Use it for |
-| --- | --- |
-| [Outside](outside.md) | A side or corner of stock, or its top surface |
-| [Inside](inside.md) | A wall or corner inside an opening, or its bottom |
-| [Center](center.md) | The center of a boss, block, hole, pocket, ridge or valley |
-| [Rotary](rotary.md) | The rotary axis Y/Z center and its alignment with X travel |
-| [Settings](settings.md) | Ball diameter, backoff and feeds |
+Select a picture to open the confirmation screen. Its animation shows the route. Compare that route with your stock and clamps, including the probe shaft's clearance.
 
-In the button pictures, the crosshair is the starting position of the probe ball, the arrows point towards the surfaces to touch, and the green dot is the point being measured. Z measures straight down. Distances are in mm and feeds in mm/min.
+You can change distances and feeds here for this run only. **Proceed** starts from the ball's position at that moment, so you can still jog before pressing it. **Cancel** returns without moving.
 
-## Top row
+<!-- guide-only -->
+![Confirmation screen with motion animation and inputs](images/review.png)
+<!-- /guide-only -->
 
-The large coordinates are relative to the selected work zero. The smaller numbers below them are machine coordinates (G53).
+The probe touches each surface twice: a coarse search, backoff, then a slower fine touch. The fine touch supplies the measurement.
 
-Choose **Probe** to read the probe ball position, or **Tool** to read the tool tip with the last known tool-length offset.
+[Results and setting work zero](results.md)
 
-Tap the **G54** (or other G-number) to choose a work coordinate system. Each one has its own zero. Check this before probing: it is the coordinate system the results page will set.
+## Coordinates and controls
 
-The probe switch extends or retracts the probe independently of a routine. Tabs remain switchable while retracted; probing controls become available when the probe is extended. Settings are available with the machine connected. The **?** button opens help for the current tab.
+- Large readouts use the selected work coordinate system; small readouts use machine coordinates, G53.
+- **Probe / Tool** selects the ball or tool-tip readout. Tool uses the last known tool length.
+- **G54–G59** selects a work coordinate system. Each stores its own zero.
+- The switch beside the tabs extends or retracts the probe independently of measurements.
+- **?** explains the current tab.
 
-The back arrow leaves probing. If the probe is extended, it asks whether to retract it or leave it extended.
+## Contact and failures
 
-[Editing values](editing.md)
+Sideways and downward positioning moves stop on ball contact. Jogging and ordinary upward moves do not. A shaft collision may never trigger the ball.
 
-## Review and run
+If the first search misses, the measurement fails. If the fine touch misses, the firmware can alarm and return you to the machine's main screen. Check the search distance and starting position before retrying.
 
-![Review of an outside corner routine](images/review.png)
+## Other pages
 
-The heading names the measurement. The looping picture shows the probe's path,
-with three short steps below it. Check where the ball starts, which surfaces it
-touches and where it finishes.
-
-The fields on the right apply to this run. You can adjust its distances, feeds
-and backoff here. Settings and the values on the probing tabs stay unchanged.
-**Proceed** accepts any value still being edited and checks the options before
-starting. If a value exceeds a machine limit, correct it and press Proceed again.
-
-Check the directions, distances and clearance, including the return path. **Cancel** and the back arrow return to the controls. **Proceed** starts motion.
-
-![Execution log](images/progress.png)
-
-Each surface gets a coarse touch, a short backoff, a slow fine touch and another backoff. The fine touch supplies the measurement. The log shows the moves and their progress.
-
-[Results and work zero](results.md)
-
-[Clearance and failed probing](safety.md)
-
-Screenshots use simulated stock in the local preview.
-
-[Utilities](history.md)
+- [Settings](settings.md): ball diameter, backoff, feeds and updates.
+- [Editing numbers](editing.md)
+- [History and logs](history.md)
+- [Repeatability check](repeatability.md)

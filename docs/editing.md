@@ -1,5 +1,7 @@
-## Editing values
+# Editing numbers
 
-Tap a number to select its contents and open the keypad. Typing replaces the selected value. Tap the field again to put the cursor where you touched, or use the left and right arrows. Digits then go at the cursor.
+The first tap selects the whole value; typing replaces it. Tap again to place the cursor, or use the arrow keys to clear the selection and move the cursor. Further typing inserts at that position.
 
-Backspace deletes the selection or the digit before the cursor. ± changes the sign where negative values are allowed. Enter accepts the value. Switching tabs or leaving the field discards an unfinished edit. Saved settings survive a restart.
+**±** changes the sign. Backspace deletes the selection or the digit before the cursor. **Enter** accepts the value; a red border means it is outside the allowed range.
+
+Leaving the field discards an unfinished edit. Values accepted on the probing tabs or in Settings are saved. Edits on the confirmation screen apply only to that run.

@@ -28,7 +28,7 @@ ProbePanel {
         anchors.fill: parent
         spacing: 12
         LabButton {
-            text: "Utilities"
+            text: I18n.tr("Utilities")
             Layout.fillWidth: true
             Layout.preferredHeight: 56
             font.pixelSize: 20
@@ -37,6 +37,14 @@ ProbePanel {
         Loader {
             Layout.fillWidth: true
             sourceComponent: panel.settingsContribution
+        }
+        LanguageSelector {
+            Layout.fillWidth: true
+            language: I18n.language
+            enabled: panel.settings.loaded && !panel.settings.saving
+            onSelected: function(language) {
+                panel.settings.setValue("language", language);
+            }
         }
         Item { Layout.fillHeight: true }
     }

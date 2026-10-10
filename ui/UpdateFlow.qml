@@ -135,7 +135,7 @@ Popup {
         PageHeader {
             Layout.fillWidth: true
             Layout.preferredHeight: Theme.headerHeight
-            title: "Software update"
+            title: I18n.tr('Software update')
             uiFont: flow.uiFont
             backEnabled: flow.phase !== "installing"
             onBack: flow.close()
@@ -150,7 +150,7 @@ Popup {
                 spacing: 12
                 Label {
                     Layout.fillWidth: true
-                    text: "Installed: " + (flow.currentVersion || "—")
+                    text: I18n.tr('Installed: %1', [flow.currentVersion === "unknown" ? I18n.tr('unknown') : flow.currentVersion || "—"])
                     color: Theme.textMuted
                     font.pixelSize: 18
                     wrapMode: Text.WordWrap
@@ -162,7 +162,7 @@ Popup {
                 ProbeSwitch {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 48
-                    text: "Check automatically"
+                    text: I18n.tr('Check automatically')
                     font.pixelSize: 20
                     checked: flow.automaticChecks
                     enabled: flow.settings.loaded && flow.phase !== "installing"
@@ -171,7 +171,7 @@ Popup {
                 ProbeSwitch {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 48
-                    text: "Development releases"
+                    text: I18n.tr('Development releases')
                     font.pixelSize: 20
                     checked: flow.development
                     enabled: flow.settings.loaded && flow.phase !== "installing"
@@ -185,10 +185,10 @@ Popup {
                 Layout.fillWidth: true
                 Layout.fillHeight: flow.phase !== "available"
                 visible: flow.phase !== "available"
-                text: flow.phase === "loading" ? "Checking for updates..."
-                    : flow.phase === "current" ? (flow.development ? "You have the latest development build." : "You have the latest release.")
-                    : flow.phase === "installing" ? "Installing update. The interface will restart."
-                    : flow.errorText
+                text: flow.phase === "loading" ? I18n.tr('Checking for updates...')
+                    : flow.phase === "current" ? (flow.development ? I18n.tr('You have the latest development build.') : I18n.tr('You have the latest release.'))
+                    : flow.phase === "installing" ? I18n.tr('Installing update. The interface will restart.')
+                    : I18n.tr(flow.errorText)
                 color: flow.phase === "error" ? Theme.danger : Theme.text
                 font.pixelSize: 22
                 wrapMode: Text.WordWrap
@@ -226,14 +226,14 @@ Popup {
                 Item { Layout.fillWidth: true }
                 LabButton {
                     visible: flow.phase === "error"
-                    text: "Try again"
+                    text: I18n.tr('Try again')
                     Layout.preferredWidth: 232
                     Layout.preferredHeight: 64
                     onClicked: flow.reload()
                 }
                 LabButton {
                     visible: flow.phase === "available"
-                    text: "Install update"
+                    text: I18n.tr('Install update')
                     primary: true
                     Layout.preferredWidth: 232
                     Layout.preferredHeight: 64
@@ -245,9 +245,9 @@ Popup {
 
     TouchDialog {
         id: installConfirmation
-        title: "Install update"
-        message: "Make sure the machine is idle and the spindle is stopped. Install this update now?"
-        acceptText: "Install"
+        title: I18n.tr('Install update')
+        message: I18n.tr('Make sure the machine is idle and the spindle is stopped. Install this update now?')
+        acceptText: I18n.tr('Install')
         font.family: flow.uiFont
         onAccepted: flow.install()
     }

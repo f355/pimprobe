@@ -21,7 +21,7 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import test from "node:test";
-import { renderPage } from "./build-help.mjs";
+import { renderPage, helpSections } from "./build-help.mjs";
 import { releaseNotes } from "./release-notes.mjs";
 
 const root = new URL("../", import.meta.url);
@@ -47,18 +47,25 @@ test("rustup discovery puts the actual compiler on PATH", () => {
     }
 });
 
-test("contextual help expands page links and omits guide-only sections", () => {
+test("contextual help keeps headings and resolves shared image paths", () => {
     const scratch = mkdtempSync(join(tmpdir(), "pimprobe-help-"));
     try {
         const source = pathToFileURL(scratch + "/");
-        writeFileSync(join(scratch, "page.md"), "# Title\n\nKeep **this**.\n<!-- guide-only -->Screenshot<!-- /guide-only -->\n[Details](details.md)\n");
-        writeFileSync(join(scratch, "details.md"), "# Details\n\nIncluded text.\n");
-        assert.equal(renderPage("page.md", [], source), "Keep **this**.\n\nIncluded text.\n");
-        writeFileSync(join(scratch, "details.md"), "[Back](page.md)\n");
-        assert.throws(() => renderPage("page.md", [], source), /Circular help link/);
+        writeFileSync(join(scratch, "page.md"), "# Title\n\nIntro.\n<!-- guide-only -->\n[Guide](README.md)\n<!-- /guide-only -->\n## Distance\n\n![Moves](../images/path.svg)\n\nSearch **X**.\n");
+        assert.equal(renderPage("page.md", source), "Intro.\n\n## Distance\n\n![Moves](images/path.svg)\n\nSearch **X**.\n");
     } finally {
         rmSync(scratch, { recursive: true, force: true });
     }
+});
+
+test("help separates the introduction, foldable sections and illustrations", () => {
+    const sections = helpSections('Start here.\n\n## Distance\n\nUse 10 mm.\n\n![Moves](images/example.svg)\n\nAfter the touch.\n\n## Result\n\nRead the coordinates.');
+    assert.equal(sections.length, 3);
+    assert.deepEqual(sections[0], {title:'', blocks:[{text:'Start here.'}]});
+    assert.deepEqual(sections[1], {title:'Distance', blocks:[
+        {text:'Use 10 mm.'}, {image:'images/example.svg', caption:'Moves'}, {text:'After the touch.'}
+    ]});
+    assert.equal(sections[2].title, 'Result');
 });
 
 test("shell scripts have valid syntax", () => {
@@ -69,7 +76,7 @@ test("shell scripts have valid syntax", () => {
 });
 
 test("operator guide links and images resolve", () => {
-    for (const name of readdirSync(new URL("docs/", root)).filter(name => name.endsWith(".md"))) {
+    for (const name of readdirSync(new URL("docs/", root), {recursive:true}).filter(name => name.endsWith(".md"))) {
         const page = new URL("docs/" + name, root);
         for (const [, target] of readFileSync(page, "utf8").matchAll(/!?\[[^\]]*\]\(([^)]+)\)/g))
             assert.ok(existsSync(new URL(target, page)), name + ": " + target);

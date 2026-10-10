@@ -143,8 +143,8 @@ PageView {
             Layout.fillWidth: true
             Layout.preferredHeight: Theme.headerHeight
             visible: flow.showHeader
-            title: "Probe repeatability"
-            detail: flow.showingResults ? flow.measurements.length + " / " + flow.repetitions + " runs" : ""
+            title: I18n.tr('Probe repeatability')
+            detail: flow.showingResults ? I18n.tr('%1 / %2 runs', [flow.measurements.length, flow.repetitions]) : ""
             uiFont: flow.uiFont
             backEnabled: flow.phase !== "running"
             onBack: flow.close()
@@ -170,20 +170,20 @@ PageView {
                     Layout.fillWidth: true
                     spacing: 20
                     Label {
-                        text: "Before starting"
+                        text: I18n.tr('Before starting')
                         color: Theme.text
                         font.pixelSize: 26
                     }
                     Label {
                         Layout.fillWidth: true
-                        text: "Home the machine with the L bracket installed. The probe uses machine coordinates (G53) to find the bracket walls and bed."
+                        text: I18n.tr('Home the machine with the L bracket installed. The probe uses machine coordinates (G53) to find the bracket walls and bed.')
                         color: Theme.text
                         font.pixelSize: 20
                         wrapMode: Text.WordWrap
                     }
                     Label {
                         Layout.fillWidth: true
-                        text: "Leave room for the probe to extend and clear the path to the bracket."
+                        text: I18n.tr('Leave room for the probe to extend and clear the path to the bracket.')
                         color: Theme.textMuted
                         font.pixelSize: 20
                         wrapMode: Text.WordWrap
@@ -201,10 +201,11 @@ PageView {
                     Label {
                         anchors.fill: parent
                         anchors.margins: Theme.margin
-                        text: "The probe tip approaches about 15 mm from the bracket walls and 5 mm above the bed, then measures the selected surfaces.\n\n" +
-                            (flow.home ? "The machine jogs near home and homes before each repetition." :
-                             flow.jogHome ? "The machine jogs near home before each repetition." :
-                             "X/Y travel starts at the current height. Make sure the path is clear.")
+                        text: flow.home
+                            ? I18n.tr('The probe tip approaches about 15 mm from the bracket walls and 5 mm above the bed, then measures the selected surfaces.\n\nThe machine jogs near home and homes before each repetition.')
+                            : flow.jogHome
+                                ? I18n.tr('The probe tip approaches about 15 mm from the bracket walls and 5 mm above the bed, then measures the selected surfaces.\n\nThe machine jogs near home before each repetition.')
+                                : I18n.tr('The probe tip approaches about 15 mm from the bracket walls and 5 mm above the bed, then measures the selected surfaces.\n\nX/Y travel starts at the current height. Make sure the path is clear.')
                         color: Theme.text
                         font.pixelSize: 20
                         wrapMode: Text.WordWrap
@@ -223,7 +224,7 @@ PageView {
                     spacing: 10
                     RowLayout {
                         Layout.fillWidth: true
-                        Label { text: "Axes"; color: Theme.text; font.pixelSize: 19; Layout.fillWidth: true }
+                        Label { text: I18n.tr('Axes'); color: Theme.text; font.pixelSize: 19; Layout.fillWidth: true }
                         Repeater {
                             model: ["X", "Y", "Z"]
                             LabButton {
@@ -247,7 +248,7 @@ PageView {
                     }
                     RowLayout {
                         Layout.fillWidth: true
-                        Label { text: "Repetitions"; color: Theme.text; font.pixelSize: 19; Layout.fillWidth: true }
+                        Label { text: I18n.tr('Repetitions'); color: Theme.text; font.pixelSize: 19; Layout.fillWidth: true }
                         NumberField {
                             objectName: "repetitions"
                             editor: editor
@@ -263,7 +264,7 @@ PageView {
                     }
                     RowLayout {
                         Layout.fillWidth: true
-                        Label { text: "Jog home each time"; color: Theme.text; font.pixelSize: 19; Layout.fillWidth: true }
+                        Label { text: I18n.tr('Jog home each time'); color: Theme.text; font.pixelSize: 19; Layout.fillWidth: true }
                         ProbeSwitch {
                             Layout.preferredWidth: 110
                             Layout.preferredHeight: 54
@@ -274,7 +275,7 @@ PageView {
                     }
                     RowLayout {
                         Layout.fillWidth: true
-                        Label { text: "Home each time"; color: Theme.text; font.pixelSize: 19; Layout.fillWidth: true }
+                        Label { text: I18n.tr('Home each time'); color: Theme.text; font.pixelSize: 19; Layout.fillWidth: true }
                         ProbeSwitch {
                             Layout.preferredWidth: 110
                             Layout.preferredHeight: 54
@@ -284,7 +285,7 @@ PageView {
                     }
                     RowLayout {
                         Layout.fillWidth: true
-                        Label { text: "Retract each time"; color: Theme.text; font.pixelSize: 19; Layout.fillWidth: true }
+                        Label { text: I18n.tr('Retract each time'); color: Theme.text; font.pixelSize: 19; Layout.fillWidth: true }
                         ProbeSwitch {
                             Layout.preferredWidth: 110
                             Layout.preferredHeight: 54
@@ -299,7 +300,7 @@ PageView {
             MessageStrip {
                 visible: flow.failure.length > 0
                 Layout.fillWidth: true
-                text: flow.failure
+                text: I18n.tr(flow.failure)
             }
             RowLayout {
                 visible: flow.showingResults
@@ -330,14 +331,14 @@ PageView {
                     Layout.fillHeight: true
                     spacing: 2
                     Label {
-                        text: flow.phase === "running" ? "G53 measurements (mm)" : "Deviation from mean (mm)"
+                        text: flow.phase === "running" ? I18n.tr('G53 measurements (mm)') : I18n.tr('Deviation from mean (mm)')
                         color: Theme.text
                         font.pixelSize: 18
                     }
                     RowLayout {
                         Layout.fillWidth: true
                         Layout.rightMargin: 16
-                        Label { text: "Run"; color: Theme.textMuted; font.pixelSize: 17; Layout.preferredWidth: 108 }
+                        Label { text: I18n.tr('Run'); color: Theme.textMuted; font.pixelSize: 17; Layout.preferredWidth: 108 }
                         Repeater {
                             model: ["X", "Y", "Z"]
                             Label {
@@ -392,7 +393,7 @@ PageView {
                             required property var modelData
                             Layout.fillWidth: true
                             Layout.rightMargin: 16
-                            Label { text: summary.modelData.label; color: Theme.textMuted; font.pixelSize: 17; Layout.preferredWidth: 108 }
+                            Label { text: I18n.tr(summary.modelData.label); color: Theme.textMuted; font.pixelSize: 17; Layout.preferredWidth: 108 }
                             Repeater {
                                 model: flow.statistics
                                 Label {
@@ -415,23 +416,24 @@ PageView {
                 spacing: 12
                 LabButton {
                     visible: flow.showingResults
-                    text: flow.sourceVisible ? "Readings" : "Log"
+                    text: flow.sourceVisible ? I18n.tr('Readings') : I18n.tr('Log')
                     Layout.preferredWidth: 128
                     onClicked: flow.sourceVisible = !flow.sourceVisible
                 }
                 Label {
                     Layout.fillWidth: true
-                    text: flow.showingResults ?
-                        (flow.jogHome ? "Jog home: yes" : "Jog home: no") + "    " +
-                        (flow.home ? "Home: yes" : "Home: no") + "    " +
-                        (flow.retractEachTime ? "Retract: yes" : "Retract: no") : ""
+                    text: flow.showingResults
+                        ? I18n.tr('Jog home: %1    Home: %2    Retract: %3', [
+                            flow.jogHome ? I18n.tr('yes') : I18n.tr('no'),
+                            flow.home ? I18n.tr('yes') : I18n.tr('no'),
+                            flow.retractEachTime ? I18n.tr('yes') : I18n.tr('no')]) : ""
                     color: Theme.textMuted
                     font.pixelSize: 16
                     wrapMode: Text.WordWrap
                 }
                 LabButton {
                     visible: !flow.showingResults
-                    text: "Cancel"
+                    text: I18n.tr('Cancel')
                     Layout.preferredWidth: 140
                     Layout.preferredHeight: 56
                     font.pixelSize: 20
@@ -439,7 +441,7 @@ PageView {
                 }
                 LabButton {
                     visible: flow.phase !== "running"
-                    text: flow.phase === "prepare" ? "Fixture is ready" : flow.phase === "options" ? "Start check" : "Close"
+                    text: flow.phase === "prepare" ? I18n.tr('Fixture is ready') : flow.phase === "options" ? I18n.tr('Start check') : I18n.tr('Close')
                     enabled: flow.phase !== "options" || flow.canStart
                     Layout.preferredWidth: 180
                     Layout.preferredHeight: 56
@@ -450,7 +452,7 @@ PageView {
                 LabButton {
                     visible: flow.phase === "running"
                     objectName: "stopCheck"
-                    text: flow.stopRequested ? "Stopping..." : "Stop"
+                    text: flow.stopRequested ? I18n.tr('Stopping...') : I18n.tr('Stop')
                     enabled: flow.streamStarted && !flow.stopRequested
                     font.pixelSize: 20
                     Layout.preferredWidth: 180

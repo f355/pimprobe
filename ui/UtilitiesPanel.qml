@@ -26,6 +26,7 @@ Item {
     required property var client
     property bool showHeader: true
     property string message: ""
+    property string exportedPath: ""
     signal closed
     signal repeatabilityRequested
     signal historyRequested
@@ -35,7 +36,9 @@ Item {
 
     function exportLogs() {
         message = "";
+        exportedPath = "";
         exportRequest.send("history.export", null, function(reply) {
+            exportedPath = reply.ok && reply.data ? reply.data.relativePath || "" : "";
             message = reply.ok && reply.data && reply.data.relativePath
                 ? "Saved: " + reply.data.relativePath
                 : reply.error || "Could not export logs";
@@ -45,6 +48,7 @@ Item {
     function clearLogs() {
         clearConfirmation.close();
         message = "";
+        exportedPath = "";
         clearRequest.send("history.clear", null, function(reply) {
             message = reply.ok ? "Logs cleared" : reply.error || "Could not clear logs";
         });
@@ -63,7 +67,7 @@ Item {
             Layout.fillWidth: true
             Layout.preferredHeight: Theme.headerHeight
             visible: utilitiesPanel.showHeader
-            title: "Utilities"
+            title: I18n.tr('Utilities')
             uiFont: utilitiesPanel.uiFont
             onBack: utilitiesPanel.closed()
         }
@@ -73,7 +77,7 @@ Item {
             Layout.margins: 16
             spacing: 16
             LabButton {
-                text: "Probe history"
+                text: I18n.tr('Probe history')
                 Layout.fillWidth: true
                 Layout.preferredHeight: 80
                 font.pixelSize: 24
@@ -85,7 +89,7 @@ Item {
                 rowSpacing: 12
                 columnSpacing: 12
                 LabButton {
-                    text: "Export logs"
+                    text: I18n.tr('Export logs')
                     Layout.fillWidth: true
                     Layout.preferredWidth: 1
                     Layout.preferredHeight: 56
@@ -93,7 +97,7 @@ Item {
                     onClicked: utilitiesPanel.exportLogs()
                 }
                 LabButton {
-                    text: "Clear logs"
+                    text: I18n.tr('Clear logs')
                     Layout.fillWidth: true
                     Layout.preferredWidth: 1
                     Layout.preferredHeight: 56
@@ -104,7 +108,8 @@ Item {
             }
             Label {
                 Layout.fillWidth: true
-                text: utilitiesPanel.message
+                text: utilitiesPanel.exportedPath ? I18n.tr('Saved: %1', [utilitiesPanel.exportedPath])
+                    : utilitiesPanel.message === "Logs cleared" ? I18n.tr('Logs cleared') : I18n.tr(utilitiesPanel.message)
                 color: utilitiesPanel.message.indexOf("Saved:") === 0 || utilitiesPanel.message === "Logs cleared"
                     ? Theme.accentBright : Theme.warning
                 font.pixelSize: 18
@@ -112,7 +117,7 @@ Item {
             }
             Item { Layout.fillHeight: true }
             LabButton {
-                text: "Probe repeatability"
+                text: I18n.tr('Probe repeatability')
                 Layout.preferredWidth: 280
                 Layout.preferredHeight: 56
                 onClicked: utilitiesPanel.repeatabilityRequested()
@@ -122,9 +127,9 @@ Item {
 
     TouchDialog {
         id: clearConfirmation
-        title: "Clear probing logs?"
-        message: "Probe history and diagnostic traces will be removed."
-        acceptText: "Clear logs"
+        title: I18n.tr('Clear probing logs?')
+        message: I18n.tr('Probe history and diagnostic traces will be removed.')
+        acceptText: I18n.tr('Clear logs')
         destructive: true
         font.family: utilitiesPanel.uiFont
         onAccepted: utilitiesPanel.clearLogs()

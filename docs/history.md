@@ -1,11 +1,11 @@
-# Utilities
+# History and logs
 
-**Probe history** lists recent probing attempts, newest first. Tap an entry to see its result, including measured machine coordinates, dimensions, work-zero offsets or a failure message. Repeatability checks show their readings and statistics. An attempt interrupted by a restart appears as interrupted.
+Open **Settings → Utilities → Probe history**. Select a run to see its measurements, inputs, commands and any error.
 
-**Open result** brings an ordinary or rotary measurement back to its results page. Choose a WCS, enter any offsets and set work zero from the saved measurement. Check that the stock and machine reference still match when it was measured. **Details** shows the history entry and its saved actions.
+**Open result** lets you use a saved measurement to set work zero. The stock and machine reference must still match that measurement.
 
-**Export logs** copies the history and diagnostic traces into a timestamped folder on the mounted USB drive. The diagnostic traces include the settings and machine state at the start, commands, probe contacts and errors.
+## Export or clear
 
-**Clear logs** removes the history and diagnostic traces after confirmation.
+**Export logs** copies history and diagnostic logs into a dated folder on the mounted USB drive. This includes commands and controller replies for troubleshooting.
 
-[Probe repeatability](repeatability.md)
+**Clear logs** deletes the saved history and logs after confirmation.

@@ -23,7 +23,7 @@ import "controls"
 Popup {
     id: picker
     property int currentWcs: 54
-    property string title: "Work coordinates"
+    property string title: I18n.tr('Work coordinates')
     signal selected(int wcs)
     Component.onCompleted: if ("popupType" in picker) picker.popupType = Popup.Item
     parent: Overlay.overlay

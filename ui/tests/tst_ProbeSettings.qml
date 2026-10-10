@@ -33,15 +33,47 @@ TestCase {
     property var requests
 
     function init() {
+        I18n.systemLanguage = "en"
         requests = []
         settings.loaded = false
         settings.load()
         compare(requests[0].operation, "settings.schema")
-        requests[0].done({ok: true, data: {centerXSearchDistance: {minimum: 0.1, maximum: 1000, default: 20}}})
+        requests[0].done({ok: true, data: {centerXSearchDistance: {minimum: 0.1, maximum: 1000, default: 20}, language:{default:""}}})
         compare(requests[1].operation, "settings.get")
         requests[1].done({ok: true, data: {centerXSearchDistance: 20}})
         verify(settings.loaded)
         requests = []
+    }
+    function cleanup() {
+        I18n.systemLanguage = ""
+        I18n.language = "en"
+    }
+    function test_language_selection_updates_labels_and_saves() {
+        I18n.systemLanguage = "zh_CN"
+        settings.values = {language:""}
+        compare(I18n.language, "zh_CN")
+        settings.setValue("language", "sv")
+        compare(I18n.language, "sv")
+        compare(I18n.tr("Settings"), "Inställningar")
+        compare(requests[0].operation, "settings.update")
+        compare(requests[0].body.language, "sv")
+        requests[0].done({ok:true})
+        settings.values = {language:"sv"}
+        compare(I18n.language, "sv")
+    }
+    function test_language_defaults_data() {
+        return [
+            {tag:"machine-Chinese", preference:"", system:"zh_CN", expected:"zh_CN"},
+            {tag:"machine-English", preference:"", system:"en", expected:"en"},
+            {tag:"saved-Swedish", preference:"sv", system:"zh_CN", expected:"sv"},
+            {tag:"local-Swedish", preference:"", system:"sv_SE", expected:"sv"},
+            {tag:"local-Chinese", preference:"", system:"zh-Hans-CN", expected:"zh_CN"},
+            {tag:"unsupported", preference:"", system:"de_DE", expected:"en"}
+        ]
+    }
+    function test_language_defaults(data) {
+        compare(I18n.resolve(data.preference, data.system), data.expected)
+        compare(I18n.launchLanguage(["qmlscene", "Main.qml", "--language=" + data.system]), data.system)
     }
     function test_edits_during_save_are_serialized_without_overwriting_new_values() {
         settings.setValue("centerXSearchDistance", 120)

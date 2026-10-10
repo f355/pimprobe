@@ -39,6 +39,12 @@ use tokio::sync::broadcast;
 
 pub type Position = [f64; 4];
 
+/// Convert probe Z calibration and the ETS contact into the offset subtracted
+/// from carriage Z to get the probe's coordinate with tool compensation applied.
+pub fn probe_z_offset(calibration: f64, ets_contact: f64, tool_length_offset: f64) -> f64 {
+    calibration - ets_contact + tool_length_offset
+}
+
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum Error {
     #[error("Probing cancelled. Check that the machine has stopped.")]
@@ -117,6 +123,8 @@ pub struct State {
     pub position: Position,
     pub wcs: i32,
     pub work_position: Position,
+    /// X/Y corrections are added to carriage position; the Z correction is
+    /// subtracted and includes the ETS reference and active tool compensation.
     pub probe_offset: Position,
     pub tool: i32,
     #[serde(default)]

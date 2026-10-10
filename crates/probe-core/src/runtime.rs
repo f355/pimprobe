@@ -551,8 +551,8 @@ async fn write_zero<C: Controller + ?Sized>(
     offsets: [f64; 3],
     t: TimingPolicy,
 ) -> Result<(), Error> {
+    let state = query_coordinates(c).await?;
     let mut rx = c.subscribe();
-    let state = c.state();
     p.check_state(&state, state.position)?;
     let mut desired = state.work_position;
     let mut words = Vec::new();
@@ -562,7 +562,7 @@ async fn write_zero<C: Controller + ?Sized>(
             .filter(|v| v.is_finite())
             .ok_or_else(|| Error::Compensation(format!("No {a} measurement is available.")))?
             + offsets[i];
-        // G10 L20 takes tool-compensated WPos; the probe measurement is fixed in G53.
+        // The result is a work origin; G10 L20 needs the compensated current WPos.
         let tool_offset = if a == Axis::Z {
             state.tool_length_offset
         } else {
@@ -635,7 +635,7 @@ pub async fn zero_recorded_result<C: Controller + ?Sized>(
             "Offsets must be numbers between -1000 and 1000 mm.".into(),
         ));
     }
-    let state = crate::rotary::query_rotary_frame(c).await?;
+    let state = query_coordinates(c).await?;
     let mut target: [Option<f64>; 3] =
         std::array::from_fn(|i| result.machine_point[i].map(|value| value + offsets[i]));
     for (i, axis) in ["X", "Y", "Z"].into_iter().enumerate() {

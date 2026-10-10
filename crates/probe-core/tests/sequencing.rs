@@ -66,6 +66,23 @@ impl Controller for Scripted {
                 .unwrap();
             return Ok(());
         }
+        if command == "$#" {
+            let state = self.state();
+            self.events
+                .send(Event {
+                    wcs_origin: Some((state.wcs, state.wcs_origin.unwrap())),
+                    wcs_rotation: Some((state.wcs, state.wcs_rotation.unwrap_or(0.0))),
+                    coordinate_offset: Some(state.coordinate_offset),
+                    tool_length_offset: Some(state.tool_length_offset),
+                    probe: Some(Contact {
+                        position: state.position,
+                        success: false,
+                    }),
+                    ..Event::default()
+                })
+                .unwrap();
+            return Ok(());
+        }
         if matches!(command, "G21 G94 G91" | "G21 G94 G90") {
             self.state.lock().unwrap().modes.distance =
                 if command.ends_with("91") { 91 } else { 90 };

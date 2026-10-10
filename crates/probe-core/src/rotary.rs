@@ -241,13 +241,14 @@ pub async fn query_rotary_state<C: Controller + ?Sized>(c: &C) -> Result<State, 
                 break;
             }
         }
-        query_rotary_frame(c).await
+        query_coordinates(c).await
     })
     .await
     .map_err(|_| Error::Timeout)?
 }
 
-pub(crate) async fn query_rotary_frame<C: Controller + ?Sized>(c: &C) -> Result<State, Error> {
+/// Read the active work origin, G92 offset and tool-length compensation.
+pub async fn query_coordinates<C: Controller + ?Sized>(c: &C) -> Result<State, Error> {
     let mut rx = c.subscribe();
     let wcs = c.state().wcs;
     let mut received = [
@@ -761,7 +762,7 @@ pub async fn zero_rotary<C: Controller + ?Sized>(
             "No completed rotary calibration is available.".into(),
         ));
     }
-    let state = query_rotary_frame(c).await?;
+    let state = query_coordinates(c).await?;
     write_rotary_zero(c, result, &state, state.wcs_rotation.unwrap_or(0.0), false).await
 }
 
@@ -812,7 +813,7 @@ pub async fn align_rotary<C: Controller + ?Sized>(
         ));
     }
     if result.zeroed {
-        let state = query_rotary_frame(c).await?;
+        let state = query_coordinates(c).await?;
         write_rotary_zero(c, result, &state, result.xy_angle, true).await
     } else {
         write_rotary_rotation(c, result.wcs, result.xy_angle).await

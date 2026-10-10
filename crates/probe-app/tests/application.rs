@@ -124,6 +124,7 @@ impl HostActions for Host {
 
 struct Device {
     mock: MockController,
+    coordinates_read: AtomicBool,
     owner: Arc<tokio::sync::Mutex<()>>,
     pause: AtomicBool,
     moving: AtomicBool,
@@ -137,6 +138,7 @@ impl Device {
         mock.set_extended(true).unwrap();
         Self {
             mock,
+            coordinates_read: AtomicBool::new(true),
             owner: Arc::new(tokio::sync::Mutex::new(())),
             pause: AtomicBool::new(false),
             moving: AtomicBool::new(false),
@@ -150,6 +152,10 @@ impl Device {
 impl Controller for Device {
     fn state(&self) -> State {
         let mut state = self.mock.state();
+        if !self.coordinates_read.load(Ordering::SeqCst) {
+            state.tool_length_offset = 0.0;
+            state.wcs_origin = None;
+        }
         if self.moving.load(Ordering::SeqCst) {
             state.ready = false;
         }
@@ -159,6 +165,9 @@ impl Controller for Device {
         self.mock.subscribe()
     }
     async fn send(&self, command: &str) -> Result<(), Error> {
+        if command == "$#" {
+            self.coordinates_read.store(true, Ordering::SeqCst);
+        }
         if self.pause.load(Ordering::SeqCst) && command.contains("G38.") {
             self.moving.store(true, Ordering::SeqCst);
             self.entered.notify_one();
@@ -230,6 +239,72 @@ fn config() -> RoutineConfig {
         x: 0,
         y: 0,
         ..RoutineConfig::default()
+    }
+}
+
+#[tokio::test]
+async fn probing_reads_active_tool_compensation_before_measuring_and_zeroing() {
+    for (tool_length_offset, surface) in [(-60., 24.), (0., -36.)] {
+        let mut state = MockController::new().state();
+        state.position[2] = -20.0;
+        state.work_position[2] = 0.0;
+        state.tool_length_offset = tool_length_offset;
+        state.probe_offset[2] = pimprobe_core::probe_z_offset(-50., -60., tool_length_offset);
+        state.wcs_origin = None;
+        state.probe_extended = true;
+        let device = Arc::new(Device {
+            mock: MockController::with_state(state),
+            coordinates_read: AtomicBool::new(false),
+            ..Device::new()
+        });
+        let store = Arc::new(MemoryStore::default());
+        let app = ProbeApp::new(
+            device.clone(),
+            Settings::load(store.clone()).unwrap(),
+            Arc::new(Host),
+            Records::new(store.clone(), store),
+        );
+        let review = app
+            .review(RoutineConfig {
+                depth: 15.0,
+                ..config()
+            })
+            .await
+            .unwrap();
+        assert_eq!(device.state().tool_length_offset, tool_length_offset);
+        let mut operation = app
+            .start_motion(
+                Token {
+                    id: review.id.clone(),
+                },
+                Motion::Run,
+            )
+            .await
+            .unwrap();
+        let mut result = None;
+        while let Some(event) = operation.recv().await {
+            if let OperationEvent::Result {
+                result: MeasurementResult::Routine(measurement),
+            } = event
+            {
+                result = Some(measurement);
+            }
+        }
+        let measured = result.expect("Z measurement");
+        assert!((measured.machine_point[2].unwrap() - surface).abs() < 0.001);
+        device.coordinates_read.store(false, Ordering::SeqCst);
+        let zeroed = app
+            .zero(ZeroRequest {
+                id: review.id,
+                offsets: [0.0; 3],
+            })
+            .await
+            .unwrap();
+        assert!(zeroed.zeroed);
+        let state = device.mock.state();
+        assert!((state.wcs_origin.unwrap()[2] - surface).abs() < 0.001);
+        assert!((state.work_position[2] - 16.0).abs() < 0.001);
+        assert!((state.wcs_origin.unwrap()[2] + state.tool_length_offset - -36.0).abs() < 0.001);
     }
 }
 

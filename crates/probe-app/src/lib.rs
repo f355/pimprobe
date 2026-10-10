@@ -458,7 +458,7 @@ impl ProbeApp {
             pimprobe_core::query_rotary_state(app.device.as_ref()).await?
         } else {
             let modes = pimprobe_core::query_modes(app.device.as_ref()).await?;
-            let mut state = app.device.state();
+            let mut state = pimprobe_core::query_coordinates(app.device.as_ref()).await?;
             state.modes = modes;
             state
         };

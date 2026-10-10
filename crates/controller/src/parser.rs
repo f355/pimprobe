@@ -62,7 +62,7 @@ pub enum Record {
     Ack,
     Error(i32),
     Status(MachineStatus),
-    Probe(Contact),
+    Probe(Contact, Option<f64>),
     Modes(Modes, i32),
     Version(String),
     Rotation(i32, f64),
@@ -141,6 +141,12 @@ pub fn parse_line(line: &str) -> Result<Option<Record>, String> {
             s.strip_suffix(']').ok_or("missing closing bracket")?,
         )?)));
     }
+    if let Some(s) = line.strip_prefix("[Zpos:") {
+        return Ok(Some(Record::Setting(
+            202,
+            finite(s.strip_suffix(']').ok_or("missing closing bracket")?)?,
+        )));
+    }
     if let Some(s) = line.strip_prefix("[G") {
         if let Some((wcs, values)) = s.strip_suffix(']').and_then(|s| s.split_once(':')) {
             if let Ok(wcs @ 54..=59) = wcs.parse::<i32>() {
@@ -156,14 +162,17 @@ pub fn parse_line(line: &str) -> Result<Option<Record>, String> {
         let (pos, result) = s.split_once(':').ok_or("missing probe result")?;
         let mut parts = result.split(',');
         let success = number::<i32>(parts.next().unwrap_or(""))? != 0;
-        parts.next().map(finite).transpose()?;
+        let ets_contact = parts.next().map(finite).transpose()?;
         if parts.next().is_some() {
             return Err("too many probe result values".into());
         }
-        return Ok(Some(Record::Probe(Contact {
-            position: position(pos)?,
-            success,
-        })));
+        return Ok(Some(Record::Probe(
+            Contact {
+                position: position(pos)?,
+                success,
+            },
+            ets_contact,
+        )));
     }
     if let Some(s) = line.strip_prefix('<') {
         let s = s.strip_suffix('>').ok_or("missing closing bracket")?;
@@ -332,15 +341,19 @@ mod tests {
             panic!()
         };
         assert!(s.motion_blocked && s.door_open && !s.complete);
-        for line in [
-            "[PRB:-104.686,-23.692,-102.073,0.000:1]",
-            "[PROBE:-104.686,-23.692,-102.073,0.000:1,-38.500]",
+        for (line, reference) in [
+            ("[PRB:-104.686,-23.692,-102.073,0.000:1]", None),
+            (
+                "[PROBE:-104.686,-23.692,-102.073,0.000:1,-38.500]",
+                Some(-38.5),
+            ),
         ] {
-            let Some(Record::Probe(p)) = parse_line(line).unwrap() else {
+            let Some(Record::Probe(p, ets_contact)) = parse_line(line).unwrap() else {
                 panic!()
             };
             assert_eq!(p.position, [-104.686, -23.692, -102.073, 0.0]);
             assert!(p.success);
+            assert_eq!(ets_contact, reference);
         }
         for (line, expected) in [
             ("[GC:G0 G54 G17 G21 G90 G94 M5 M9 T0 F0 S0]", (21, 90, 94)),
@@ -378,6 +391,10 @@ mod tests {
         assert!(
             matches!(parse_line("[TLO:7.25]").unwrap(), Some(Record::ToolLength(length)) if length == 7.25)
         );
+        assert!(matches!(
+            parse_line("[Zpos:-60]").unwrap(),
+            Some(Record::Setting(202, -60.))
+        ));
         assert!(
             matches!(parse_line("[main-version:1.0.35+c0.abcdef01-b,main-hwd:1]").unwrap(),
             Some(Record::Version(version)) if version == "1.0.35+c0.abcdef01-b")

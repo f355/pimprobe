@@ -15,7 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use crate::device::DeviceSnapshot;
-use pimprobe_core::Position;
+use pimprobe_core::{Position, probe_z_offset};
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
@@ -45,7 +45,11 @@ impl Coordinates {
         let probe = (|| {
             let x = *snapshot.settings.get(&33)?;
             let y = *snapshot.settings.get(&34)?;
-            let z = -*snapshot.settings.get(&35)?;
+            let z = -probe_z_offset(
+                *snapshot.settings.get(&35)?,
+                *snapshot.settings.get(&202)?,
+                snapshot.tool_length_offset,
+            );
             let (sin, cos) = snapshot
                 .wcs_rotations
                 .get(&status.wcs)
@@ -76,6 +80,24 @@ mod tests {
     use crate::device::DeviceStatus;
 
     #[test]
+    fn probe_coordinates_use_the_ets_reference_when_tool_compensation_is_cancelled() {
+        let snapshot = DeviceSnapshot {
+            status: Some(DeviceStatus {
+                wcs: 54,
+                machine_position: [0., 0., -30., 0.],
+                work_position: [0., 0., 10., 0.],
+                ..Default::default()
+            }),
+            settings: [(33, 0.), (34, 0.), (35, -50.), (202, -60.)].into(),
+            tool_length_offset: 0.,
+            ..Default::default()
+        };
+        let probe = Coordinates::from_snapshot(&snapshot).probe.unwrap();
+        assert_eq!(probe.machine_position[2], -40.);
+        assert_eq!(probe.work_position[2], 0.);
+    }
+
+    #[test]
     fn probe_and_tool_tips_use_their_own_offsets_in_machine_and_rotated_work_coordinates() {
         let snapshot = DeviceSnapshot {
             status: Some(DeviceStatus {
@@ -84,7 +106,7 @@ mod tests {
                 work_position: [10., 20., 30., 40.],
                 ..Default::default()
             }),
-            settings: [(33, -50.), (34, -8.), (35, -25.)].into(),
+            settings: [(33, -50.), (34, -8.), (35, -25.), (202, 12.)].into(),
             wcs_rotations: [(54, 90.)].into(),
             tool_length_offset: 12.,
             ..Default::default()
@@ -100,6 +122,7 @@ mod tests {
         }
         let changed_tool = DeviceSnapshot {
             tool_length_offset: 35.,
+            settings: [(33, -50.), (34, -8.), (35, -25.), (202, 35.)].into(),
             ..snapshot
         };
         assert_eq!(
@@ -120,7 +143,7 @@ mod tests {
                 work_position: [0., 0., -37., 0.],
                 ..Default::default()
             }),
-            settings: [(33, 0.), (34, 0.), (35, -25.)].into(),
+            settings: [(33, 0.), (34, 0.), (35, -25.), (202, 12.)].into(),
             tool_length_offset: 12.,
             ..Default::default()
         };

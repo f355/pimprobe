@@ -138,7 +138,7 @@ TestCase {
         var horizontal = data.tag === "horizontal";
         var axis = horizontal ? 1 : 2;
         var spacing = flow.result.level.touches[1][axis] - flow.result.level.touches[0][axis];
-        verify(Math.abs(spacing - (horizontal ? 12 : -8)) < 0.001);
+        verify(Math.abs(spacing - (horizontal ? 12 : 8)) < 0.001);
         var zero = descendants(flow.contentItem,Button).filter(function(button) {
             return button.visible && button.text === (horizontal ? "Set A/Z zero" : "Set A/Y zero");
         })[0];

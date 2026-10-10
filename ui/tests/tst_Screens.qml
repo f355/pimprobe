@@ -270,7 +270,9 @@ TestCase {
                 rotary.result = {wcs:54,zeroed:false,rotationApplied:false,rotationSupported:true,
                     xyAngle:0.0412,xzAngle:-0.0194,
                     stations:[{center:[-60.125,-95.204,-60.375]},{center:[-30.125,-95.182,-60.385]}],
-                    level:{touches:[[-60.125,-95.204,-60.375],[-60.125,-85.204,-60.377]],correction:0.0138,residual:0.0014}};
+                    level:{touches:[[-60.125,-95.204,-60.375],
+                        operation === "horizontal" ? [-60.125,-85.204,-60.377] : [-60.125,-95.202,-50.375]],
+                        correction:0.0138,residual:0.0014}};
                 if (kind === "rotary-confirm") rotary.confirmAction("zero");
             }
         } else if (kind.indexOf("repeat-") === 0) {

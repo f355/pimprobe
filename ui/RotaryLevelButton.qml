@@ -83,7 +83,7 @@ ProbeButton {
                             - thickness / (2 * Math.cos(tilt));
                 Draw.arrow(c, x, -size * 0.27, x, contact - 5);
             });
-            Draw.crosshair(c, button.vertical ? halfSpacing : -halfSpacing, -size * 0.27);
+            Draw.crosshair(c, -halfSpacing, -size * 0.27);
             c.strokeStyle = Theme.accentBright;
             Draw.crosshair(c, 0, surface);
 

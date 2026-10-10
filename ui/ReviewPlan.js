@@ -38,8 +38,8 @@ function describe(config, rotary) {
             options.push(distance("yDistance", "Y distance", 0.1, 100));
             options.push(distance("zDistance", "Z distance", 0.1, 100));
             phases = [
-                config.operation === "horizontal" ? "Start above the face to level." : "Start beside the face to align.",
-                "Touch two points. Turn A to correct the angle and check again.",
+                config.operation === "horizontal" ? "Start above the face to level." : "Start beside the lower touch point.",
+                config.operation === "horizontal" ? "Touch two points. Turn A to correct the angle and check again." : "Touch lower, then upper. Turn A to correct the angle and check again.",
                 "Back off from the face. Show the final angle and touches."
             ];
         }

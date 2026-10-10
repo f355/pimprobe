@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="530" viewBox="0 0 960 530" role="img" aria-labelledby="title desc">
 <title id="title">Mirrored vertical alignment approaches toward Y plus and Y minus</title>
-<desc id="desc">End views along X show the probe beside the upper point with the face leaning away from its shaft. Probe horizontally, back off to starting Y, move down by Z distance, probe again, then return to start and rotate A to align the face vertically.</desc>
+<desc id="desc">End views along X show the probe beside the lower point with the face leaning away from its shaft. Probe horizontally, back off to starting Y, move up by Z distance, probe again, then return to start and rotate A to align the face vertically.</desc>
 <defs>
   <path id="arrow" d="M-14-6L0 0L-14 6Z" fill="#343a3e"/>
   <path id="dimension" d="M-8-4L0 0L-8 4Z" fill="#343a3e"/>
@@ -16,15 +16,15 @@
   <use href="#chuck" x="288" y="240"/><use href="#chuck" x="673" y="240"/>
   <path d="M284 112L249 347L284 352L319 117Z" fill="#b9bdc0" stroke="#6a7074" stroke-width="2"/>
   <path d="M267 112H302V350H267Z" fill="none" stroke="#6a7074" stroke-width="1.5" stroke-dasharray="6 5"/>
-  <path d="M145 82V151" stroke="#555d62" stroke-width="5"/>
-  <use href="#start" x="145" y="165"/>
+  <path d="M145 206V275" stroke="#555d62" stroke-width="5"/>
+  <use href="#start" x="145" y="289"/>
   <path d="M161 165H270" stroke="#343a3e" stroke-width="2.5"/>
   <path d="M161 289H252" stroke="#343a3e" stroke-width="2.5"/>
   <use href="#arrow" transform="translate(270 165)"/><use href="#arrow" transform="translate(252 289)"/>
   <circle cx="276" cy="165" r="5" fill="#a64247"/><circle cx="258" cy="289" r="5" fill="#a64247"/>
-  <text x="282" y="158" font-size="14">1</text><text x="265" y="282" font-size="14">2</text>
-  <path d="M145 186V275" stroke="#246c94" stroke-width="2" stroke-dasharray="5 4"/>
-  <use href="#blue" transform="translate(145 275) rotate(90)"/>
+  <text x="282" y="158" font-size="14">2</text><text x="265" y="282" font-size="14">1</text>
+  <path d="M121 268V179" stroke="#246c94" stroke-width="2" stroke-dasharray="5 4"/>
+  <use href="#blue" transform="translate(121 179) rotate(-90)"/>
   <path d="M94 165V289" stroke="#343a3e" stroke-width="1.5"/>
   <use href="#dimension" transform="translate(94 165) rotate(-90)"/><use href="#dimension" transform="translate(94 289) rotate(90)"/>
   <text x="27" y="221" font-size="14">Z</text><text x="27" y="241" font-size="14">distance</text>
@@ -35,15 +35,15 @@
   <text x="326" y="237" fill="#008544">A0 / Y0</text>
   <path d="M676 112L711 347L676 352L641 117Z" fill="#b9bdc0" stroke="#6a7074" stroke-width="2"/>
   <path d="M658 112H693V350H658Z" fill="none" stroke="#6a7074" stroke-width="1.5" stroke-dasharray="6 5"/>
-  <path d="M815 82V151" stroke="#555d62" stroke-width="5"/>
-  <use href="#start" x="815" y="165"/>
+  <path d="M815 206V275" stroke="#555d62" stroke-width="5"/>
+  <use href="#start" x="815" y="289"/>
   <path d="M799 165H690" stroke="#343a3e" stroke-width="2.5"/>
   <path d="M799 289H708" stroke="#343a3e" stroke-width="2.5"/>
   <use href="#arrow" transform="translate(690 165) rotate(180)"/><use href="#arrow" transform="translate(708 289) rotate(180)"/>
   <circle cx="684" cy="165" r="5" fill="#a64247"/><circle cx="702" cy="289" r="5" fill="#a64247"/>
-  <text x="663" y="158" font-size="14">1</text><text x="681" y="282" font-size="14">2</text>
-  <path d="M815 186V275" stroke="#246c94" stroke-width="2" stroke-dasharray="5 4"/>
-  <use href="#blue" transform="translate(815 275) rotate(90)"/>
+  <text x="663" y="158" font-size="14">2</text><text x="681" y="282" font-size="14">1</text>
+  <path d="M839 268V179" stroke="#246c94" stroke-width="2" stroke-dasharray="5 4"/>
+  <use href="#blue" transform="translate(839 179) rotate(-90)"/>
   <path d="M866 165V289" stroke="#343a3e" stroke-width="1.5"/>
   <use href="#dimension" transform="translate(866 165) rotate(-90)"/><use href="#dimension" transform="translate(866 289) rotate(90)"/>
   <text x="879" y="221" font-size="14">Z</text><text x="879" y="241" font-size="14">distance</text>
@@ -52,8 +52,8 @@
   <text x="678" y="401" font-size="15">Y distance</text>
   <path d="M693 214V240M680 227H706" stroke="#008544" stroke-width="2.5"/><circle cx="693" cy="227" r="5" fill="#008544"/>
   <text x="535" y="237" fill="#008544">A0 / Y0</text>
-  <text x="24" y="437">Start beside the upper point. The top of the face leans away from the probe shaft.</text>
-  <text x="24" y="465">Back off to starting Y before moving down; return to the start before rotating and checking again.</text>
+  <text x="24" y="437">Start beside the lower point. The top of the face leans away from the probe shaft.</text>
+  <text x="24" y="465">Back off to starting Y before moving up; return to the start before rotating and checking again.</text>
   <text x="24" y="513" fill="#626a70" font-size="14">Solid: measured face · Dotted: vertical face · Green: mean face position after alignment · Not to scale</text>
   <path d="M876 125H912" fill="none" stroke="#343a3e"/>
   <path d="M876 125V101" fill="none" stroke="#343a3e"/>

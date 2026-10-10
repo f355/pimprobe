@@ -187,7 +187,7 @@ fn fixture(operation: RotaryOperation, tilt: f64, version: &str) -> (MockControl
         pivot: if vertical {
             [
                 y + if mirrored { -8. } else { 8. },
-                z - 6. + config.diameter / 2.,
+                z + 6. + config.diameter / 2.,
             ]
         } else {
             [y + 6., z - 8.]
@@ -244,23 +244,21 @@ async fn levels_both_surfaces_and_preserves_other_work_axes() {
                 } else {
                     2
                 };
-                let spacing = if operation == RotaryOperation::Horizontal {
-                    12.
-                } else {
-                    -12.
-                };
-                assert!(
-                    (level.touches[0][i]
-                        - before.position[i]
-                        - if i == 1 {
-                            before.probe_offset[1]
-                        } else {
-                            -before.probe_offset[2] + 1.
-                        })
-                    .abs()
-                        < 0.001
-                );
-                assert!((level.touches[1][i] - level.touches[0][i] - spacing).abs() < 0.001);
+                let spacing = 12.;
+                for points in [level.initial_touches, level.touches] {
+                    assert!(
+                        (points[0][i]
+                            - before.position[i]
+                            - if i == 1 {
+                                before.probe_offset[1]
+                            } else {
+                                -before.probe_offset[2] + plan.config.diameter / 2.
+                            })
+                        .abs()
+                            < 0.001
+                    );
+                    assert!((points[1][i] - points[0][i] - spacing).abs() < 0.001);
+                }
                 let after = machine.state();
                 assert_eq!(after.modes, before.modes);
                 assert_eq!(after.plane, before.plane);
@@ -270,6 +268,18 @@ async fn levels_both_surfaces_and_preserves_other_work_axes() {
                 }
                 assert!((after.position[3] - before.position[3] - expected).abs() < 0.02);
                 let commands = machine.commands();
+                let spacing_axis = if i == 1 { 'Y' } else { 'Z' };
+                for program in [commands.join("\n"), plan.program()] {
+                    let moves: Vec<f64> = program
+                        .lines()
+                        .filter(|line| line.starts_with("G38.3 "))
+                        .filter_map(|line| {
+                            line.split_whitespace()
+                                .find_map(|word| word.strip_prefix(spacing_axis)?.parse().ok())
+                        })
+                        .collect();
+                    assert_eq!(moves, [spacing, -spacing, spacing, -spacing]);
+                }
                 let turn = commands
                     .iter()
                     .position(|cmd| {
@@ -348,13 +358,13 @@ fn review_checks_search_and_second_touch_travel() {
     assert!(review_rotary(state, config).is_err());
     let (machine, config) = fixture(RotaryOperation::Vertical, 8., "1.0.35-a");
     let mut state = machine.state();
-    state.position[2] = -198.;
+    state.position[2] = -2.;
     assert!(review_rotary(state, config).is_err());
 }
 
 #[tokio::test]
-async fn contact_while_descending_along_a_wall_aborts_before_rotation() {
-    let (machine, mut config) = fixture(RotaryOperation::Vertical, 15., "1.0.35-a");
+async fn contact_while_ascending_along_a_wall_aborts_before_rotation() {
+    let (machine, mut config) = fixture(RotaryOperation::Vertical, -15., "1.0.35-a");
     config.z_distance = 30.;
     let before = machine.state();
     let plan = review_rotary(before.clone(), config).unwrap();

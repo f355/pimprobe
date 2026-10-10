@@ -40,7 +40,7 @@ fn distances(config: &RotaryConfig) -> (f64, f64) {
     if config.operation == RotaryOperation::Horizontal {
         (config.y_distance, config.z_distance)
     } else {
-        (-config.z_distance, config.y_distance)
+        (config.z_distance, config.y_distance)
     }
 }
 

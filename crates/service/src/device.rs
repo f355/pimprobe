@@ -59,7 +59,7 @@ impl Device {
                     pivot: if vertical {
                         [
                             y + if mirrored { -8. } else { 8. },
-                            z - config.z_distance / 2. + config.diameter / 2.,
+                            z + config.z_distance / 2. + config.diameter / 2.,
                         ]
                     } else {
                         [y + config.y_distance / 2., z - 8.]

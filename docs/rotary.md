@@ -121,18 +121,18 @@ Hold the workpiece with the flat face within 20° of vertical. Use the
 upper-right button to approach from the Y− side and probe toward Y+, or the
 lower-right button to approach from the Y+ side and probe toward Y−.
 
-Position the ball beside the upper touch point. The top of the face should
+Position the ball beside the lower touch point. The top of the face should
 lean away from the probe shaft, as shown in the button. Leave enough clearance
 to rotate the workpiece with the probe at this starting position.
 
 - **Y distance:** the maximum search toward the face from the starting Y.
-- **Z distance:** the downward move from the first touch height to the second.
+- **Z distance:** the upward move from the lower touch height to the upper.
   Both heights must lie on the flat face, clear of its edges and fixtures.
 
 ![Vertical alignment toward Y+ or Y−, with clearance for the probe shaft](images/rotary-vertical.svg)
 
-The probe measures the upper point, returns to the starting Y, moves down and
-measures the lower point. It returns to the starting Y and Z before rotating
+The probe measures the lower point, returns to the starting Y, moves up and
+measures the upper point. It returns to the starting Y and Z before rotating
 A to align the face, then measures both points again. Small remaining angles
 are corrected and checked again, up to three times.
 

@@ -72,19 +72,11 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn persists_and_loads_new_defaults() {
+    fn saves_edits_and_loads_missing_values() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("settings.json");
         let mut settings = open(&path).unwrap();
-        assert_eq!(settings.snapshot()["coarseFeed"], 300.0);
-        assert_eq!(settings.snapshot()["fineFeed"], 50.0);
-        assert_eq!(settings.snapshot()["probeDiameter"], 2.0);
-        assert_eq!(settings.snapshot()["safeZOffset"], 40.0);
-        let routine = pimprobe_core::RoutineConfig::default();
-        assert_eq!(routine.coarse_feed, 300.0);
-        assert_eq!(routine.fine_feed, 50.0);
-        assert_eq!(routine.diameter, 2.0);
-        assert_eq!(routine.safe_z_offset, 40.0);
+        let defaults = settings.snapshot();
         settings
             .update(
                 json!({"coarseFeed":123,"safeZOffset":25,"centerXSearchDistance":120,"centerYSearchDistance":150})
@@ -98,7 +90,10 @@ mod tests {
         assert_eq!(reopened["centerXSearchDistance"], 120);
         assert_eq!(reopened["centerYSearchDistance"], 150);
         assert_eq!(reopened["safeZOffset"], 25);
-        assert_eq!(reopened["outsideYSearchDistance"], 10.0);
+        assert_eq!(
+            reopened["outsideYSearchDistance"],
+            defaults["outsideYSearchDistance"]
+        );
     }
 
     #[test]
@@ -126,7 +121,10 @@ mod tests {
         )
         .unwrap();
         let saved = open(&path).unwrap().snapshot();
-        assert_eq!(saved["coarseFeed"], 300.0);
+        assert_eq!(
+            saved["coarseFeed"],
+            ProbeSettings::default().snapshot()["coarseFeed"]
+        );
         assert_eq!(saved["centerXSearchDistance"], 40);
         let stored: Map<String, Value> = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
         assert_eq!(stored, saved);

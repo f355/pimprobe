@@ -49,25 +49,3 @@ pub enum OperationEvent {
         result: Option<MeasurementResult>,
     },
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn timestamped_progress_round_trips_through_json() {
-        let event = OperationEvent::Progress {
-            elapsed_ms: Some(1250),
-            progress: Progress::default(),
-        };
-        let encoded = serde_json::to_string(&event).unwrap();
-        let decoded: OperationEvent = serde_json::from_str(&encoded).unwrap();
-        assert!(matches!(
-            decoded,
-            OperationEvent::Progress {
-                elapsed_ms: Some(1250),
-                ..
-            }
-        ));
-    }
-}

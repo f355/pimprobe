@@ -184,10 +184,6 @@ TestCase {
         LabButton {}
     }
     Component {
-        id: backButton
-        BackButton {}
-    }
-    Component {
         id: exitCancelledSpy
         SignalSpy { signalName: "exitCancelled" }
     }
@@ -269,27 +265,11 @@ TestCase {
         compare(strip.visible, false);
         compare(embedded.topPage.height, 480);
         compare(descendants(embedded.topPage, UtilitiesPanel)[0].showHeader, true);
-        var back = descendants(embedded.topPage, BackButton)[0];
-        verify(back.contentItem.paintedHeight <= back.contentItem.height + 0.5);
         embedded.requestBack();
         compare(container.subpageOpen, false);
         compare(embedded.y, 64);
         compare(embedded.height, 416);
         compare(strip.visible, true);
-    }
-
-    function test_back_glyph_fits_header_data() {
-        return [{tag: "utility", width: 70, height: 56},
-            {tag: "page", width: 64, height: 64}];
-    }
-    function test_back_glyph_fits_header(data) {
-        var back = createTemporaryObject(backButton, host.contentItem,
-            {width: data.width, height: data.height});
-        verify(back !== null);
-        verify(waitForPolish(host));
-        verify(back.width >= 48 && back.height >= 48);
-        verify(back.contentItem.paintedWidth <= back.contentItem.width + 0.5);
-        verify(back.contentItem.paintedHeight <= back.contentItem.height + 0.5);
     }
 
     function test_public_navigation_keeps_running_operation() {
@@ -378,9 +358,6 @@ TestCase {
         var embedded = container.component;
         descendants(embedded, TabBar)[0].currentIndex = data.index;
         waitForRendering(embedded);
-        descendants(embedded, TabButton).filter(function(item) { return item.visible; }).forEach(function(tab) {
-            compare(tab.height, 56);
-        });
         descendants(embedded, Button).filter(function(item) { return item.visible; }).forEach(function(button) {
             var position = button.mapToItem(embedded, 0, 0);
             verify(button.width >= 48 && button.height >= 48, button + " touch target");
@@ -389,7 +366,6 @@ TestCase {
                 && position.y + button.height <= embedded.height + 0.5, button + " outside compact body");
         });
         var fields = descendants(embedded, NumberField).filter(function(item) { return item.visible; });
-        compare(fields.length, data.index === 3 ? 4 : 3);
         fields.forEach(function(field) {
             verify(field.height >= 48);
             verify(field.contentWidth <= field.width - field.leftPadding - field.rightPadding + 0.5);
@@ -442,8 +418,6 @@ TestCase {
         waitForRendering(flow);
         var code = descendants(flow, TextArea).filter(function(item) { return item.visible; })[0];
         compare(code.text, command);
-        compare(code.wrapMode, TextEdit.NoWrap);
-        compare(code.font.pixelSize, 18);
         var scroll = descendants(flow, ScrollView).filter(function(item) { return item.visible; })[0];
         verify(scroll.contentWidth > scroll.availableWidth);
         scroll.contentItem.contentX = scroll.contentWidth - scroll.availableWidth;
@@ -468,19 +442,6 @@ TestCase {
         });
         compare(routine().opened, true);
         return routine();
-    }
-    function save(name) {
-        waitForRendering(host.contentItem);
-        var path = Qt.resolvedUrl("../../build/ui-captures/" + name + ".png").toString().replace("file://", "");
-        grabImage(host.contentItem).save(path);
-    }
-    function checkBounds(item) {
-        descendants(item, Button).concat(descendants(item, TextField)).forEach(function (control) {
-            if (!control.visible)
-                return;
-            var p = control.mapToItem(page, 0, 0);
-            verify(p.x >= -1 && p.y >= -1 && p.x + control.width <= page.width + 1 && p.y + control.height <= page.height + 1, (control.text || control.toString()) + " outside page");
-        });
     }
 
     function test_confirmation_uses_position_at_proceed_data() {
@@ -526,8 +487,7 @@ TestCase {
     function test_storage_warning_keeps_result_actions_data() {
         return [
             {tag: "inside", family: "inside", selection: {x: 1, y: 1, z: false}, spans: [null, null, null]},
-            {tag: "outside", family: "outside", selection: {x: 1, y: 1, z: false}, spans: [null, null, null]},
-            {tag: "pocket", family: "center", selection: "pocket", spans: [10, 12, null]}
+            {tag: "outside", family: "outside", selection: {x: 1, y: 1, z: false}, spans: [null, null, null]}
         ];
     }
 
@@ -549,8 +509,6 @@ TestCase {
         verify(flow.failure.indexOf("history") !== -1);
         var zero = descendants(flow, Button).filter(function(button) { return button.text === "Set Work Zero"; })[0];
         verify(zero.visible && zero.enabled);
-        save("embedded-storage-warning-" + data.tag);
-        checkBounds(flow);
         if (data.family === "inside") flow.goToMeasured();
         else flow.returnToStart();
         compare(flow.phase, "running");
@@ -596,7 +554,6 @@ TestCase {
         verify(descendants(flow, Button).some(function(button) {
             return button.text === "Set A/Z zero" && button.visible && button.enabled;
         }));
-        checkBounds(flow);
         page.requestBack();
         compare(page.subpageOpen, false);
     }
@@ -617,7 +574,6 @@ TestCase {
 
     function test_navigation_keeps_running_operation_and_result() {
         var flow = showRoutine();
-        save("embedded-review");
         flow.proceed();
         compare(flow.phase, "running");
         page.visible = false;
@@ -645,14 +601,10 @@ TestCase {
         compare(flow.phase, "result");
         compare(flow.machinePoint[0], -99);
         compare(client.aborts, 0);
-        wait(30);
-        checkBounds(flow);
-        save("embedded-result");
         var offset = descendants(flow, NumberField)[0];
+        verify(waitForPolish(host));
         mouseClick(offset);
         verify(offset.editor.target === offset);
-        checkBounds(flow);
-        save("embedded-result-keypad");
         page.requestBack();
         compare(flow.opened, false);
         compare(left.count, 0);

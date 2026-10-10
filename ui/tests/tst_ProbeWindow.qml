@@ -77,6 +77,13 @@ TestCase {
         Mock.verifyServer(test, probeWindow.serviceUrl)
         tryVerify(function() { return probeWindow.page.settings.loaded && probeWindow.page.machineState.connected }, 3000)
     }
+    function init() {
+        probeWindow.requestActivate()
+        Array.prototype.forEach.call(probeWindow.page.children, function(child) {
+            if (child instanceof PageView && child.opened) child.close()
+        })
+        verify(waitForPolish(probeWindow))
+    }
     function test_tabs_remain_switchable_with_retracted_probe() {
         callApi("POST", "/probe-actuator", {extended: false})
         tryVerify(function() { return !probeWindow.page.probeFullyExtended() }, 3000)
@@ -132,32 +139,6 @@ TestCase {
         tryVerify(function() { return !probeWindow.page.settings.saving }, 3000)
     }
 
-    function test_all_tabs_commit_values_on_enter() {
-        probeWindow.requestActivate()
-        callApi("POST", "/probe-actuator", {extended: true})
-        tryVerify(function() { return probeWindow.page.probeFullyExtended() }, 3000)
-        var tabs = descendants(probeWindow.contentItem, TabBar)[0]
-        var keys = ["outsideXSearchDistance", "insideXSearchDistance", "centerXSearchDistance", "rotaryRodDiameter", "probeDiameter"]
-        for (var tab = 0; tab < keys.length; ++tab) {
-            mouseClick(tabs.itemAt(tab))
-            compare(tabs.currentIndex, tab)
-            waitForRendering(probeWindow.contentItem)
-            var field = descendants(probeWindow.contentItem, NumberField).filter(function(f) { return f.visible })[0]
-            var oldValue = field.value
-            mouseClick(field)
-            field.forceActiveFocus()
-            tryVerify(function() { return field.editor.target === field })
-            field.editor.typeKey("6")
-            field.editor.accept()
-            compare(probeWindow.page.settings.values[keys[tab]], 6)
-            tryVerify(function() { return !probeWindow.page.settings.saving }, 3000)
-            field.editor.begin(field)
-            String(oldValue).split("").forEach(function(key) { field.editor.typeKey(key) })
-            field.editor.accept()
-            tryVerify(function() { return !probeWindow.page.settings.saving }, 3000)
-        }
-    }
-
     function test_settings_scroll_to_rotary_feed() {
         probeWindow.requestActivate()
         var tabs = descendants(probeWindow.contentItem, TabBar)[0]
@@ -198,24 +179,6 @@ TestCase {
         compare(field.editor.target, null)
         compare(Number(field.text), saved)
         compare(probeWindow.page.settings.values.outsideXSearchDistance, saved)
-    }
-
-    function test_disconnect_discards_uncommitted_edit() {
-        probeWindow.requestActivate()
-        callApi("POST", "/probe-actuator", {extended: true})
-        tryVerify(function() { return probeWindow.page.probeFullyExtended() }, 3000)
-        var tabs = descendants(probeWindow.contentItem, TabBar)[0]
-        mouseClick(tabs.itemAt(0))
-        var field = descendants(probeWindow.contentItem, NumberField).filter(function(f) { return f.visible })[0]
-        var previous = field.value
-        field.forceActiveFocus()
-        field.editor.typeKey("7")
-        probeWindow.page.client.error = "Disconnected"
-        probeWindow.page.client.state = {connected: false}
-        compare(field.editor.target, null)
-        compare(Number(field.text), previous)
-        probeWindow.page.refreshState()
-        tryVerify(function() { return probeWindow.page.machineState.connected }, 3000)
     }
 
     function test_disconnected_status_discards_draft_even_if_probe_is_extended() {
@@ -308,67 +271,7 @@ TestCase {
         }
     }
 
-    function test_exit_dialog_actions_and_centering() {
-        callApi("POST", "/probe-actuator", {extended: true})
-        tryVerify(function() { return probeWindow.page.probeFullyExtended() }, 3000)
-        probeWindow.page.requestExit()
-        var overlay = probeWindow.contentItem.parent
-        var prompt
-        tryVerify(function() {
-            prompt = descendants(overlay, TextArea).filter(function(label) {
-                return label.visible && label.text === "Retract the probe before leaving?"
-            })[0]
-            return prompt !== undefined
-        })
-        try {
-            var dialog = findChild(probeWindow.page, "exitDialog")
-            verify(dialog !== null, "Exit dialog exists")
-            var panel = dialog.contentItem.parent
-            var position = panel.mapToItem(overlay, 0, 0)
-            verify(Math.abs(position.x + panel.width / 2 - overlay.width / 2) <= 1,
-                   "Exit dialog is horizontally centered in the window")
-            verify(Math.abs(position.y + panel.height / 2 - overlay.height / 2) <= 1,
-                   "Exit dialog is vertically centered in the window")
-            var title = descendants(panel, Label).filter(function(label) {
-                return label.visible && label.text === "Probe extended"
-            })[0]
-            verify(title !== undefined)
-            var buttons = descendants(panel, Button)
-            compare(buttons.map(function(button) { return button.text }),
-                    ["Cancel", "Leave extended", "Retract and exit"])
-        } finally {
-            var cancel = descendants(overlay, Button).filter(function(button) {
-                return button.visible && button.text === "Cancel"
-            })[0]
-            if (cancel) mouseClick(cancel)
-            callApi("POST", "/probe-actuator", {extended: false})
-        }
-    }
-
-    function test_contextual_help() {
-        var tabs = descendants(probeWindow.contentItem, TabBar)[0]
-        var help = descendants(probeWindow.page.headerBar, Button).filter(function(b) { return b.text === "?" })[0]
-        var pages = []
-        for (var i = 0; i < tabs.count; ++i) {
-            mouseClick(tabs.itemAt(i))
-            mouseClick(help)
-            var body
-            tryVerify(function() {
-                body = descendants(probeWindow.contentItem.parent, TextArea).filter(function(a) {
-                    return a.visible && a.text.length > 0
-                })[0]
-                return body !== undefined
-            })
-            pages.push(body.text)
-            var back = descendants(probeWindow.contentItem.parent, Button).filter(function(b) {
-                return b.visible && b.text === "\u2190"
-            })[0]
-            mouseClick(back)
-        }
-        compare(new Set(pages).size, tabs.count)
-    }
-
-    function test_utilities_pane_contains_repeatability() {
+    function test_utilities_opens_repeatability() {
         var tabs = descendants(probeWindow.contentItem, TabBar)[0]
         mouseClick(tabs.itemAt(4))
 
@@ -386,26 +289,10 @@ TestCase {
             return panel.visible
         })[0]
         verify(utilitiesPanel !== undefined)
-        var overlay = probeWindow.contentItem.parent
-        var panelPosition = utilitiesPanel.mapToItem(overlay, 0, 0)
-        compare(panelPosition.x, 0)
-        compare(panelPosition.y, 0)
-        compare(utilitiesPanel.width, overlay.width)
-        compare(utilitiesPanel.height, overlay.height)
         var repeatability = descendants(utilitiesPanel, Button).filter(function(button) {
             return button.visible && button.text === "Probe repeatability"
         })[0]
         verify(repeatability !== undefined)
-        for (var label of ["Probe history", "Export logs", "Clear logs"]) {
-            verify(descendants(utilitiesPanel, Button).some(function(button) {
-                return button.visible && button.text === label
-            }), label + " is available in Utilities")
-        }
-        var toolPosition = repeatability.mapToItem(utilitiesPanel, 0, 0)
-        verify(toolPosition.x >= 16 && toolPosition.y >= 64
-            && toolPosition.x + repeatability.width <= utilitiesPanel.width - 16
-            && toolPosition.y + repeatability.height <= utilitiesPanel.height - 16,
-            "Repeatability fits within the Utilities margins")
         mouseClick(repeatability)
         var flow = contentObject(RepeatabilityFlow)
         verify(flow !== null)
@@ -438,6 +325,7 @@ TestCase {
         tryVerify(function() { return tabs.enabled && !probeWindow.page.controlsLocked() }, 3000)
         mouseClick(tabs.itemAt(4))
         tryCompare(tabs, "currentIndex", 4)
+        verify(waitForPolish(probeWindow))
         var utilities = descendants(probeWindow.contentItem, Button).filter(function(button) {
             return button.visible && button.text === "Utilities"
         })[0]

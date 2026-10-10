@@ -90,6 +90,7 @@ TestCase {
         children(page, NumberField).forEach(function(field) { field.editor.cancel(); field.deselect(); });
         children(page, TabBar)[0].currentIndex = 0;
         findChild(page, "droReference").probeSelected = true;
+        verify(waitForPolish(host));
     }
     function showResult(family, selection, axes, spans) {
         page.openRoutineReview(family, selection);
@@ -303,8 +304,6 @@ TestCase {
             if (kind === "log") result.sourceVisible = true;
         }
         verify(waitForPolish(host));
-        waitForRendering(host.contentItem);
-        wait(40);
         var path = Qt.resolvedUrl("../../build/ui-captures/" + data.tag + ".png").toString().replace("file://","");
         var capture = grabImage(host.contentItem.parent);
         compare(capture.width, 800);

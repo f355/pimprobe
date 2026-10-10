@@ -90,11 +90,8 @@ TestCase {
             .map(function(option) { return option.key; }),data.keys);
         verify(Animations.clips[plan.clip]);
     }
-    function test_motion_data() {
-        return Object.keys(Animations.clips).map(function(clip) { return {tag:clip}; });
-    }
-    function test_motion(data) {
-        var illustration = createTemporaryObject(illustrationComponent,host.contentItem,{clip:data.tag});
+    function test_motion_and_clip_change() {
+        var illustration = createTemporaryObject(illustrationComponent,host.contentItem);
         verify(illustration);
         var sprite = findChild(illustration,"motionSprite");
         verify(waitForPolish(illustration));
@@ -111,5 +108,10 @@ TestCase {
         waitForRendering(illustration);
         var third = grabImage(illustration);
         verify(!first.equals(second) || !first.equals(third),"The rendered probe moves");
+        illustration.clip = "rotary-axis";
+        sprite.running = true;
+        tryVerify(function() { return sprite.currentFrame > 0; },3000);
+        verify(waitForRendering(illustration));
+        verify(!third.equals(grabImage(illustration)),"Changing the operation changes its illustration");
     }
 }

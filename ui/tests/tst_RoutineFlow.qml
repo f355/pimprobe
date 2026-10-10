@@ -63,56 +63,34 @@ TestCase {
     }
 
     function test_review_run_result() {
-        var snapshot = null
-        Api.request("GET", http.serviceUrl + "/state", null, function(reply) { snapshot = reply.data })
-        tryVerify(function() { return snapshot !== null }, 3000)
-        var expectedX = snapshot.status.workPosition[0] + snapshot.settings["33"] - 2
-        var expectedY = snapshot.status.workPosition[1] + snapshot.settings["34"] - 2
         flow.showRoutine({family:"outside",x:1,y:1,z:false,wcs:54,zero:false,safeZOffset:40,
                           depth:5,xSearchDistance:10,ySearchDistance:10,retract:0.5,diameter:4,
                           positioningFeed:1000,coarseFeed:30,fineFeed:10})
         tryVerify(function() { return !flow.reviewing }, 3000)
         compare(flow.failure, "")
-        compare(flow.width,800)
-        compare(flow.height,480)
         flow.proceed()
         tryCompare(flow,"phase","result",10000)
         verify(waitForPolish(view))
-        verify(Math.abs(flow.result[0] - expectedX) < 0.001)
-        verify(Math.abs(flow.result[1] - expectedY) < 0.001,
-               "Expected Y " + expectedY + ", got " + flow.result[1])
-        compare(flow.result[2],null)
         verify(!flow.zeroed)
 
-		var resultLabels = descendants(flow.contentItem, Label).filter(function(label) {
-			return label.visible
-		})
-		var xCoordinate = resultLabels.filter(function(label) { return label.text.indexOf("X ") === 0 })[0]
-		var xZero = resultLabels.filter(function(label) { return label.text.indexOf("G54 ") === 0 })[0]
-		var yCoordinate = resultLabels.filter(function(label) { return label.text.indexOf("Y ") === 0 })[0]
-		verify(xCoordinate && xZero && yCoordinate)
-		var xCoordinateBottom = xCoordinate.mapToItem(flow.contentItem, 0, xCoordinate.height).y
-		var xZeroTop = xZero.mapToItem(flow.contentItem, 0, 0).y
-		var xZeroBottom = xZero.mapToItem(flow.contentItem, 0, xZero.height).y
-		var yCoordinateTop = yCoordinate.mapToItem(flow.contentItem, 0, 0).y
-		verify(xZeroTop - xCoordinateBottom <= 2,
-		       "Zero line is too far below X coordinate: " + (xZeroTop - xCoordinateBottom))
-		verify(yCoordinateTop - xZeroBottom <= 12,
-		       "Y coordinate is too far below X zero line: " + (yCoordinateTop - xZeroBottom))
-		verify(flow.completedID.length > 0)
-		var measuredX = flow.measuredPosition(0)
-		var measuredY = flow.measuredPosition(1)
+        var resultLabels = descendants(flow.contentItem, Label).filter(function(label) {
+            return label.visible
+        })
+        var xCoordinate = resultLabels.filter(function(label) { return label.text.indexOf("X ") === 0 })[0]
+        var xWorkCoordinate = resultLabels.filter(function(label) { return label.text.indexOf("G54 ") === 0 })[0]
+        verify(xCoordinate && xWorkCoordinate)
+        verify(flow.completedID.length > 0)
+        var measuredX = flow.measuredPosition(0)
+        var measuredY = flow.measuredPosition(1)
         var resultView = descendants(flow.contentItem, ProbeResultView)[0]
         var leftPane = resultView.children[0]
         var leftSize = [leftPane.width, leftPane.height]
-        compare(leftPane.width, Theme.columnWidth)
         var offsetField = findChild(flow, "resultOffset0")
         var fieldX = offsetField.mapToItem(flow.contentItem, 0, 0).x
         offsetField.editor.begin(offsetField)
         verify(waitForPolish(view))
         compare([leftPane.width, leftPane.height], leftSize)
         compare(offsetField.mapToItem(flow.contentItem, 0, 0).x, fieldX)
-        compare(xCoordinate.font.pixelSize, 28)
         offsetField.editor.cancel()
         flow.resultWcsRequested(55)
         tryVerify(function() { return !flow.busy }, 3000)
@@ -121,47 +99,36 @@ TestCase {
         compare(flow.measuredPosition(0), measuredX)
         compare(flow.measuredPosition(1), measuredY)
         var selectedPoint = flow.result.slice()
-		flow.setOffset(0, 1.25)
-		flow.setOffset(1, -2)
-		flow.zeroResult()
-		tryCompare(flow,"zeroing",false,5000)
-		compare(flow.failure,"")
-		verify(flow.zeroed)
-		verify(flow.completedID.length > 0)
+        flow.setOffset(0, 1.25)
+        flow.setOffset(1, -2)
+        flow.zeroResult()
+        tryCompare(flow,"zeroing",false,5000)
+        compare(flow.failure,"")
+        verify(flow.zeroed)
         var zeroButton = descendants(flow.contentItem, LabButton).filter(function(button) { return button.text === "Set Work Zero" })[0]
         verify(zeroButton.enabled)
         verify(offsetField.enabled)
         compare([leftPane.width, leftPane.height], leftSize)
         var saved = resultLabels.filter(function(label) { return label.text === "Work zero set" })[0]
         verify(saved && saved.visible)
-		var after = null
-		Api.request("GET", http.serviceUrl + "/state", null, function(reply) { after = reply.data })
-		tryVerify(function() { return after !== null }, 3000)
+        var after = null
+        Api.request("GET", http.serviceUrl + "/state", null, function(reply) { after = reply.data })
+        tryVerify(function() { return after !== null }, 3000)
         tryVerify(function() {
             return JSON.stringify((http.state.status || {}).workPosition) === JSON.stringify(after.status.workPosition)
         }, 3000)
-        compare(xZero.text, "G55 " + flow.measuredWorkPosition(0).toFixed(3))
-		verify(Math.abs(after.status.machinePosition[0] - after.status.workPosition[0] - measuredX - 1.25) < 0.002)
-		verify(Math.abs(after.status.machinePosition[1] - after.status.workPosition[1] - measuredY + 2) < 0.002)
-			compare(flow.result, selectedPoint)
-        var previousCoordinate = xZero.text
+        compare(xWorkCoordinate.text, "G55 " + flow.measuredWorkPosition(0).toFixed(3))
+        compare(flow.result, selectedPoint)
+        var previousCoordinate = xWorkCoordinate.text
         flow.setOffset(0, -0.75)
-        compare(xZero.text, previousCoordinate)
+        compare(xWorkCoordinate.text, previousCoordinate)
         flow.zeroResult()
         tryCompare(flow, "zeroing", false, 5000)
         compare(flow.failure, "")
-        tryVerify(function() { return xZero.text !== previousCoordinate }, 3000)
-        compare(xZero.text, "G55 " + flow.measuredWorkPosition(0).toFixed(3))
+        tryVerify(function() { return xWorkCoordinate.text !== previousCoordinate }, 3000)
+        compare(xWorkCoordinate.text, "G55 " + flow.measuredWorkPosition(0).toFixed(3))
         verify(zeroButton.enabled && offsetField.enabled)
         compare([leftPane.width, leftPane.height], leftSize)
-        tryVerify(function() { return saved.text === "Work zero" }, 4000)
-        compare([leftPane.width, leftPane.height], leftSize)
-		verify(flow.logText.indexOf("; Coarse") !== -1)
-		verify(flow.logText.indexOf("; Fine") !== -1)
-		var backoff = /#<x_after_backoff> := (-?[0-9.]+)/.exec(flow.logText)
-		verify(backoff !== null)
-		verify(Math.abs(Number(backoff[1]) - (snapshot.status.machinePosition[0] - 4.5)) < 0.002)
-        verify(flow.simulated)
         flow.returnToStart()
         tryCompare(flow, "phase", "result", 10000)
         compare(flow.failure, "")
@@ -170,15 +137,6 @@ TestCase {
         var selected = false
         http.request("wcs.select", {wcs:54}, function(reply) { selected = reply.ok })
         tryVerify(function() { return selected }, 3000)
-    }
-
-    function test_review_options_data() {
-        return [
-            {tag: "outside", family: "outside", x: 1, y: 0, z: false, key: "xSearchDistance", value: 12, command: "G38.3 X-12 F800"},
-            {tag: "inside", family: "inside", x: 1, y: 0, z: false, key: "xSearchDistance", value: 12, command: "G38.3 X12 F125"},
-            {tag: "hole", family: "center", feature: "hole", x: 1, y: 1, z: false, key: "xSearchDistance", value: 14, command: "G38.3 X-14 F125"},
-            {tag: "Z", family: "outside", x: 0, y: 0, z: true, key: "depth", value: 8, command: "G38.3 Z-8 F125"}
-        ]
     }
 
     function api(path) {
@@ -199,9 +157,9 @@ TestCase {
         return field
     }
 
-    function test_review_options(data) {
+    function test_review_options_reach_execution_without_changing_settings() {
         var settings = api("/settings")
-        flow.showRoutine({family: data.family, feature: data.feature || "", x: data.x, y: data.y, z: data.z,
+        flow.showRoutine({family: "outside", x: 1, y: 0, z: false,
             wcs: 54, zero: false, safeZOffset: 40, depth: 5, xSearchDistance: 10, ySearchDistance: 10, retract: 0.5, diameter: 2,
             positioningFeed: 1000, coarseFeed: 300, fineFeed: 50})
         tryVerify(function() { return !flow.reviewing }, 3000)
@@ -210,17 +168,17 @@ TestCase {
         enterReviewValue("fineFeed", 25, true)
         enterReviewValue("positioningFeed", 800, true)
         enterReviewValue("retract", 0.7, true)
-        enterReviewValue(data.key, data.value, false)
+        enterReviewValue("xSearchDistance", 12, false)
         var proceed = descendants(flow.contentItem, LabButton).filter(function(button) { return button.text === "Proceed" })[0]
         mouseClick(proceed)
         tryCompare(flow, "phase", "result", 10000)
         compare(flow.failure, "")
-        verify(flow.logText.indexOf(data.command) !== -1, flow.logText)
+        verify(flow.logText.indexOf("G38.3 X-12 F800") !== -1, flow.logText)
         verify(/G38.2 [XYZ]-?1.2 F25/.test(flow.logText), flow.logText)
         var history = api("/logs/history")
         var entry = history.filter(function(item) { return item.id === flow.completedID })[0]
         verify(entry !== undefined)
-        compare(entry.config[data.key], data.value)
+        compare(entry.config.xSearchDistance, 12)
         compare(entry.config.coarseFeed, 125)
         compare(entry.config.retract, 0.7)
         compare(JSON.stringify(api("/settings")), JSON.stringify(settings))

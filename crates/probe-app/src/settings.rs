@@ -329,10 +329,11 @@ mod tests {
     fn publishes_only_successfully_saved_settings() {
         let store = Arc::new(Store::default());
         let mut settings = Settings::load(store.clone()).unwrap();
+        let before = settings.snapshot();
         let patch = json!({"coarseFeed":123}).as_object().unwrap().clone();
         store.fail.store(true, Ordering::Relaxed);
         assert!(settings.update(patch.clone()).is_err());
-        assert_eq!(settings.snapshot()["coarseFeed"], 300.0);
+        assert_eq!(settings.snapshot(), before);
         store.fail.store(false, Ordering::Relaxed);
         settings.update(patch).unwrap();
         assert_eq!(settings.snapshot()["coarseFeed"], 123);

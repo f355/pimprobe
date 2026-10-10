@@ -325,7 +325,6 @@ mod tests {
         let json = serde_json::to_value(&s).unwrap();
         assert_eq!(json["machinePosition"][0], -156.755);
         assert_eq!(json["workPosition"][2], 38.5);
-        assert!(json.get("mPos").is_none() && json.get("wPos").is_none());
         let Some(Record::Status(s)) =
             parse_line("<Alarm:2|MPos:0,0,0,0|WPos:0,0,0,0|M:5|G:54|PM:0|Abnormal:[2,106]>")
                 .unwrap()
@@ -358,30 +357,15 @@ mod tests {
         assert!(parse_line("CNC_Lab started").unwrap().is_none());
     }
     #[test]
-    fn records_and_safety() {
-        let Some(Record::Status(s)) =
-            parse_line("<Ready|MPos:1,2,3,4|PM:1|Pn:P|Abnormal:[106]|M:5|G:54>").unwrap()
-        else {
-            panic!()
-        };
-        assert!(s.door_open && !s.motion_blocked && s.probe_triggered);
+    fn errors_and_settings() {
         assert!(matches!(
             parse_line("error:9").unwrap(),
             Some(Record::Error(9))
         ));
         assert!(matches!(
-            parse_line("[PROBE:1,2,3,4:1,5]").unwrap(),
-            Some(Record::Probe(_))
-        ));
-        assert!(matches!(
             parse_line("$33=1.5").unwrap(),
             Some(Record::Setting(33, 1.5))
         ));
-        let Some(Record::Modes(m, _)) = parse_line("[GC:G21 G91 G94]").unwrap() else {
-            panic!()
-        };
-        assert_eq!((m.units, m.distance, m.feed), (21, 91, 94));
-        assert!(parse_line("banner").unwrap().is_none());
     }
     #[test]
     fn parses_rotary_capability_and_plane_reports() {

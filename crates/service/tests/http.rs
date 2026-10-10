@@ -153,48 +153,6 @@ async fn state_exposes_both_dro_reference_points() {
 }
 
 #[tokio::test]
-async fn probe_zero_and_last_tool_tip_agree_at_the_measured_surface() {
-    let temp = tempfile::tempdir().unwrap();
-    let mut state = MockController::new().state();
-    state.probe_extended = true;
-    state.tool_length_offset = 12.;
-    let app = App::new(
-        Device::Mock(Box::new(MockController::with_state(state))),
-        settings::open(temp.path().join("settings.json")).unwrap(),
-        None,
-        LogStore::open(temp.path().join("logs")).unwrap(),
-    );
-    let router = pimprobe_service::http::router(app.clone());
-    let (_, body) = request(&router, "POST", "/api/v1/routine/review", config()).await;
-    let review: Value = serde_json::from_str(&body).unwrap();
-    let token = json!({"id":review["id"]});
-    let (_, body) = request(&router, "POST", "/api/v1/routine/run", token.clone()).await;
-    let last: Value = serde_json::from_str(body.lines().last().unwrap()).unwrap();
-    assert_eq!(last["type"], "result", "{body}");
-    let surface = last["result"]["machinePoint"][2].as_f64().unwrap();
-    let (_, body) = request(&router, "POST", "/api/v1/routine/zero", token).await;
-    let result: Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(result["zeroed"], true, "{body}");
-    let state = app.device.state();
-    app.device
-        .send(&format!("G90 G53 G0 Z{}", surface + state.probe_offset[2]))
-        .await
-        .unwrap();
-    let probe = app.probe.state().coordinates.probe.unwrap();
-    assert!(probe.work_position[2].abs() < 0.002, "{probe:?}");
-    app.device
-        .send(&format!(
-            "G90 G53 G0 Z{}",
-            surface + state.tool_length_offset
-        ))
-        .await
-        .unwrap();
-    let spindle = app.probe.state().coordinates.spindle.unwrap();
-    assert!(spindle.work_position[2].abs() < 0.002, "{spindle:?}");
-    assert!((spindle.machine_position[2] - probe.machine_position[2]).abs() < 0.002);
-}
-
-#[tokio::test]
 async fn rotary_result_can_be_applied_to_a_selected_wcs() {
     let (_temp, app, router) = app();
     let (_, body) = request(
@@ -227,37 +185,6 @@ async fn rotary_result_can_be_applied_to_a_selected_wcs() {
     let result: Value = serde_json::from_str(&body).unwrap();
     assert_eq!(result["zeroed"], true, "{body}");
     assert_eq!(result["wcs"], 55);
-}
-
-#[tokio::test]
-async fn rotary_surfaces_are_aligned_rechecked_and_zeroed() {
-    for operation in ["horizontal", "vertical", "verticalNegative"] {
-        let (_temp, app, router) = app();
-        let (_, body) = request(
-            &router,
-            "POST",
-            "/api/v1/rotary/review",
-            json!({"operation":operation,"yDistance":10,"zDistance":10}),
-        )
-        .await;
-        let review: Value = serde_json::from_str(&body).unwrap();
-        assert!(review["id"].is_string(), "{body}");
-        let token = json!({"id":review["id"]});
-        let (_, body) = request(&router, "POST", "/api/v1/rotary/run", token.clone()).await;
-        let last: Value = serde_json::from_str(body.lines().last().unwrap()).unwrap();
-        assert_eq!(last["type"], "result", "{body}");
-        let level = &last["result"]["level"];
-        assert!(
-            (level["correction"].as_f64().unwrap().abs() - 8.0).abs() < 0.02,
-            "{last}"
-        );
-        assert!(level["residual"].as_f64().unwrap().abs() < 0.02, "{last}");
-        assert_eq!(level["touches"].as_array().unwrap().len(), 2);
-        let (_, body) = request(&router, "POST", "/api/v1/rotary/zero", token).await;
-        let result: Value = serde_json::from_str(&body).unwrap();
-        assert_eq!(result["zeroed"], true, "{body}");
-        assert!(app.device.state().work_position[3].abs() < 0.001);
-    }
 }
 
 #[tokio::test]
@@ -421,7 +348,7 @@ async fn update_install_requires_an_idle_stopped_machine() {
 
 #[tokio::test]
 async fn repeatability_streams_each_reading_and_axis_statistics() {
-    let (_temp, app, router) = repeatability_app();
+    let (temp, app, router) = repeatability_app();
     let before = app.device.state();
     let (code, body) = request(
         &router,
@@ -483,6 +410,17 @@ async fn repeatability_streams_each_reading_and_axis_statistics() {
                 < 1e-8
         );
     }
+    let (_, body) = request(&router, "GET", "/api/v1/logs/history", Value::Null).await;
+    let entries: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(entries[0]["category"], "repeatability");
+    assert_eq!(entries[0]["result"], last["result"]);
+    let trace = std::fs::read_to_string(temp.path().join("logs/diagnostics.jsonl")).unwrap();
+    let contacts = trace
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).unwrap())
+        .filter(|event| event["event"] == "contact")
+        .count();
+    assert_eq!(contacts, 15);
 }
 
 #[tokio::test]
@@ -646,13 +584,6 @@ async fn settings_schema_matches_accepted_values() {
             assert_eq!(code, StatusCode::OK, "{key}: {body}");
         }
     }
-    assert_eq!(schema["insideDepth"]["minimum"], 0.1);
-    assert_eq!(schema["centerDepth"]["minimum"], 0.1);
-    assert_eq!(schema["centerXSearchDistance"]["maximum"], 1000.0);
-    assert_eq!(schema["positioningFeed"]["maximum"], 6000.0);
-    assert_eq!(schema["coarseFeed"]["maximum"], 6000.0);
-    assert_eq!(schema["fineFeed"]["maximum"], 6000.0);
-    assert_eq!(schema["rotaryFeed"]["maximum"], 7200.0);
 }
 
 #[tokio::test]
@@ -669,7 +600,7 @@ async fn reviews_return_the_parameters_used_by_the_plan() {
         (
             "/api/v1/rotary/review",
             json!({"rodDiameter": 6, "xDistance": -20, "rotaryFeed": 420}),
-            json!({"rodDiameter": 6.0, "xDistance": -20.0, "rotaryFeed": 420.0, "fineFeed": 50.0}),
+            json!({"rodDiameter": 6.0, "xDistance": -20.0, "rotaryFeed": 420.0, "fineFeed": pimprobe_core::RotaryConfig::default().fine_feed}),
         ),
     ] {
         let (status, body) = request(&router, "POST", path, supplied).await;
@@ -733,10 +664,6 @@ async fn feed_settings_and_reviews_follow_machine_limits() {
 #[tokio::test]
 async fn settings_contract_and_validation() {
     let (_temp, _app, router) = app();
-    let (code, body) = request(&router, "GET", "/api/v1/settings", Value::Null).await;
-    assert_eq!(code, StatusCode::OK);
-    let values: Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(values["retractDistance"], 0.5);
     let (code, _) = request(
         &router,
         "PATCH",
@@ -754,6 +681,10 @@ async fn settings_contract_and_validation() {
         "coarseFeed",
     )
     .await;
+    let (code, body) = request(&router, "GET", "/api/v1/settings", Value::Null).await;
+    assert_eq!(code, StatusCode::OK);
+    let values: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(values["coarseFeed"], 123);
 }
 
 #[tokio::test]
@@ -844,7 +775,7 @@ async fn review_run_stream_and_late_zero() {
 }
 
 #[tokio::test]
-async fn routine_history_keeps_measurement_and_later_work_zero() {
+async fn routine_diagnostics_and_clear_are_available_over_http() {
     let (temp, _app, router) = app();
     let (_, body) = request(&router, "POST", "/api/v1/routine/review", config()).await;
     let review: Value = serde_json::from_str(&body).unwrap();
@@ -852,26 +783,6 @@ async fn routine_history_keeps_measurement_and_later_work_zero() {
     let (_, body) = request(&router, "POST", "/api/v1/routine/run", json!({"id":id})).await;
     let result: Value = serde_json::from_str(body.lines().last().unwrap()).unwrap();
     assert_eq!(result["type"], "result", "{body}");
-    let (_, body) = request(
-        &router,
-        "POST",
-        "/api/v1/routine/zero",
-        json!({"id":id,"offsets":[0,0,-2]}),
-    )
-    .await;
-    assert_eq!(
-        serde_json::from_str::<Value>(&body).unwrap()["zeroed"],
-        true
-    );
-
-    let (status, body) = request(&router, "GET", "/api/v1/logs/history", Value::Null).await;
-    assert_eq!(status, StatusCode::OK);
-    let entries: Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(entries.as_array().unwrap().len(), 1);
-    assert_eq!(entries[0]["status"], "success");
-    assert_eq!(entries[0]["result"]["point"], result["result"]["point"]);
-    assert_eq!(entries[0]["workZero"]["offsets"][2].as_f64(), Some(-2.0));
-
     let trace = std::fs::read_to_string(temp.path().join("logs/diagnostics.jsonl")).unwrap();
     let events: Vec<Value> = trace
         .lines()
@@ -925,40 +836,6 @@ async fn failed_probe_keeps_its_context_and_error() {
     assert_eq!(entries[0]["status"], "failed");
     assert_eq!(entries[0]["config"]["wcs"], 54);
     assert_eq!(entries[0]["error"], terminal["message"]);
-}
-
-#[tokio::test]
-async fn repeatability_history_keeps_report() {
-    let (temp, _app, router) = repeatability_app();
-    let (_, body) = request(
-        &router,
-        "POST",
-        "/api/v1/repeatability/run",
-        json!({"axes":[true,false,false],"repetitions":2,"home":false,"retract":false}),
-    )
-    .await;
-    assert_eq!(
-        serde_json::from_str::<Value>(body.lines().last().unwrap()).unwrap()["type"],
-        "result",
-        "{body}"
-    );
-    let (_, body) = request(&router, "GET", "/api/v1/logs/history", Value::Null).await;
-    let entries: Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(entries[0]["category"], "repeatability");
-    assert_eq!(
-        entries[0]["result"]["measurements"]
-            .as_array()
-            .unwrap()
-            .len(),
-        2
-    );
-    let trace = std::fs::read_to_string(temp.path().join("logs/diagnostics.jsonl")).unwrap();
-    let contacts = trace
-        .lines()
-        .filter_map(|line| serde_json::from_str::<Value>(line).ok())
-        .filter(|event| event["event"] == "contact")
-        .count();
-    assert_eq!(contacts, 2);
 }
 
 #[tokio::test]

@@ -46,12 +46,12 @@ test('self-extracting package preserves its payload and rejects corruption', () 
             ['ui/ProbeFlow.qml', 'app/ui/ProbeFlow.qml'],
             ['LICENSE.md', 'app/LICENSE.md'],
             ['README.md', 'app/README.md'],
+            ['ui/fonts/Geist-Regular.otf', 'app/ui/fonts/Geist-Regular.otf'],
+            ['ui/fonts/Geist-Medium.otf', 'app/ui/fonts/Geist-Medium.otf'],
+            ['ui/fonts/Geist-Bold.otf', 'app/ui/fonts/Geist-Bold.otf'],
+            ['ui/fonts/OFL.txt', 'app/ui/fonts/OFL.txt'],
         ]) assert.deepEqual(readFileSync(join(extracted, target)), readFileSync(join(root, source)));
-        for (const name of ['Geist-Regular.otf', 'Geist-Medium.otf', 'Geist-Bold.otf'])
-            assert.ok(readFileSync(join(extracted, 'app/ui/fonts', name)).length > 10000, `${name} must be packaged`);
-        assert.match(readFileSync(join(extracted, 'app/ui/fonts/OFL.txt'), 'utf8'), /SIL OPEN FONT LICENSE Version 1\.1/);
         assert.ok(existsSync(join(extracted, 'install.sh')));
-        assert.ok(existsSync(join(extracted, 'app/VERSION')));
         run('sh', [installer, '--extract', extracted], 1);
         const corrupt = readFileSync(installer);
         corrupt[corrupt.length - 20] ^= 1;

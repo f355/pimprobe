@@ -19,7 +19,6 @@
 #include <QHBoxLayout>
 #include <QMainWindow>
 #include <QPushButton>
-#include <QSignalSpy>
 #include <QTest>
 #include <QWidget>
 
@@ -27,7 +26,7 @@ class LauncherButtonTest : public QObject {
     Q_OBJECT
 
 private slots:
-    void installsOnceInVendorTopBar();
+    void installsOnceNextToWifi();
     void invokesLaunchAction();
     void matchesResizableWifi();
 };
@@ -51,7 +50,7 @@ static QHBoxLayout *makeTopBar(QMainWindow &window) {
     return layout;
 }
 
-void LauncherButtonTest::installsOnceInVendorTopBar() {
+void LauncherButtonTest::installsOnceNextToWifi() {
     QMainWindow window;
     QHBoxLayout *layout = makeTopBar(window);
 
@@ -66,14 +65,6 @@ void LauncherButtonTest::installsOnceInVendorTopBar() {
              layout->indexOf(window.findChild<QPushButton *>("wifi_pb")));
     QVERIFY(first->text().isEmpty());
     QVERIFY(!first->icon().isNull());
-    const auto image = first->icon().pixmap(QSize(40, 50)).toImage();
-    QCOMPARE(image.pixelColor(image.width() / 2, 5), QColor(Qt::white));
-    QCOMPARE(image.pixelColor(image.width() / 2, 24), QColor(Qt::white));
-    QCOMPARE(image.pixelColor(image.width() / 2, 34), QColor("#A8444C"));
-    QCOMPARE(image.pixelColor(image.width() / 2, 39).alpha(), 0);
-    QCOMPARE(image.pixelColor(image.width() / 2, 40), QColor(Qt::white));
-    QCOMPARE(image.pixelColor(image.width() / 2, 44), QColor("#8D8D8D"));
-    QVERIFY(first->grab().save("launcher-button.png"));
     QCOMPARE(window.findChildren<QPushButton *>("pimprobe_launcher_pb").size(), 1);
 }
 

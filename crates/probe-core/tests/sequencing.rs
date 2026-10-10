@@ -631,11 +631,10 @@ async fn script_captures_stream_between_fine_and_backoff_submission() {
     };
     let p = review(c.state(), cfg).unwrap();
     let log = Mutex::new(Vec::new());
-    // The final Z positioning deliberately receives no response; only the contact
-    // section's ordering is under test, and cancellation stops before that wait.
+    // Stop after the second backoff; this controller only answers the touch sequence.
     let cancel = CancellationToken::new();
     let trigger = cancel.clone();
-    let _ = run(&c, &p, timing(), cancel, |event| {
+    let error = run(&c, &p, timing(), cancel, |event| {
         if event.kind == "script" {
             log.lock().unwrap().push(event.message);
         }
@@ -651,7 +650,9 @@ async fn script_captures_stream_between_fine_and_backoff_submission() {
             trigger.cancel();
         }
     })
-    .await;
+    .await
+    .unwrap_err();
+    assert_eq!(error, Error::Cancelled);
     let log = log.lock().unwrap();
     let capture = log
         .iter()

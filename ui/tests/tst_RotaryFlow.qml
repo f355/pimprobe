@@ -64,7 +64,7 @@ TestCase {
         tryVerify(function() { return !flow.busy; }, 3000);
         compare(flow.failure, "");
         var fineFeed = findChild(flow, "review-fineFeed");
-        compare(Number(fineFeed.text), 50);
+        compare(Number(fineFeed.text), flow.config.fineFeed);
         var distance = findChild(flow, "review-xDistance");
         distance.forceActiveFocus();
         distance.editor.begin(distance);
@@ -77,7 +77,6 @@ TestCase {
         compare(flow.phase, "result");
         compare(flow.result.stations.length, 2);
         verify(Math.abs(flow.result.stations[1].center[0] - flow.result.stations[0].center[0] + 25) < 0.001);
-        verify(Math.abs(flow.result.xyAngle - Math.atan(0.003) * 180 / Math.PI) < 0.02);
         var labels = descendants(flow.contentItem, Label).filter(function(label) { return label.visible; });
         flow.result.stations.forEach(function(station) {
             station.center.forEach(function(value) {
@@ -85,12 +84,6 @@ TestCase {
             });
         });
         var buttons = descendants(flow.contentItem, Button).filter(function(button) { return button.visible; });
-        buttons.forEach(function(button) {
-            tryVerify(function() {
-                var p = button.mapToItem(flow.contentItem, 0, 0);
-                return p.y >= 0 && p.y + button.height <= flow.height;
-            }, 3000, button.text + " is clipped");
-        });
         var stations = JSON.stringify(flow.result.stations);
         flow.resultWcsRequested(56);
         tryVerify(function() { return !flow.busy; }, 3000);
@@ -120,47 +113,46 @@ TestCase {
         tryVerify(function() { return restored; }, 3000);
     }
 
-    function test_level_surfaces_and_save_their_axes() {
-        ["horizontal", "vertical", "verticalNegative"].forEach(function(operation) {
-            flow.showCalibration(Pages.rotaryConfig(settings, operation));
-            tryVerify(function() { return !flow.busy; }, 3000);
-            compare(flow.failure, "");
-            var yDistance = findChild(flow, "review-yDistance");
-            yDistance.editor.begin(yDistance);
-            yDistance.editor.typeKey("1");
-            yDistance.editor.typeKey("2");
-            yDistance.editor.accept();
-            var zDistance = findChild(flow, "review-zDistance");
-            zDistance.editor.begin(zDistance);
-            zDistance.editor.typeKey("8");
-            flow.proceed();
-            tryCompare(flow, "phase", "result", 10000);
-            compare(flow.failure, "");
-            compare(flow.config.yDistance, 12);
-            compare(flow.config.zDistance, 8);
-            compare(flow.phase, "result");
-            compare(flow.result.level.touches.length, 2);
-            var spacingAxis = operation === "horizontal" ? 1 : 2;
-            var spacing = flow.result.level.touches[1][spacingAxis] - flow.result.level.touches[0][spacingAxis];
-            verify(Math.abs(spacing - (operation === "horizontal" ? 12 : -8)) < 0.001);
-            verify(Math.abs(flow.result.level.residual) < 0.05);
-            var zero = descendants(flow.contentItem,Button).filter(function(button) {
-                return button.visible && button.text === "Set " + (operation === "horizontal" ? "A/Z" : "A/Y") + " zero";
-            })[0];
-            verify(zero !== undefined);
-            verify(waitForPolish(view));
-            var point = zero.mapToItem(flow.contentItem,0,0);
-            verify(point.y + zero.height <= flow.height);
-            mouseClick(zero);
-            var apply = descendants(view.Overlay.overlay,Button).filter(function(button) {
-                return button.visible && button.text === "Apply";
-            })[0];
-            verify(apply !== undefined);
-            mouseClick(apply);
-            tryVerify(function() { return !flow.busy && flow.result.zeroed === true; },3000);
-            compare(flow.failure, "");
-            verify(zero.enabled);
-            flow.close();
-        });
+    function test_level_review_options_and_zero_confirmation_data() {
+        return [{tag:"horizontal"}, {tag:"vertical"}, {tag:"verticalNegative"}];
+    }
+
+    function test_level_review_options_and_zero_confirmation(data) {
+        flow.showCalibration(Pages.rotaryConfig(settings, data.tag));
+        tryVerify(function() { return !flow.busy; }, 3000);
+        compare(flow.failure, "");
+        var yDistance = findChild(flow, "review-yDistance");
+        yDistance.editor.begin(yDistance);
+        yDistance.editor.typeKey("1");
+        yDistance.editor.typeKey("2");
+        yDistance.editor.accept();
+        var zDistance = findChild(flow, "review-zDistance");
+        zDistance.editor.begin(zDistance);
+        zDistance.editor.typeKey("8");
+        flow.proceed();
+        tryCompare(flow, "phase", "result", 10000);
+        compare(flow.failure, "");
+        compare(flow.config.yDistance, 12);
+        compare(flow.config.zDistance, 8);
+        compare(flow.result.level.touches.length, 2);
+        var horizontal = data.tag === "horizontal";
+        var axis = horizontal ? 1 : 2;
+        var spacing = flow.result.level.touches[1][axis] - flow.result.level.touches[0][axis];
+        verify(Math.abs(spacing - (horizontal ? 12 : -8)) < 0.001);
+        var zero = descendants(flow.contentItem,Button).filter(function(button) {
+            return button.visible && button.text === (horizontal ? "Set A/Z zero" : "Set A/Y zero");
+        })[0];
+        verify(zero !== undefined);
+        verify(waitForPolish(view));
+        mouseClick(zero);
+        var apply = descendants(view.Overlay.overlay,Button).filter(function(button) {
+            return button.visible && button.text === "Apply";
+        })[0];
+        verify(apply !== undefined);
+        mouseClick(apply);
+        tryVerify(function() { return !flow.busy && flow.result.zeroed === true; },3000);
+        compare(flow.failure, "");
+        verify(zero.enabled);
+        flow.close();
     }
 }

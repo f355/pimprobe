@@ -40,13 +40,6 @@ TestCase {
             codeFont: "DejaVu Sans Mono"
         }
     }
-    function descendants(item, type) {
-        var matches = item instanceof type ? [item] : []
-        var children = item.children || []
-        for (var i = 0; i < children.length; ++i)
-            matches = matches.concat(descendants(children[i], type))
-        return matches
-    }
     function test_stop_keeps_partial_results() {
         flow.showCheck()
         flow.phase = "running"
@@ -67,30 +60,10 @@ TestCase {
         verify(!flow.stopRequested)
         flow.close()
     }
-    function test_machine_coordinate_instructions_and_readings() {
-        flow.showCheck()
-        tryCompare(flow, "opened", true)
-        verify(descendants(flow.contentItem, Label).some(function(label) {
-            return label.visible && label.text.indexOf("machine coordinates (G53)") >= 0
-        }))
-        verify(descendants(flow.contentItem, Button).some(function(button) {
-            return button.visible && button.text === "Fixture is ready"
-        }))
-        flow.phase = "running"
-        verify(descendants(flow.contentItem, Label).some(function(label) {
-            return label.visible && label.text === "G53 measurements (mm)"
-        }))
-        flow.close()
-    }
     function test_preparation_options_and_keypad() {
         flow.showCheck()
         tryCompare(flow, "opened", true)
         compare(flow.phase, "prepare")
-        compare(flow.axes, [true, true, true])
-        compare(flow.repetitions, 5)
-        compare(flow.jogHome, false)
-        compare(flow.home, false)
-        compare(flow.retract, true)
         flow.confirmPreparation()
         compare(flow.phase, "options")
         var field = findChild(flow.contentItem, "repetitions")

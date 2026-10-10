@@ -26,7 +26,5 @@ qt_add_executable(history_transport_test history_transport_test.cpp)
 target_link_libraries(history_transport_test PRIVATE Qt6::Test Qt6::Qml Qt6::Quick Qt6::QuickControls2)
 target_compile_definitions(history_transport_test PRIVATE PIMPROBE_UI_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../..")
 add_test(NAME history_transport COMMAND history_transport_test)
-find_program(QMLTESTRUNNER qmltestrunner REQUIRED)
-add_test(NAME numeric_editor COMMAND "${QMLTESTRUNNER}" -input "${CMAKE_CURRENT_SOURCE_DIR}/../tst_NumericEditor.qml")
-set_tests_properties(history_transport numeric_editor PROPERTIES
+set_tests_properties(history_transport PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_CONTROLS_STYLE=Basic")

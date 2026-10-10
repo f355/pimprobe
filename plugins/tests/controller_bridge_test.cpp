@@ -193,9 +193,8 @@ void ControllerBridgeTest::rejectsOversizedQueuedCommand() {
     QVERIFY(socket.waitForConnected());
     socket.write(frame('Q', QByteArray(4097, 'G')));
     QVERIFY(socket.waitForBytesWritten());
-    QTest::qWait(50);
+    QTRY_COMPARE(socket.state(), QLocalSocket::UnconnectedState);
     QCOMPARE(queued.size(), 0);
-    QCOMPARE(socket.state(), QLocalSocket::UnconnectedState);
 }
 
 void ControllerBridgeTest::disconnectsClientThatStopsReading() {

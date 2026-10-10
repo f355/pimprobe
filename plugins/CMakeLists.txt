@@ -76,7 +76,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR PIMPROBE_ABSTRACT_PLUGIN)
         target_link_libraries(pimprobe_plugin_metadata_test PRIVATE Qt6::Core)
         add_test(NAME pimprobe_plugin_metadata_test COMMAND pimprobe_plugin_metadata_test
             $<TARGET_FILE:pimprobe_proxy_plugin> $<TARGET_FILE:pimprobe_launcher_plugin>)
-        if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND PIMPROBE_ABSTRACT_PLUGIN)
             add_test(NAME pimprobe_plugin_symbols_test COMMAND ${CMAKE_COMMAND}
                 -DNM=${CMAKE_NM} -DVENDOR=${PIMPROBE_ABSTRACT_PLUGIN}
                 -DPROXY=$<TARGET_FILE:pimprobe_proxy_plugin>

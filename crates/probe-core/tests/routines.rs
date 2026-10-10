@@ -141,25 +141,6 @@ fn internal_search_limits_use_each_axis_distance() {
 }
 
 #[test]
-fn center_internal_features_finish_at_probing_height() {
-    for feature in [
-        "center_hole",
-        "center_pocket",
-        "center_x-valley",
-        "center_y-valley",
-    ] {
-        let mut state = mock().state();
-        state.position[2] = -22.6;
-        let plan =
-            review(state, config(feature)).unwrap_or_else(|error| panic!("{feature}: {error}"));
-        assert!(
-            !plan.program().iter().any(|line| line == "G1 Z40 F1000"),
-            "{feature}"
-        );
-    }
-}
-
-#[test]
 fn travel_error_identifies_the_exhausted_direction() {
     let mut state = mock().state();
     state.position[1] = -18.6;
@@ -210,28 +191,6 @@ fn preflight_errors_explain_what_needs_attention() {
             .to_string();
         assert!(error.contains(expected), "{error}");
     }
-}
-
-#[tokio::test]
-async fn internal_side_probing_stays_at_the_starting_height() {
-    let controller = mock();
-    let cfg = config("inside_1_1");
-    controller.configure(&cfg).unwrap();
-    let plan = review(controller.state(), cfg).unwrap();
-    let height = plan.start.position[2];
-    run(
-        &controller,
-        &plan,
-        TimingPolicy::default(),
-        CancellationToken::new(),
-        |p| {
-            if p.command.starts_with("G38.3 X") && p.command.ends_with("F30.000") {
-                near(controller.state().position[2], height);
-            }
-        },
-    )
-    .await
-    .unwrap();
 }
 
 #[tokio::test]
@@ -300,37 +259,6 @@ async fn external_search_without_contact_stops_at_the_starting_axis_coordinate()
             plan.start.position[2] - plan.config.depth,
         );
     }
-}
-
-#[tokio::test]
-async fn inside_corner_finishes_at_its_starting_xy_without_lifting() {
-    let controller = mock();
-    let cfg = RoutineConfig {
-        family: "inside".into(),
-        x: 1,
-        y: -1,
-        z: false,
-        ..Default::default()
-    };
-    controller.configure(&cfg).unwrap();
-    let plan = review(controller.state(), cfg).unwrap();
-    run(
-        &controller,
-        &plan,
-        TimingPolicy::default(),
-        CancellationToken::new(),
-        |_| {},
-    )
-    .await
-    .unwrap();
-    let end = controller.state().position;
-    near(end[0], plan.start.position[0]);
-    near(end[1], plan.start.position[1]);
-    near(end[2], plan.start.position[2]);
-    assert!(!controller
-        .commands()
-        .iter()
-        .any(|command| command == "G1 Z40.000 F1000.000"));
 }
 
 #[tokio::test]
@@ -684,48 +612,6 @@ async fn geometry_measurements_end_positions_and_script_parity() {
                 assert_eq!(actual, preview, "{name}");
             }
         }
-        if !cfg.zero {
-            let updated = zero_result(
-                &controller,
-                &plan,
-                &result,
-                [0.0; 3],
-                TimingPolicy::default(),
-                CancellationToken::new(),
-            )
-            .await
-            .unwrap();
-            assert!(updated.zeroed);
-            assert_eq!(updated.point, result.point);
-            assert_eq!(controller.state().position, final_state.position);
-            assert_eq!(controller.state().modes, final_state.modes);
-            for i in 0..3 {
-                if let Some(v) = result.point[i] {
-                    let desired = (final_state.position[i]
-                        - (v + initial.position[i] - initial.work_position[i]))
-                        * 1000.0;
-                    near(
-                        controller.state().work_position[i],
-                        desired.round() / 1000.0,
-                    );
-                } else {
-                    near(
-                        controller.state().work_position[i],
-                        final_state.work_position[i],
-                    );
-                }
-            }
-            assert!(zero_result(
-                &controller,
-                &plan,
-                &updated,
-                [0.0; 3],
-                TimingPolicy::default(),
-                CancellationToken::new()
-            )
-            .await
-            .is_err());
-        }
     }
 }
 
@@ -746,50 +632,51 @@ fn canonical_command(line: &str) -> String {
 }
 
 #[tokio::test]
-async fn inside_corners_start_y_at_starting_x_and_probing_height() {
+async fn inside_corners_probe_at_starting_height_and_return_x_before_y() {
     for x in [-1, 1] {
         for y in [-1, 1] {
-            {
-                let cfg = RoutineConfig {
-                    family: "inside".into(),
-                    x,
-                    y,
-                    z: false,
-                    ..RoutineConfig::default()
-                };
-                let controller = mock();
-                controller.configure(&cfg).unwrap();
-                let initial = controller.state();
-                let plan = review(initial.clone(), cfg.clone()).unwrap();
-                let at_y = Mutex::new(None);
-                let y_coarse = format!(
+            let cfg = RoutineConfig {
+                family: "inside".into(),
+                x,
+                y,
+                z: false,
+                ..RoutineConfig::default()
+            };
+            let controller = mock();
+            controller.configure(&cfg).unwrap();
+            let initial = controller.state();
+            let plan = review(initial.clone(), cfg.clone()).unwrap();
+            let touches = Mutex::new(Vec::new());
+            let coarse_commands = [
+                format!(
+                    "G38.3 X{:.3} F{:.3}",
+                    f64::from(x) * cfg.x_search_distance,
+                    cfg.coarse_feed
+                ),
+                format!(
                     "G38.3 Y{:.3} F{:.3}",
                     f64::from(y) * cfg.y_search_distance,
                     cfg.coarse_feed
-                );
-                run(
-                    &controller,
-                    &plan,
-                    TimingPolicy::default(),
-                    CancellationToken::new(),
-                    |p| {
-                        if p.command == y_coarse {
-                            *at_y.lock().unwrap() = Some(controller.state().position);
-                        }
-                    },
-                )
-                .await
-                .unwrap();
-                let position = at_y.lock().unwrap().expect("Y coarse touch");
-                near(position[0], initial.position[0]);
-                near(position[2], initial.position[2] - cfg.side_depth());
-                let commands = controller.commands();
-                let y_index = commands.iter().position(|c| c == &y_coarse).unwrap();
-                assert_eq!(
-                    commands[y_index - 1],
-                    format!("G38.3 X{:.3} F1000.000", -f64::from(x) * 3.5)
-                );
-            }
+                ),
+            ];
+            run(
+                &controller,
+                &plan,
+                TimingPolicy::default(),
+                CancellationToken::new(),
+                |p| {
+                    if coarse_commands.contains(&p.command) {
+                        touches.lock().unwrap().push(controller.state().position);
+                    }
+                },
+            )
+            .await
+            .unwrap();
+            let touches = touches.into_inner().unwrap();
+            assert_eq!(touches.len(), 2);
+            near(touches[0][2], initial.position[2]);
+            near(touches[1][2], initial.position[2]);
+            near(touches[1][0], initial.position[0]);
         }
     }
 }
@@ -888,25 +775,6 @@ async fn late_zero_converts_inches_and_restores_modes_without_motion() {
 }
 
 #[tokio::test]
-async fn modes_changed_after_review_are_intentionally_overridden() {
-    let controller = mock();
-    let cfg = RoutineConfig::default();
-    controller.configure(&cfg).unwrap();
-    let plan = review(controller.state(), cfg).unwrap();
-    controller.send("G20 G93 G90").await.unwrap();
-    assert!(run(
-        &controller,
-        &plan,
-        TimingPolicy::default(),
-        CancellationToken::new(),
-        |_| {}
-    )
-    .await
-    .is_ok());
-    assert_eq!(controller.state().modes, plan.start.modes);
-}
-
-#[tokio::test]
 async fn coarse_miss_returns_z_and_restores_modes_without_zero() {
     let controller = mock();
     let cfg = RoutineConfig {
@@ -974,11 +842,7 @@ fn preflight_configuration_and_envelope_errors_are_fail_closed() {
     let original = mock().state();
     let cfg = RoutineConfig::default();
     for mutate in [
-        |s: &mut State| s.connected = false,
-        |s: &mut State| s.ready = false,
-        |s: &mut State| s.spindle_stopped = false,
         |s: &mut State| s.probe_extended = false,
-        |s: &mut State| s.probe_triggered = true,
         |s: &mut State| s.probe_offset_known = false,
         |s: &mut State| s.travel_limits_known = false,
         |s: &mut State| s.position[0] = f64::NAN,

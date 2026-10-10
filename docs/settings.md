@@ -6,9 +6,20 @@ Settings are saved when you accept a value and survive restarts. Distances use m
 ![Probe settings](images/settings.png)
 <!-- /guide-only -->
 
-## Ball diameter and backoff
+## Ball diameter
 
-**Probe ball diameter** corrects the touched surface by the ball's radius. It is separate from the machine's probe-to-spindle calibration.
+**Probe ball diameter** is the effective diameter used to correct side touches. The physical ball is 2 mm, but the probe mechanism moves and the shaft bends before a touch is recorded. Calibration accounts for that movement. The machine's probe-to-spindle offsets are separate.
+
+## Measure the effective diameter
+
+1. Secure a gauge block or gauge pin of known size. Keep the fine feed you normally use.
+2. In **Center**, measure the block with **X ridge** or **Y ridge** across its known dimension, or measure an upright pin with **Boss**. For a pin, repeat from the measured center before taking the diameter reading.
+3. Read **Raw span** on the result page. **Effective diameter = |raw span − known size|**. For example, a 10 mm block with a raw span of 11.94 mm gives **1.94 mm**.
+4. Enter this value in **Probe ball diameter** and measure again to check it.
+
+For a pin, use the average of the X and Y raw spans.
+
+## Backoff
 
 **Retract distance** is the backoff after each coarse and fine touch. It must let the probe release. The fine search goes back to the coarse contact, allowing another 0.5 mm beyond it.
 

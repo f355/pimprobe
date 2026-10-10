@@ -274,9 +274,13 @@ TestCase {
         ]
         for (var item of cases) {
             flow.routine = {family:"center", feature:item.feature}
-            flow.spans = item.spans
+            var raw = item.spans.map(function(v) { return v === null ? null : v - 2 })
+            flow.acceptResult({point:[0, 0, null], machinePoint:[-100, -80, null],
+                spans:item.spans, rawSpans:raw, rawPoint:[-43, -70, null], zeroed:false}, "measured")
             compare(flow.dimensions.map(function(d) { return d.label }), item.labels)
             compare(flow.dimensions.map(function(d) { return d.value }), item.spans.filter(function(v) { return v !== null }))
+            compare(flow.dimensions.map(function(d) { return d.raw }), raw.filter(function(v) { return v !== null }))
+            compare(flow.rawPoint, [-43, -70, null])
         }
     }
 

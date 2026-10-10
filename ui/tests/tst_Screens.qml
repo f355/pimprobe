@@ -48,7 +48,7 @@ TestCase {
                 LabButton { text: I18n.tr("Check for updates"); primary: true; notification: updates.updateAvailable; onClicked: updates.show() }
             }
         }
-        UpdateFlow { id: updates; client: client; settings: page.settings; uiFont: host.font.family }
+        UpdateFlow { id: updates; parent: page; client: client; settings: page.settings; uiFont: host.font.family }
     }
     readonly property var point: [-120.128, -95.204, -90.375]
     readonly property var readingRows: [
@@ -82,6 +82,7 @@ TestCase {
     function init() {
         failOnWarning(/(?!(.*Populating font|.*Sans Serif)).*/);
         client.error = "";
+        page.contextHelp.active = false;
         page.actionError = "";
         client.state = client.readyState();
         children(page, PageView).forEach(function(view) { if (view.opened) view.close(); });
@@ -92,17 +93,23 @@ TestCase {
         children(page, NumberField).forEach(function(field) { field.editor.cancel(); field.deselect(); });
         children(page, TabBar)[0].currentIndex = 0;
         findChild(page, "droReference").probeSelected = true;
-        children(page, Flickable).forEach(function(view) { view.contentY = 0; view.contentX = 0; });
+        children(page, Flickable).forEach(function(view) { view.contentY = view.originY; view.contentX = view.originX; });
         verify(waitForPolish(host));
     }
-    function cleanup() {
+    function cleanupTestCase() {
         I18n.language = "en";
     }
     function showResult(family, selection, axes, spans) {
         page.openRoutineReview(family, selection);
         var flow = component(ProbeFlow);
+        var rawSpans = (spans || [null, null, null]).map(function(v) {
+            var internal = selection === "hole" || selection === "pocket" || String(selection).indexOf("valley") >= 0;
+            return v === null ? null : v + (internal ? -2 : 2);
+        });
         flow.acceptResult({point: [0, 0, 0].map(function(v, i) { return axes[i] ? v : null; }),
             machinePoint: point.map(function(v, i) { return axes[i] ? v : null; }),
+            rawPoint: [-124, -114, -40].map(function(v, i) { return axes[i] ? v : null; }),
+            rawSpans: rawSpans,
             spans: spans || [null, null, null], zeroed: false}, "screen-result");
         flow.logText = client.program.join("\n");
         return flow;
@@ -196,7 +203,21 @@ TestCase {
             {tag:"69-outside-help-details", kind:"help-details", tab:0},
             {tag:"70-rotary-help-details", kind:"help-details", tab:3},
             {tag:"71-settings-help-details", kind:"help-details", tab:4},
-            {tag:"72-help-path", kind:"help-image", tab:0}
+            {tag:"72-help-path", kind:"help-image", tab:0},
+            {tag:"73-help-coordinates", kind:"help-tip", title:"Coordinates"},
+            {tag:"74-help-wcs", kind:"help-tip", title:"Work coordinates"},
+            {tag:"76-help-actuator", kind:"help-tip", title:"Extend / Retract"},
+            {tag:"77-help-tabs", kind:"help-tip", title:"Probing tabs"},
+            {tag:"78-help-distance", kind:"help-tip", title:"X search distance", tab:1},
+            {tag:"79-help-settings", kind:"help-tip", title:"Probe ball diameter", tab:4},
+            {tag:"80-guide-index", kind:"guide"},
+            {tag:"81-help-retracted", kind:"help", tab:0, actuator:0},
+            {tag:"82-help-result-contacts", kind:"inside", helpTitle:"Contacts · G53 · mm"},
+            {tag:"83-help-result-span", kind:"pocket", helpTitle:"Raw span · mm"},
+            {tag:"84-help-rotary-centers", kind:"rotary", helpTitle:"Axis centers · G53 · mm"},
+            {tag:"85-help-rotary-tilt", kind:"level", helpTitle:"Remaining tilt"},
+            {tag:"86-help-repeatability-spread", kind:"repeat-result", helpTitle:"Std dev"},
+            {tag:"87-help-confirmation", kind:"review", help:true}
         ];
         return ["en", "zh_CN", "sv"].reduce(function(rows, language) {
             return rows.concat(screens.map(function(screen) {
@@ -210,6 +231,12 @@ TestCase {
         var tabs = children(page, TabBar)[0];
         var kind = data.kind;
         if (data.tab !== undefined) tabs.currentIndex = data.tab;
+        if (data.actuator !== undefined)
+            client.state = Object.assign({}, client.state, {status:Object.assign({}, client.state.status,
+                {probeActuator:data.actuator})});
+        verify(waitForPolish(host));
+        host.update();
+        verify(waitForRendering(host.contentItem));
         if (kind === "update-marker") {
             updates.available = {name: "Update", notes: "Changes"};
         } else if (kind === "tab") {
@@ -240,6 +267,8 @@ TestCase {
         else if (kind === "help" || kind === "help-details" || kind === "help-image") {
             page.openHelp();
             if (kind === "help-details" || kind === "help-image") {
+                page.openGuide();
+                component(OperatorGuide).pageIndex = data.tab + 1;
                 var document = component(HelpDocument);
                 verify(waitForPolish(host));
                 var sections = children(document, MenuButton).filter(function(b) { return b.visible; });
@@ -258,6 +287,14 @@ TestCase {
                 compare(document.contentWidth, document.availableWidth);
             }
         }
+        else if (kind === "help-tip") {
+            page.openHelp();
+            verify(waitForPolish(host));
+            tryVerify(function() { return page.contextHelp.tips.length > 0; });
+            var tip = page.contextHelp.tips.filter(function(item) { return item.title === I18n.tr(data.title); })[0];
+            verify(tip !== undefined);
+            page.contextHelp.select(tip);
+        } else if (kind === "guide") { page.openHelp(); page.openGuide(); }
         else if (kind.indexOf("exit") === 0) {
             page.requestExit();
             if (kind === "exit-error") page.actionError = "Probe retraction failed. Check the actuator.";
@@ -346,7 +383,24 @@ TestCase {
             }
             if (kind === "log") result.sourceVisible = true;
         }
+        if (data.helpTitle || data.help) {
+            page.openHelp();
+            verify(waitForPolish(host));
+            tryVerify(function() { return page.contextHelp.headerGuide !== null; });
+            if (data.helpTitle) {
+                var resultTip = page.contextHelp.tips.filter(function(item) { return item.title === I18n.tr(data.helpTitle); })[0];
+                verify(resultTip !== undefined);
+                page.contextHelp.select(resultTip);
+            }
+        }
         verify(waitForPolish(host));
+        page.contextHelp.refresh();
+        host.update();
+        verify(waitForRendering(host.contentItem));
+        // Wrapping translated labels can schedule a second text-layout pass.
+        verify(waitForPolish(host));
+        host.update();
+        verify(waitForRendering(host.contentItem));
         var path = Qt.resolvedUrl("../../build/ui-captures/" + data.tag + ".png").toString().replace("file://","");
         var capture = grabImage(host.contentItem.parent);
         compare(capture.width, 800);
@@ -357,11 +411,11 @@ TestCase {
         if (kind === "update-confirm") mouseClick(button(host.Overlay.overlay, "Cancel"));
     }
     function checkControls(item) {
-        children(item, Button).concat(children(item, TextField)).filter(function(control) {
+        children(item, Button).concat(children(item, TabButton), children(item, TextField)).filter(function(control) {
             if (!control.visible) return false;
             var parent = control.parent;
             while (parent && parent !== item) {
-                if (parent instanceof Flickable) return false;
+                if (parent instanceof Flickable && !(control instanceof TabButton)) return false;
                 parent = parent.parent;
             }
             return true;
@@ -369,7 +423,7 @@ TestCase {
             var p = control.mapToItem(host.contentItem,0,0);
             verify(control.width >= 48 && control.height >= 48, control.text + " touch target");
             verify(p.x >= -0.5 && p.y >= -0.5 && p.x + control.width <= 800.5 && p.y + control.height <= 480.5,
-                control.text + " outside screen");
+                control.text + " outside screen at " + p.x + "," + p.y + " size " + control.width + "," + control.height);
             if (control instanceof Button && control.contentItem instanceof Label) {
                 verify(control.contentItem.implicitWidth <= control.contentItem.width + 0.5,
                     control.text + " label is clipped");

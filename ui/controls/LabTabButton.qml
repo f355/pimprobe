@@ -21,7 +21,7 @@ TabButton {
     id: control
     property bool notification: false
     font.pixelSize: Theme.textSize
-    padding: 6
+    padding: 4
 
     contentItem: Label {
         text: control.text

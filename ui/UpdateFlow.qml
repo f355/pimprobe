@@ -163,6 +163,7 @@ Popup {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 48
                     text: I18n.tr('Check automatically')
+                    helpText: I18n.tr("Check the selected update channel at each startup. A marker appears on Settings when an update is available.")
                     font.pixelSize: 20
                     checked: flow.automaticChecks
                     enabled: flow.settings.loaded && flow.phase !== "installing"
@@ -172,6 +173,7 @@ Popup {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 48
                     text: I18n.tr('Development releases')
+                    helpText: I18n.tr("Choose development builds instead of regular releases. The selected channel is saved and checked at startup.")
                     font.pixelSize: 20
                     checked: flow.development
                     enabled: flow.settings.loaded && flow.phase !== "installing"
@@ -227,6 +229,7 @@ Popup {
                 LabButton {
                     visible: flow.phase === "error"
                     text: I18n.tr('Try again')
+                    helpText: I18n.tr("Check GitHub again for the latest version on the selected channel.")
                     Layout.preferredWidth: 232
                     Layout.preferredHeight: 64
                     onClicked: flow.reload()

@@ -20,6 +20,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import "controls"
 import "ProbePages.js" as Pages
+import "controls/HelpText.js" as HelpText
 
 RowLayout {
     id: view
@@ -42,58 +43,108 @@ RowLayout {
                 wrapMode: Text.WordWrap
                 color: Theme.text
             }
-            Repeater {
-                model: view.flow.dimensions
-                RowLayout {
-                    required property var modelData
+            RowLayout {
+                visible: view.flow.dimensions.length > 0
+                Layout.fillWidth: true
+                spacing: 12
+                ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 12
                     Label {
-                        text: I18n.tr('%1 · mm', [I18n.tr(parent.modelData.label)])
-                        Layout.fillWidth: true
-                        font.pixelSize: 18
+                        text: I18n.tr('Size · mm')
+                        Layout.preferredHeight: 48
+                        verticalAlignment: Text.AlignBottom
                         color: Theme.textMuted
+                        font.pixelSize: 18
                     }
+                    Repeater {
+                        model: view.flow.dimensions
+                        RowLayout {
+                            required property var modelData
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 56
+                            Label {
+                                text: I18n.tr(parent.modelData.label)
+                                Layout.fillWidth: true
+                                color: Theme.textMuted
+                                font.pixelSize: 18
+                            }
+                            Label {
+                                text: parent.modelData.value.toFixed(3)
+                                color: Theme.text
+                                font.family: view.flow.codeFont
+                                font.pixelSize: 24
+                            }
+                        }
+                    }
+                    HelpTip {
+                        title: I18n.tr('Size · mm')
+                        text: HelpText.descriptions.size
+                    }
+                }
+                ColumnLayout {
+                    Layout.minimumWidth: 128
+                    Layout.preferredWidth: 128
+                    Layout.maximumWidth: 128
+                    spacing: 12
                     Label {
-                        text: parent.modelData.value.toFixed(3)
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 48
+                        text: I18n.tr('Raw span · mm')
+                        color: Theme.textMuted
+                        font.pixelSize: 18
+                        horizontalAlignment: Text.AlignRight
+                        verticalAlignment: Text.AlignBottom
+                        wrapMode: Text.WordWrap
+                    }
+                    Repeater {
+                        model: view.flow.dimensions
+                        Label {
+                            required property var modelData
+                            text: modelData.raw === null ? "—" : modelData.raw.toFixed(3)
+                            Layout.alignment: Qt.AlignRight
+                            Layout.preferredHeight: 56
+                            color: Theme.text
+                            font.family: view.flow.codeFont
+                            font.pixelSize: 24
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                    }
+                    HelpTip {
+                        title: I18n.tr('Raw span · mm')
+                        text: HelpText.descriptions.rawSpan
+                    }
+                }
+            }
+            ColumnLayout {
+                visible: view.flow.dimensions.length === 0
+                Layout.fillWidth: true
+                spacing: 12
+                Label {
+                    text: I18n.tr('Contacts · G53 · mm')
+                    color: Theme.textMuted
+                    font.pixelSize: 18
+                }
+                Repeater {
+                    model: view.flow.measuredAxes
+                    Label {
+                        required property int modelData
+                        text: ["X", "Y", "Z"][modelData] + " "
+                            + (view.flow.rawPoint[modelData] === null ? "—" : view.flow.rawPoint[modelData].toFixed(3))
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 56
+                        verticalAlignment: Text.AlignVCenter
                         font.family: view.flow.codeFont
-                        font.pixelSize: 26
+                        font.pixelSize: 28
                         color: Theme.text
                     }
                 }
-            }
-            Loader {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.minimumHeight: 48
-                sourceComponent: view.flow.routine.family === "center" ? centerDiagram : view.flow.routine.family === "inside" ? insideDiagram : outsideDiagram
-                Component {
-                    id: centerDiagram
-                    CenterProbeButton {
-                        feature: view.flow.routine.z ? "z" : view.flow.routine.feature
-                        label: ""
-                        enabled: false
-                    }
-                }
-                Component {
-                    id: insideDiagram
-                    InsideProbeButton {
-                        xApproach: view.flow.routine.x || 0
-                        yApproach: view.flow.routine.y || 0
-                        zApproach: view.flow.routine.z || false
-                        enabled: false
-                    }
-                }
-                Component {
-                    id: outsideDiagram
-                    OutsideProbeButton {
-                        xApproach: view.flow.routine.x || 0
-                        yApproach: view.flow.routine.y || 0
-                        zApproach: view.flow.routine.z || false
-                        enabled: false
-                    }
+                HelpTip {
+                    title: I18n.tr('Contacts · G53 · mm')
+                    text: HelpText.descriptions.rawContacts
                 }
             }
+            Item { Layout.fillHeight: true }
         }
         NumericKeypad {
             anchors.fill: parent
@@ -128,6 +179,8 @@ RowLayout {
                 Layout.preferredHeight: 56
                 onClicked: wcsPicker.open()
                 Accessible.name: I18n.tr('Choose result work coordinates')
+                helpTitle: Accessible.name
+                helpText: HelpText.descriptions["Choose result work coordinates"]
             }
         }
         ScrollView {
@@ -180,6 +233,10 @@ RowLayout {
                                 font.family: view.flow.codeFont
                                 font.pixelSize: 16
                             }
+                            HelpTip {
+                                title: I18n.tr('Measured · G53 · mm')
+                                text: HelpText.descriptions.measuredPoint
+                            }
                         }
                         NumberField {
                             objectName: "resultOffset" + axis.modelData
@@ -191,6 +248,7 @@ RowLayout {
                             Layout.preferredWidth: 112
                             Layout.preferredHeight: 56
                             Accessible.name: I18n.tr('%1 origin offset', [["X", "Y", "Z"][axis.modelData]])
+                            helpText: HelpText.descriptions.offset
                             onCommitted: function (value) {
                                 view.flow.setOffset(axis.modelData, value);
                             }
@@ -207,6 +265,8 @@ RowLayout {
                         font.pixelSize: 20
                     }
                     NumberField {
+                        helpTitle: I18n.tr('Safe Z lift · mm')
+                        helpText: HelpText.descriptions.safeZ
                         editor: view.editor
                         minimum: 0.1
                         maximum: 1000

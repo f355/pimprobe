@@ -25,6 +25,7 @@ Rectangle {
     property string detail
     property string uiFont: "sans-serif"
     property bool backEnabled: true
+    property bool showHelp: true
     signal back()
     implicitHeight: Theme.headerHeight
     color: Theme.header
@@ -54,6 +55,19 @@ Rectangle {
             font.family: header.uiFont
             font.pixelSize: 18
             color: Theme.textMuted
+        }
+        GuideButton {
+            objectName: "headerHelpGuide"
+            controller: helpButton.controller
+            visible: header.showHelp && controller !== null && controller.active
+            Layout.preferredWidth: 112
+            Layout.preferredHeight: 48
+        }
+        HelpButton {
+            id: helpButton
+            visible: header.showHelp && controller !== null
+            Layout.preferredWidth: 48
+            Layout.preferredHeight: 48
         }
     }
 }

@@ -2,6 +2,8 @@
 
 De stora koordinaterna visar den uppmätta ytan eller centrumet i **G53**. De mindre koordinaterna visar samma punkt i valt **G54–G59**. Probkalibrering och kompensation för kulradien är redan tillämpade.
 
+Vid centrummätningar inkluderar **Mått** kulkompensation; **Råmått** är avståndet mellan finkontakterna före kompensation. Kant- och Z-resultat visar okompenserade maskinkoordinater under **Kontakter**.
+
 <!-- guide-only -->
 ![Mätresultat och nollpunktsförskjutningar](../images/result.png)
 <!-- /guide-only -->

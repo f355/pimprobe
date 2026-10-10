@@ -24,6 +24,9 @@ TextField {
     required property real maximum
     property real value: minimum
     property bool initialized: false
+    property string helpTitle: Accessible.name
+    property string helpText: ""
+    HelpTip { target: field; title: field.helpTitle; text: field.helpText }
     signal committed(real value)
     text: String(value)
     color: Theme.text

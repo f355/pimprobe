@@ -537,6 +537,7 @@ async fn geometry_measurements_end_positions_and_script_parity() {
         let plan = review(initial.clone(), cfg.clone()).unwrap();
         let script = Mutex::new(Vec::<String>::new());
         let commands = Mutex::new(Vec::<String>::new());
+        let contacts = Mutex::new(Vec::new());
         let result = run(
             &controller,
             &plan,
@@ -549,6 +550,12 @@ async fn geometry_measurements_end_positions_and_script_parity() {
                 if !p.command.is_empty() {
                     commands.lock().unwrap().push(p.command);
                 }
+                if let (Some(measurement), Some(contact)) = (p.measurement, p.contact) {
+                    contacts
+                        .lock()
+                        .unwrap()
+                        .push((measurement, contact.position));
+                }
             },
         )
         .await
@@ -557,6 +564,17 @@ async fn geometry_measurements_end_positions_and_script_parity() {
         assert_eq!(result.zeroed, expected.result.zeroed, "{name}");
         assert_eq!(result.wcs, expected.result.wcs);
         assert_eq!(result.axes, expected.result.axes);
+        if cfg.family != "center" || cfg.z {
+            for (measurement, position) in contacts.into_inner().unwrap() {
+                let axis = match measurement.as_str() {
+                    "x" => 0,
+                    "y" => 1,
+                    "z" => 2,
+                    _ => panic!("{measurement}"),
+                };
+                near(result.raw_point[axis].unwrap(), position[axis]);
+            }
+        }
         for i in 0..3 {
             match (result.point[i], expected.result.point[i]) {
                 (Some(a), Some(b)) => near(a, b),
@@ -690,16 +708,22 @@ async fn center_spans_are_compensated_and_survive_work_zero_offsets() {
         let controller = mock();
         controller.configure(&cfg).unwrap();
         let plan = review(controller.state(), cfg.clone()).unwrap();
+        let contacts = Mutex::new(Vec::new());
         let result = run(
             &controller,
             &plan,
             TimingPolicy::default(),
             CancellationToken::new(),
-            |_| {},
+            |progress| {
+                if let (Some(name), Some(contact)) = (progress.measurement, progress.contact) {
+                    contacts.lock().unwrap().push((name, contact.position));
+                }
+            },
         )
         .await
         .unwrap();
         let serialized = serde_json::to_value(&result).unwrap();
+        let contacts = contacts.into_inner().unwrap();
         let spans = serialized["spans"]
             .as_array()
             .expect("measured spans in result");
@@ -710,6 +734,23 @@ async fn center_spans_are_compensated_and_survive_work_zero_offsets() {
                 continue;
             }
             let value = spans[i].as_f64().unwrap();
+            let axis = ["x", "y"][i];
+            let low = contacts
+                .iter()
+                .find(|(name, _)| name == &format!("{axis}_low"))
+                .unwrap()
+                .1[i];
+            let high = contacts
+                .iter()
+                .find(|(name, _)| name == &format!("{axis}_high"))
+                .unwrap()
+                .1[i];
+            near(result.raw_spans[i].unwrap(), (high - low).abs());
+            near(result.raw_point[i].unwrap(), (low + high) / 2.0);
+            near(
+                serialized["rawSpans"][i].as_f64().unwrap(),
+                (high - low).abs(),
+            );
             if i == 0 && matches!(feature, "hole" | "boss") {
                 // The first pass starts 1.5 mm away from the circle's Y center.
                 assert!(value < 14.0);
@@ -735,6 +776,8 @@ async fn center_spans_are_compensated_and_survive_work_zero_offsets() {
         )
         .await
         .unwrap();
+        assert_eq!(updated.raw_point, result.raw_point);
+        assert_eq!(updated.raw_spans, result.raw_spans);
         assert_eq!(
             serde_json::to_value(updated).unwrap()["spans"],
             serialized["spans"]

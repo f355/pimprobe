@@ -44,22 +44,21 @@ TestCase {
     }
     function test_expanded_pages_data() {
         return ["en", "zh_CN", "sv"].reduce(function(rows, language) {
-            return rows.concat([0,1,2,3,4].map(function(page) {
-                return {tag:language + "-" + page, language:language, page:page};
+            return rows.concat(HelpPages.guidesForLanguage(language).map(function(page, index) {
+                return {tag:language + "-" + index, language:language, page:index};
             }));
         }, []);
     }
     function test_expanded_pages(data) {
         failOnWarning(/^(?!.*(?:Populating font|Sans Serif)).*/);
-        document.sections = HelpPages.forLanguage(data.language)[data.page];
+        document.sections = HelpPages.guidesForLanguage(data.language)[data.page].sections;
         verify(waitForPolish(host));
         var headings = children(document, MenuButton).filter(function(button) { return button.visible; });
-        verify(headings.length > 0);
         headings.forEach(function(button) { button.clicked(); });
         verify(waitForPolish(host));
         tryVerify(function() {
-            return children(document, TextArea).filter(function(area) { return area.visible; })
-                .every(function(area) { return area.width > 0; });
+            var paragraphs = children(document, TextArea).filter(function(area) { return area.visible; });
+            return paragraphs.length > 0 && paragraphs.every(function(area) { return area.width > 0; });
         });
         compare(document.contentWidth, document.availableWidth);
         children(document, TextArea).filter(function(area) { return area.visible; }).forEach(function(area) {

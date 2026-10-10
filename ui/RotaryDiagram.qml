@@ -21,6 +21,8 @@ import "ProbeDrawing.js" as Draw
 ProbeButton {
     diagramLabel: I18n.tr('Calibrate rotary axis')
     caption: I18n.tr('Axis center')
+    helpTitle: caption
+    helpText: I18n.tr("Start above a straight rod held in the chuck. Measure its axis center at two X positions and the angle of the axis.")
     contentItem: ProbeDiagram {
         onPaint: {
             var c = getContext("2d");

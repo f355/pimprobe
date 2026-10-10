@@ -30,10 +30,10 @@ Proben probar varje yta två gånger: grovsökning, tillbakagång och sedan en l
 ## Koordinater och reglage
 
 - De stora koordinaterna visas i valt arbetskoordinatsystem; de små i maskinkoordinater, G53.
-- **Prob / Verktyg** väljer visning av kulans eller verktygsspetsens position. Verktyg använder den senast kända verktygslängden.
+- Tryck på koordinatvisningen för att växla mellan **Prob** och **Verktyg**. När spindeln är tom använder Verktyg fortfarande den senast uppmätta verktygslängdskompensationen.
 - **G54–G59** väljer arbetskoordinatsystem. Varje system sparar sin egen nollpunkt.
-- Reglaget bredvid flikarna fäller ut eller in proben oberoende av mätningarna.
-- **?** förklarar den aktuella fliken.
+- Tryck på **Infälld / Utfälld** bredvid flikarna för att fälla ut eller in proben oberoende av mätningarna. Den markerade raden visar aktuellt läge.
+- **?** markerar reglagen. Tryck på ett för en förklaring, eller på **Handbok** för de här sidorna. **×** lämnar hjälpen.
 
 ## Kontakt och fel
 

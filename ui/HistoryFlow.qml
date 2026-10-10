@@ -244,6 +244,10 @@ PageView {
                     color: flow.selectedIndex === entryRow.index ? Theme.accentWash : Theme.panel
                     radius: Theme.radius
                     border.color: flow.selectedIndex === entryRow.index ? Theme.accentBright : Theme.divider
+                    HelpTip {
+                        title: I18n.tr('Probe history')
+                        text: I18n.tr("Select a saved measurement to see its details. Open result restores its measured coordinates and work-zero controls.")
+                    }
                     Column {
                         anchors.fill: parent
                         anchors.margins: 12
@@ -295,6 +299,7 @@ PageView {
                 LabButton {
                     objectName: "historyOpenResult"
                     text: I18n.tr('Open result')
+                    helpText: I18n.tr("Open the saved measurement to set work zero again. The stock and machine reference must still match the measurement.")
                     Layout.fillWidth: true
                     enabled: !openRequest.pending && flow.selected !== null && flow.selected.result && (flow.selected.result.machinePoint !== undefined || flow.selected.category === "rotary")
                     primary: true

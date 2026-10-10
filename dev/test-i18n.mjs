@@ -94,7 +94,7 @@ test('UI source collection includes motion plans, feature names, states and conf
     const sources = collectSources();
     for (const source of ['Boss center', 'X valley center', 'Backoff', '°/min',
         'Start above a smooth part of the rod.', 'Touch opposite walls at this height. Find the midpoint.',
-        'Unknown', 'Intermediate', 'Probing x ridge center.', 'Work zero set', 'X/Y rotation set',
+        'Unknown', 'Moving', 'Probing x ridge center.', 'Work zero set', 'X/Y rotation set',
         'boss center', 'interrupted', 'Rotary axis calibration', 'Width X', 'Width Y', 'Length Y',
         'Inside %1 corner', 'Outside %1 edge', 'The probing service could not complete the request (HTTP %1).'])
         assert.ok(sources.has(source), `Uncollected display source: ${source}`);

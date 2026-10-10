@@ -18,11 +18,14 @@ import QtQuick
 import "controls"
 import QtQuick.Controls
 import "ProbeDrawing.js" as Draw
+import "controls/HelpText.js" as HelpText
 
 ProbeButton {
     id: control
     required property string feature
     required property string label
+    helpTitle: label
+    helpText: HelpText.center(feature)
     diagramLabel: label
 
     contentItem: Item {

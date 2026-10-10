@@ -94,6 +94,13 @@ export function collectSources(ui = uiSource) {
     }
     const pages = script('ProbePages.js');
     const review = script('ReviewPlan.js');
+    const help = script('controls/HelpText.js');
+    for (const english of Object.values(help.descriptions)) add(english, 'ui/controls/HelpText.js');
+    for (const inside of [false, true])
+        for (const z of [false, true])
+            for (const corner of [false, true]) add(help.edge(inside, z, corner), 'ui/controls/HelpText.js');
+    for (const feature of ['boss', 'block', 'hole', 'pocket', 'x-ridge', 'x-valley', 'z'])
+        add(help.center(feature), 'ui/controls/HelpText.js');
     for (const fields of [pages.outside, pages.inside, pages.center, pages.rotary, pages.setup])
         for (const field of fields) {
             add(field.label, 'ui/ProbePages.js');

@@ -17,6 +17,7 @@
 import QtQuick
 import "controls"
 import "ProbeDrawing.js" as Draw
+import "controls/HelpText.js" as HelpText
 
 ProbeButton {
     id: control
@@ -24,6 +25,9 @@ ProbeButton {
     required property int xApproach
     required property int yApproach
     property bool zApproach: false
+    helpTitle: zApproach ? I18n.tr("Z surface") : I18n.tr(xApproach && yApproach ? "Inside %1 corner" : "Inside %1 edge",
+        [(xApproach ? "X" + (xApproach > 0 ? "+" : "-") : "") + (xApproach && yApproach ? "/" : "") + (yApproach ? "Y" + (yApproach > 0 ? "+" : "-") : "")])
+    helpText: HelpText.edge(true, zApproach, xApproach && yApproach)
     diagramLabel: zApproach ? I18n.tr('Z surface') : "X " + xApproach + ", Y " + yApproach
 
     contentItem: ProbeDiagram {

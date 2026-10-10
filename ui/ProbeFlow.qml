@@ -63,6 +63,8 @@ PageView {
     property string logText: ""
     property var result: []
     property var spans: [null, null, null]
+    property var rawPoint: [null, null, null]
+    property var rawSpans: [null, null, null]
     readonly property var dimensions: {
         var round = routine.feature === "boss" || routine.feature === "hole";
         return [0, 1].filter(function (i) {
@@ -72,7 +74,8 @@ PageView {
             var label = round ? ["Span X", "Span Y"][i] : i === 0 ? "Width X" : ridge ? "Width Y" : "Length Y";
             return {
                 label: label,
-                value: spans[i]
+                value: spans[i],
+                raw: rawSpans[i]
             };
         });
     }
@@ -161,6 +164,8 @@ PageView {
         logText = "";
         result = [];
         spans = [null, null, null];
+        rawPoint = [null, null, null];
+        rawSpans = [null, null, null];
         offsets = [0, 0, 0];
         resultEditor.cancel();
         machinePoint = [null, null, null];
@@ -289,6 +294,8 @@ PageView {
     }
 
     function acceptResult(measurement, id) {
+        rawPoint = measurement.rawPoint || [null, null, null];
+        rawSpans = measurement.rawSpans || [null, null, null];
         result = measurement.point;
         machinePoint = measurement.machinePoint;
         spans = measurement.spans || [null, null, null];

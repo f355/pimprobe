@@ -14,14 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-LabButton {
-    implicitWidth: Theme.headerHeight
-    implicitHeight: Theme.headerHeight
-    text: "\u2190"
-    helpTitle: I18n.tr("Back")
-    helpText: I18n.tr("Return to the previous page. When leaving with the probe extended, choose whether to retract it.")
-    font.pixelSize: 34
-    padding: 4
-    background: null
-    textColor: Theme.text
+import QtQuick
+
+Item {
+    property Item target: parent
+    property string title
+    property string text
+    property bool toggle: false
+    property int frameHeight: 0
+    visible: false
 }

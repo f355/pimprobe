@@ -75,6 +75,7 @@ ApplicationWindow {
     }
     UpdateFlow {
         id: updateDialog
+        parent: probePage
         client: http
         settings: probePage.settings
         uiFont: window.font.family

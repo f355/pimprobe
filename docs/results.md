@@ -2,6 +2,8 @@
 
 The large coordinates are the measured surface or center in **G53**. The smaller coordinates show the same point in the selected **G54–G59**. Probe calibration and ball-radius compensation are already applied.
 
+For centered features, **Size** includes ball compensation; **Raw span** is the distance between the fine contacts before compensation. Edge and Z results show the uncompensated machine coordinates under **Contacts**.
+
 <!-- guide-only -->
 ![Measurement results and zero offsets](images/result.png)
 <!-- /guide-only -->

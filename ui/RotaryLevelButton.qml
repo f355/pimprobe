@@ -25,6 +25,10 @@ ProbeButton {
     property bool negativeY: false
     diagramLabel: vertical ? (negativeY ? I18n.tr('Align vertical surface toward Y−') : I18n.tr('Align vertical surface toward Y+')) : I18n.tr('Level horizontal surface')
     caption: vertical ? (negativeY ? I18n.tr('Align face Y−') : I18n.tr('Align face Y+')) : I18n.tr('Level surface')
+    helpTitle: caption
+    helpText: vertical
+        ? I18n.tr("Start beside the lower touch point with the top edge leaning away from the shaft. Touch bottom and top, then rotate A to make the face vertical.")
+        : I18n.tr("Start above the first touch point. Measure downward at two Y positions, then rotate A to level the surface.")
 
     contentItem: ProbeDiagram {
         onPaint: {

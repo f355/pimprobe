@@ -23,6 +23,7 @@ ScrollView {
     id: document
     required property var sections
     property string uiFont
+    signal linkActivated(string link)
     clip: true
     contentWidth: availableWidth
     ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
@@ -74,6 +75,7 @@ ScrollView {
                                     readOnly: true
                                     textFormat: TextEdit.MarkdownText
                                     text: block.modelData.text || ""
+                            onLinkActivated: function(link) { document.linkActivated(link); }
                                     color: Theme.text
                                     font.family: document.uiFont
                                     font.pixelSize: 20

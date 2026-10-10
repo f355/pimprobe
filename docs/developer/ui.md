@@ -9,7 +9,7 @@ each screen for the 4.9-inch touch panel, not for a desktop monitor.
 - Leave 16 px around screen content and 12 px between controls.
 - Use `PageHeader` for a 64 px header with Back on the left and status on the
   right. Keep the same header on review, results, history and utility screens.
-- Probing pages have a 352 px diagram or keypad column on the left and aligned
+- Probing pages have a 352 px diagram, measurement or keypad column on the left and aligned
   labels and inputs on the right.
 - Keep result actions in a bottom row outside the scrolling content. Show the
   command log separately from the measurements.
@@ -64,6 +64,16 @@ Inspect those captures as well as the test results. Check alignment, readable
 labels, scrolling, visible actions and whether diagrams explain the operation.
 
 ## Languages and help
+
+`HelpButton` toggles `ContextHelp`. It outlines visible controls and intercepts
+their taps. `HelpTip` supplies a target item, title and short explanation;
+group related readouts or tab buttons under one tip. `LabButton`,
+`NumberField` and `ProbeSwitch` also accept `helpTitle` and `helpText`.
+Use one or two sentences about what the control changes.
+
+Explanations stay inside the screen and beside the selected control when space
+allows. Guide opens the Markdown pages; Back returns to control explanations.
+`PageHeader` places `GuideButton` beside the help button while help is active.
 
 Use `I18n.tr` for labels and complete messages, with `%1`, `%2` placeholders
 for values. Translate service messages when displaying them. Keep

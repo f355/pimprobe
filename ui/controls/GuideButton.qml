@@ -14,14 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import QtQuick
+
 LabButton {
-    implicitWidth: Theme.headerHeight
-    implicitHeight: Theme.headerHeight
-    text: "\u2190"
-    helpTitle: I18n.tr("Back")
-    helpText: I18n.tr("Return to the previous page. When leaving with the probe extended, choose whether to retract it.")
-    font.pixelSize: 34
-    padding: 4
-    background: null
-    textColor: Theme.text
+    required property var controller
+    visible: controller !== null && controller.active
+    text: I18n.tr("Guide")
+    implicitWidth: 112
+    implicitHeight: 48
+    font.pixelSize: 18
+    padding: 8
+    primary: true
+    helpText: ""
+    onClicked: controller.openGuide()
 }

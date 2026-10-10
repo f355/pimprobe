@@ -19,6 +19,9 @@ import QtQuick.Controls
 
 Switch {
     id: control
+    property string helpTitle: text
+    property string helpText: ""
+    HelpTip { target: control; title: control.helpTitle; text: control.helpText }
     spacing: 10
 
     indicator: Item {

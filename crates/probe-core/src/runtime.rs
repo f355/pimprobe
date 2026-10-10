@@ -29,6 +29,12 @@ pub struct RoutineResult {
     /// Separations between opposing compensated surfaces, in millimeters.
     #[serde(default)]
     pub spans: [Option<f64>; 3],
+    /// Fine-contact machine coordinates, or their midpoint for opposing touches.
+    #[serde(default, rename = "rawPoint")]
+    pub raw_point: [Option<f64>; 3],
+    /// Separations between opposing fine contacts, before ball compensation.
+    #[serde(default, rename = "rawSpans")]
+    pub raw_spans: [Option<f64>; 3],
     pub wcs: i32,
     pub zeroed: bool,
     #[serde(default)]
@@ -300,6 +306,10 @@ async fn run_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
                     }
                     let center = (low + high) / 2.0;
                     result.spans[axis.index()] = Some(high - low);
+                    let raw_low = refs[&format!("contact_{n}_low")];
+                    let raw_high = refs[&format!("contact_{n}_high")];
+                    result.raw_point[axis.index()] = Some((raw_low + raw_high) / 2.0);
+                    result.raw_spans[axis.index()] = Some((raw_high - raw_low).abs());
                     refs.insert(format!("surface_{n}"), center);
                     result.point[axis.index()] = Some(
                         center
@@ -371,6 +381,7 @@ async fn run_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
                     )?;
                     refs.insert(format!("surface_{measurement}"), surface);
                     if measurement == axis.name() {
+                        result.raw_point[axis.index()] = Some(contact.position[axis.index()]);
                         result.point[axis.index()] = Some(
                             surface
                                 - (p.start.position[axis.index()]

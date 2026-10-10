@@ -203,6 +203,7 @@ TestCase {
             height: 480
             property alias component: embeddedPage
             property alias subpageOpen: embeddedPage.subpageOpen
+            property alias contextHelp: embeddedPage.contextHelp
             Loader {
                 objectName: "actuatorStrip"
                 width: parent.width
@@ -216,6 +217,7 @@ TestCase {
                 width: parent.width
                 height: subpageOpen ? parent.height : container.rootHeight
                 client: container.client
+                helpContainer: container
                 showHeader: subpageOpen
                 compactLayout: container.compactLayout
             }
@@ -244,7 +246,7 @@ TestCase {
         compare(field.editor.target, null);
         compare(field.text, original);
         embedded.openHelp();
-        compare(embedded.pageTitle, "Settings help");
+        compare(embedded.helpMode, true);
         embedded.requestBack();
     }
 
@@ -271,6 +273,20 @@ TestCase {
         compare(embedded.height, 416);
         compare(strip.visible, true);
     }
+    function test_help_includes_host_controls() {
+        var container = navigationContainer();
+        var embedded = container.component;
+        embedded.openHelp();
+        verify(waitForPolish(host));
+        tryVerify(function() { return embedded.contextHelp.tips.length > 0; });
+        var actuator = embedded.contextHelp.tips.filter(function(tip) { return tip.title === "Extend / Retract"; })[0];
+        verify(actuator !== undefined);
+        compare(embedded.contextHelp.parent, container);
+        compare(embedded.contextHelp.height, 480);
+        compare(embedded.contextHelp.bounds(actuator).y, 0);
+        embedded.requestBack();
+        compare(embedded.helpMode, false);
+    }
 
     function test_public_navigation_keeps_running_operation() {
         var container = navigationContainer();
@@ -294,7 +310,7 @@ TestCase {
         embedded.openSettings();
         compare(embedded.subpageOpen, false);
         embedded.openHelp();
-        compare(embedded.pageTitle, "Settings help");
+        compare(embedded.helpMode, true);
     }
 
     function test_public_navigation_respects_recovery_lock() {
@@ -306,9 +322,9 @@ TestCase {
         embedded.openUtilities();
         compare(embedded.subpageOpen, false);
         embedded.openHelp();
-        compare(embedded.pageTitle, "Outside help");
+        compare(embedded.helpMode, true);
         embedded.requestBack();
-        compare(embedded.subpageOpen, true);
+        compare(embedded.helpMode, false);
     }
 
     function test_exit_cancel_reports_abandoned_navigation_data() {
@@ -519,15 +535,15 @@ TestCase {
     function test_back_follows_visible_page() {
         page.openWcs();
         compare(page.pageTitle, "Work coordinates");
-        page.openHelp();
-        compare(page.pageTitle, "Outside help");
+        page.openGuide();
+        compare(page.pageTitle, "Operator Guide");
         page.requestBack();
         compare(page.pageTitle, "Work coordinates");
-        page.openHelp();
+        page.openGuide();
         page.openWcs();
         compare(page.pageTitle, "Work coordinates");
         page.requestBack();
-        compare(page.pageTitle, "Outside help");
+        compare(page.pageTitle, "Operator Guide");
         page.requestBack();
         compare(page.subpageOpen, false);
     }

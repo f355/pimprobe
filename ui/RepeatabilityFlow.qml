@@ -17,6 +17,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import "controls"
+import "controls/HelpText.js" as HelpText
 import QtQuick.Controls
 import QtQuick.Layouts
 
@@ -234,6 +235,8 @@ PageView {
                                 Layout.preferredHeight: 56
                                 padding: 8
                                 text: modelData
+                                helpTitle: I18n.tr('Axes') + " · " + modelData
+                                helpText: I18n.tr("Include this axis in the repeated measurements.")
                                 font.pixelSize: 23
                                 checkable: true
                                 checked: flow.axes[index]
@@ -251,6 +254,8 @@ PageView {
                         Label { text: I18n.tr('Repetitions'); color: Theme.text; font.pixelSize: 19; Layout.fillWidth: true }
                         NumberField {
                             objectName: "repetitions"
+                            helpTitle: I18n.tr('Repetitions')
+                            helpText: I18n.tr("Number of measurements to collect. Statistics update after each repetition.")
                             editor: editor
                             minimum: 1
                             maximum: 100
@@ -269,6 +274,8 @@ PageView {
                             Layout.preferredWidth: 110
                             Layout.preferredHeight: 54
                             checked: flow.jogHome
+                            helpTitle: I18n.tr('Jog home each time')
+                            helpText: I18n.tr("Move near the home position between repetitions, without searching for the home switches.")
                             enabled: !flow.home
                             onClicked: flow.jogHome = checked
                         }
@@ -280,6 +287,8 @@ PageView {
                             Layout.preferredWidth: 110
                             Layout.preferredHeight: 54
                             checked: flow.home
+                            helpTitle: I18n.tr('Home each time')
+                            helpText: I18n.tr("Home the machine between repetitions to include homing variation. Homing also retracts the probe.")
                             onClicked: flow.home = checked
                         }
                     }
@@ -290,6 +299,8 @@ PageView {
                             Layout.preferredWidth: 110
                             Layout.preferredHeight: 54
                             checked: flow.retractEachTime
+                            helpTitle: I18n.tr('Retract each time')
+                            helpText: I18n.tr("Retract and extend the probe between repetitions to include actuator variation.")
                             enabled: !flow.jogHome
                             onClicked: flow.retract = checked
                         }
@@ -329,11 +340,15 @@ PageView {
                     visible: !flow.sourceVisible
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    spacing: 2
+                    spacing: 8
                     Label {
                         text: flow.phase === "running" ? I18n.tr('G53 measurements (mm)') : I18n.tr('Deviation from mean (mm)')
                         color: Theme.text
                         font.pixelSize: 18
+                        HelpTip {
+                            title: I18n.tr('Readings')
+                            text: HelpText.descriptions.repeatReadings
+                        }
                     }
                     RowLayout {
                         Layout.fillWidth: true
@@ -387,12 +402,21 @@ PageView {
                     }
                     Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.divider }
                     Repeater {
-                        model: [{label:"Mean G53",key:"mean"}, {label:"Median",key:"median"}, {label:"Std dev",key:"stddev"}, {label:"Range",key:"range"}]
+                        model: [
+                            {label:"Mean G53",key:"mean",help:HelpText.descriptions.repeatMean},
+                            {label:"Median",key:"median",help:HelpText.descriptions.repeatMedian},
+                            {label:"Std dev",key:"stddev",help:HelpText.descriptions.repeatStddev},
+                            {label:"Range",key:"range",help:HelpText.descriptions.repeatRange}
+                        ]
                         RowLayout {
                             id: summary
                             required property var modelData
                             Layout.fillWidth: true
                             Layout.rightMargin: 16
+                            HelpTip {
+                                title: I18n.tr(summary.modelData.label)
+                                text: summary.modelData.help
+                            }
                             Label { text: I18n.tr(summary.modelData.label); color: Theme.textMuted; font.pixelSize: 17; Layout.preferredWidth: 108 }
                             Repeater {
                                 model: flow.statistics
@@ -417,6 +441,9 @@ PageView {
                 LabButton {
                     visible: flow.showingResults
                     text: flow.sourceVisible ? I18n.tr('Readings') : I18n.tr('Log')
+                    helpText: flow.sourceVisible
+                        ? I18n.tr("Show each measurement and the statistics calculated from the readings.")
+                        : I18n.tr("Show the commands and messages recorded during this measurement.")
                     Layout.preferredWidth: 128
                     onClicked: flow.sourceVisible = !flow.sourceVisible
                 }
@@ -442,6 +469,11 @@ PageView {
                 LabButton {
                     visible: flow.phase !== "running"
                     text: flow.phase === "prepare" ? I18n.tr('Fixture is ready') : flow.phase === "options" ? I18n.tr('Start check') : I18n.tr('Close')
+                    helpText: flow.phase === "prepare"
+                        ? I18n.tr("Choose which axes to measure and how many repetitions to run.")
+                        : flow.phase === "options"
+                            ? I18n.tr("Run the repeatability check with the selected axes and options.")
+                            : I18n.tr("Close this page.")
                     enabled: flow.phase !== "options" || flow.canStart
                     Layout.preferredWidth: 180
                     Layout.preferredHeight: 56
@@ -453,6 +485,7 @@ PageView {
                     visible: flow.phase === "running"
                     objectName: "stopCheck"
                     text: flow.stopRequested ? I18n.tr('Stopping...') : I18n.tr('Stop')
+                    helpText: I18n.tr("Stop the repeatability check.")
                     enabled: flow.streamStarted && !flow.stopRequested
                     font.pixelSize: 20
                     Layout.preferredWidth: 180

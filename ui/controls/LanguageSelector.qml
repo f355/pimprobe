@@ -23,8 +23,13 @@ ColumnLayout {
     required property string language
     signal selected(string language)
     spacing: 8
+    HelpTip {
+        title: I18n.tr("Language")
+        text: I18n.tr("Choose the language for controls and help. The choice is saved for the next startup.")
+    }
     Label {
         text: I18n.tr("Language")
+        leftPadding: 8
         color: Theme.textMuted
         font.pixelSize: 18
     }

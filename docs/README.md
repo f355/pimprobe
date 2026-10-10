@@ -30,10 +30,10 @@ The probe touches each surface twice: a coarse search, backoff, then a slower fi
 ## Coordinates and controls
 
 - Large readouts use the selected work coordinate system; small readouts use machine coordinates, G53.
-- **Probe / Tool** selects the ball or tool-tip readout. Tool uses the last known tool length.
+- Tap the coordinate readout to switch between **Probe** and **Tool**. With an empty spindle, Tool still uses the last measured tool length offset.
 - **G54–G59** selects a work coordinate system. Each stores its own zero.
-- The switch beside the tabs extends or retracts the probe independently of measurements.
-- **?** explains the current tab.
+- Tap **Retracted / Extended** beside the tabs to extend or retract the probe independently of measurements. The highlighted label shows its current state.
+- **?** highlights the controls. Tap one for an explanation, or **Guide** for these pages. **×** leaves help.
 
 ## Contact and failures
 

@@ -47,7 +47,7 @@ test("rustup discovery puts the actual compiler on PATH", () => {
     }
 });
 
-test("contextual help keeps headings and resolves shared image paths", () => {
+test("operator guide compiler keeps headings and resolves shared image paths", () => {
     const scratch = mkdtempSync(join(tmpdir(), "pimprobe-help-"));
     try {
         const source = pathToFileURL(scratch + "/");

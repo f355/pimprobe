@@ -16,12 +16,17 @@
 
 import QtQuick
 import QtQuick.Controls
+import "HelpText.js" as HelpText
 
 Button {
     id: control
     property bool primary: false
     property bool selected: false
     property bool notification: false
+    property string helpTitle: text
+    property string helpText: HelpText.action(text, I18n)
+    property int helpFrameHeight: 0
+    HelpTip { target: control; title: control.helpTitle; text: control.helpText; frameHeight: control.helpFrameHeight }
     property color textColor: selected ? Theme.accentBright : primary ? Theme.primaryText : Theme.text
 
     implicitHeight: Theme.buttonHeight

@@ -312,6 +312,7 @@ PageView {
                 LabButton {
                     visible: flow.phase === "result"
                     text: I18n.tr('Set %1 zero', [flow.zeroAxes])
+                    helpText: I18n.tr("Set the selected work coordinate system's zero for the measured axes. Axis calibration uses the first axis center; face alignment uses the measured surface and A angle.")
                     enabled: !flow.busy && flow.reviewID.length > 0
                     primary: true
                     Layout.preferredHeight: 64
@@ -322,6 +323,7 @@ PageView {
                 LabButton {
                     visible: flow.phase === "result" && !flow.leveling && flow.result.rotationSupported === true
                     text: I18n.tr('Set X/Y rotation')
+                    helpText: I18n.tr("Rotate the selected work coordinate system to match the measured rotary axis angle in X/Y.")
                     enabled: !flow.busy && flow.reviewID.length > 0
                     Layout.preferredHeight: 64
                     Layout.preferredWidth: 216

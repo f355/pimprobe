@@ -19,6 +19,7 @@ import QtQuick
 import "controls"
 import QtQuick.Controls
 import QtQuick.Layouts
+import "controls/HelpText.js" as HelpText
 
 RowLayout {
     id: row
@@ -30,9 +31,14 @@ RowLayout {
     property int labelSize: 20
     property int numberSize: 24
     spacing: 12
+    HelpTip {
+        title: I18n.tr(row.definition.label)
+        text: HelpText.option(row.definition.key)
+    }
 
     Label {
         Layout.fillWidth: true
+        leftPadding: 8
         text: I18n.tr(row.definition.label)
         color: Theme.text
         font.pixelSize: row.labelSize

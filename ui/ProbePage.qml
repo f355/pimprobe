@@ -18,7 +18,6 @@ import QtQuick
 import "controls"
 import QtQuick.Controls
 import QtQuick.Layouts
-import "HelpPages.js" as HelpPages
 import "ProbePages.js" as Pages
 
 Pane {
@@ -30,21 +29,16 @@ Pane {
     onStyleChanged: if (style)
         Theme.style = style
     property Component headerControls: Component {
-        ProbeSwitch {
+        ProbeActuatorButton {
             id: probeSwitch
-            implicitWidth: 158
-            text: page.actuatorRequestPending || page.machineState.actuatorPending ? I18n.tr('Moving') : I18n.tr(page.probeState((page.machineState.status || {}).probeActuator, (page.machineState.status || {}).probeActuatorKnown))
-            checked: (page.machineState.status || {}).probeActuatorKnown === true && (page.machineState.status || {}).probeActuator !== 0
-            enabled: page.machineState.connected && (page.machineState.status || {}).mode === "Ready" && (page.machineState.status || {}).probeActuatorKnown && !page.actuatorRequestPending && !page.machineState.actuatorPending && !page.interactionLocked()
+            moving: page.actuatorRequestPending || page.machineState.actuatorPending === true || (page.machineState.status || {}).probeActuator === 3
+            stateKnown: (page.machineState.status || {}).probeActuatorKnown === true && [0, 1].indexOf((page.machineState.status || {}).probeActuator) !== -1
+            extended: (page.machineState.status || {}).probeActuator === 1
+            enabled: page.machineState.connected && (page.machineState.status || {}).mode === "Ready" && stateKnown && !moving && !page.interactionLocked()
             font.family: page.uiFontFamily
             font.pixelSize: 18
-            contentItem: Label {
-                leftPadding: probeSwitch.indicator.width + probeSwitch.spacing
-                text: probeSwitch.text
-                color: page.probeLabelColor()
-                font: probeSwitch.font
-                verticalAlignment: Text.AlignVCenter
-            }
+            helpTitle: I18n.tr("Extend / Retract")
+            helpText: I18n.tr("Extend or retract the probe independently of measurements. Keep the ball and shaft clear while the actuator moves.")
             onClicked: {
                 var status = page.machineState.status || {};
                 page.setProbeExtended(status.probeActuator === 0);
@@ -57,8 +51,11 @@ Pane {
     signal exitCancelled
     signal alarmRequested
     readonly property bool busy: interactionLocked()
+    readonly property alias contextHelp: helpOverlay
+    readonly property bool helpMode: helpOverlay.active
+    property Item helpContainer: page
     readonly property var topPage: {
-        var views = [rotaryDialog, confirmDialog, repeatabilityDialog, historyDialog, settingsPage, utilitiesPage, helpPage, wcsPicker];
+        var views = page.children.filter(function(item) { return item instanceof PageView; });
         var top = null;
         for (var i = 0; i < views.length; ++i)
             if (views[i].opened && (!top || views[i].z > top.z))
@@ -66,18 +63,18 @@ Pane {
         return top;
     }
     readonly property bool subpageOpen: topPage !== null
-    readonly property string helpTitle: I18n.tr(["Outside help", "Inside help", "Center help", "Rotary help", "Settings help"][helpIndex])
     readonly property string pageTitle: topPage === wcsPicker ? I18n.tr('Work coordinates')
-        : topPage === helpPage ? helpTitle
+        : topPage === helpPage ? helpPage.title
         : topPage === historyDialog ? I18n.tr('Probe history')
         : topPage === repeatabilityDialog ? I18n.tr('Probe repeatability')
         : topPage === confirmDialog ? confirmDialog.description
         : topPage === rotaryDialog ? rotaryDialog.title
         : topPage === settingsPage ? I18n.tr('Probe settings')
         : topPage === utilitiesPage ? I18n.tr('Utilities') : I18n.tr('Probing')
-    property int helpIndex: tabs.currentIndex
-    onVisibleChanged: if (!visible)
-        exitDialog.close()
+    onVisibleChanged: if (!visible) {
+        exitDialog.close();
+        helpOverlay.active = false;
+    }
     padding: 0
     topPadding: showHeader ? Theme.headerHeight : 0
     property ProbeSettings settings: ProbeSettings {
@@ -109,24 +106,6 @@ Pane {
     readonly property bool actuatorRequestPending: actuatorRequest.pending
     property bool exitAfterRetract: false
 
-    function coordinate(position, index) {
-        return position && position.length > index ? Number(position[index]).toFixed(3) : "--.---";
-    }
-
-    function probeState(value, known) {
-        if (!known)
-            return "Unknown";
-        if (value === 0)
-            return "Retracted";
-        if (value === 1)
-            return "Extended";
-        if (value === 2)
-            return "Intermediate";
-        if (value === 3)
-            return "Moving";
-        return "Unknown";
-    }
-
     function currentWcs() {
         var reported = Number((machineState.status || {}).wcs);
         return reported >= 54 && reported <= 59 ? reported : 54;
@@ -142,18 +121,7 @@ Pane {
     }
 
     function activePageAvailable() {
-        return tabs.currentIndex === 4 ? machineState.connected === true : probeAvailable();
-    }
-
-    function probeLabelColor() {
-        if (actuatorRequestPending || machineState.actuatorPending)
-            return Theme.textMuted;
-        var status = machineState.status || {};
-        if (status.probeActuatorKnown && status.probeActuator === 0)
-            return Theme.danger;
-        if (status.probeActuatorKnown && status.probeActuator === 1)
-            return Theme.accentBright;
-        return Theme.textMuted;
+        return tabs.currentIndex === tabs.count - 1 && !compactLayout ? machineState.connected === true : probeAvailable();
     }
 
     function requestExit() {
@@ -235,6 +203,14 @@ Pane {
     }
 
     function requestBack() {
+        if (topPage === helpPage) {
+            helpPage.back();
+            return;
+        }
+        if (helpMode) {
+            helpOverlay.active = false;
+            return;
+        }
         if (busy)
             return;
         if (topPage)
@@ -243,14 +219,19 @@ Pane {
             requestExit();
     }
     function openHelp() {
-        helpPage.open();
+        helpOverlay.active = !helpOverlay.active;
+    }
+    function openGuide() {
+        helpPage.showIndex();
     }
     function openWcs() {
+        helpOverlay.active = false;
         wcsPicker.open();
     }
     function openSettings() {
         if (busy)
             return;
+        helpOverlay.active = false;
         numericEditor.cancel();
         while (topPage)
             topPage.close();
@@ -262,6 +243,7 @@ Pane {
     function openUtilities() {
         if (busy)
             return;
+        helpOverlay.active = false;
         numericEditor.cancel();
         settingsPage.cancelEdit();
         utilitiesPage.open();
@@ -284,12 +266,14 @@ Pane {
     }
 
     property Item headerBar: Rectangle {
+        id: header
         parent: page
         width: page.width
         height: page.showHeader ? Theme.headerHeight : 0
         visible: page.showHeader && !page.subpageOpen
         implicitHeight: Theme.headerHeight
         color: Theme.header
+        readonly property int helpFrameHeight: height - 8
 
         RowLayout {
             anchors.fill: parent
@@ -301,6 +285,7 @@ Pane {
                 id: backButton
                 Layout.preferredWidth: 48
                 Layout.fillHeight: true
+                helpFrameHeight: header.helpFrameHeight
                 onClicked: page.requestExit()
             }
 
@@ -308,41 +293,16 @@ Pane {
                 Layout.fillWidth: true
             }
 
-            RowLayout {
-                Layout.fillHeight: true
-                spacing: 4
-                Repeater {
-                    model: ["X", "Y", "Z"]
-                    ColumnLayout {
-                        id: headerCoordinate
-                        required property string modelData
-                        required property int index
-                        Layout.preferredWidth: 136
-                        Layout.fillHeight: true
-                        spacing: 0
-
-                        Label {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            text: headerCoordinate.modelData + " " + page.coordinate(page.droCoordinates.workPosition, headerCoordinate.index)
-                            color: Theme.text
-                            font.family: page.monoFontFamily
-                            font.pixelSize: 22
-                            horizontalAlignment: Text.AlignRight
-                            verticalAlignment: Text.AlignBottom
-                        }
-                        Label {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            text: page.coordinate(page.droCoordinates.machinePosition, headerCoordinate.index)
-                            color: Theme.textMuted
-                            font.family: page.monoFontFamily
-                            font.pixelSize: 16
-                            horizontalAlignment: Text.AlignRight
-                            verticalAlignment: Text.AlignTop
-                        }
-                    }
-                }
+            CoordinateReadout {
+                id: droReference
+                objectName: "droReference"
+                Layout.preferredWidth: implicitWidth
+                Layout.preferredHeight: 56
+                helpFrameHeight: header.helpFrameHeight
+                workPosition: page.droCoordinates.workPosition || []
+                machinePosition: page.droCoordinates.machinePosition || []
+                monoFont: page.monoFontFamily
+                font.family: page.uiFontFamily
             }
 
             LabButton {
@@ -351,6 +311,9 @@ Pane {
                 background: null
                 padding: 8
                 text: "G" + page.currentWcs()
+                helpTitle: I18n.tr("Work coordinates")
+                helpFrameHeight: header.helpFrameHeight
+                helpText: I18n.tr("Select G54–G59. Each work coordinate system stores its own zero; the selected one is used for readouts and new measurements.")
                 font.family: page.uiFontFamily
                 font.pixelSize: 22
                 font.bold: true
@@ -358,38 +321,11 @@ Pane {
                 onClicked: wcsPicker.open()
             }
 
-            CoordinateReferenceButton {
-                id: droReference
-                objectName: "droReference"
-                Layout.preferredWidth: 96
-                Layout.preferredHeight: 56
-                font.family: page.uiFontFamily
-            }
-
-            LabButton {
+            HelpButton {
                 id: helpButton
                 Layout.preferredWidth: 48
                 Layout.preferredHeight: 48
-                Layout.rightMargin: 0
-                text: "?"
                 font.family: page.uiFontFamily
-                font.pixelSize: 25
-                font.bold: true
-                padding: 4
-                contentItem: Label {
-                    text: helpButton.text
-                    color: Theme.text
-                    font: helpButton.font
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                }
-                background: Rectangle {
-                    color: helpButton.down ? Theme.pressed : Theme.panel
-                    border.color: Theme.divider
-                    border.width: 1
-                    radius: width / 2
-                }
-                onClicked: helpPage.open()
             }
         }
     }
@@ -447,6 +383,8 @@ Pane {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         text: "G" + modelData
+                        helpTitle: I18n.tr('Work coordinates') + " · G" + modelData
+                        helpText: I18n.tr("Select this work coordinate system for readouts and new measurements.")
                         font.family: page.uiFontFamily
                         font.pixelSize: 30
                         font.bold: modelData === page.currentWcs()
@@ -459,44 +397,11 @@ Pane {
         }
     }
 
-    PageView {
+    OperatorGuide {
         id: helpPage
-        onOpening: {
-            page.helpIndex = settingsPage.opened ? 4 : tabs.currentIndex;
-            helpScroll.reset();
-        }
         parent: page
-        x: 0
-        y: 0
-        width: parent.width
-        height: parent.height
-        padding: 0
-
-        background: Rectangle {
-            color: Theme.page
-        }
-
-        ColumnLayout {
-            anchors.fill: parent
-            spacing: 0
-
-            PageHeader {
-                Layout.fillWidth: true
-                Layout.preferredHeight: Theme.headerHeight
-                visible: page.showHeader
-                title: page.helpTitle
-                uiFont: page.uiFontFamily
-                onBack: helpPage.close()
-            }
-
-            HelpDocument {
-                id: helpScroll
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                sections: HelpPages.forLanguage(I18n.language)[page.helpIndex]
-                uiFont: page.uiFontFamily
-            }
-        }
+        showHeader: page.showHeader
+        helpMode: page.helpMode
     }
 
     ProbeFlow {
@@ -604,6 +509,21 @@ Pane {
         interval: 3000
         onTriggered: page.actionError = ""
     }
+    ContextHelp {
+        id: helpOverlay
+        parent: page.helpContainer
+        scope: page.topPage || page.helpContainer
+        suspended: helpPage.opened
+        onGuideRequested: page.openGuide()
+        onActiveChanged: {
+            if (active) {
+                numericEditor.cancel();
+                settingsPage.cancelEdit();
+            } else if (helpPage.opened) {
+                helpPage.close();
+            }
+        }
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -621,6 +541,7 @@ Pane {
             }
             LabButton {
                 text: I18n.tr('Retry')
+                helpText: I18n.tr("Try the failed request again.")
                 primary: true
                 onClicked: page.settings.loaded ? page.settings.save() : page.settings.load()
             }
@@ -642,7 +563,7 @@ Pane {
             Loader {
                 visible: page.showHeader
                 Layout.leftMargin: Theme.margin
-                Layout.preferredWidth: 140
+                Layout.preferredWidth: 120
                 Layout.preferredHeight: 56
                 sourceComponent: page.headerControls
             }
@@ -661,11 +582,17 @@ Pane {
                         required property string modelData
                         implicitHeight: 56
                         height: tabs.height
+                        padding: 2
                         text: I18n.tr(modelData)
                         notification: modelData === "Settings" && page.updateAvailable
                         font.family: page.uiFontFamily
                     }
                 }
+            }
+            HelpTip {
+                target: tabs
+                title: I18n.tr("Probing tabs")
+                text: I18n.tr("Choose Outside for stock edges, Inside for pocket walls, Center for opposite sides, or Rotary for the fourth axis. Settings contains ball diameter, feeds and utilities.")
             }
         }
 

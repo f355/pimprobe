@@ -6,9 +6,20 @@ Inställningarna sparas när du godkänner ett värde och finns kvar efter omsta
 ![Probinställningar](../images/settings.png)
 <!-- /guide-only -->
 
-## Kuldiameter och tillbakagång
+## Kuldiameter
 
-**Probkulans diameter** korrigerar ytkoordinaten med kulans radie. Den är separat från maskinens kalibrering av förskjutningen mellan prob och spindel.
+**Probkulans diameter** är den effektiva diametern som korrigerar sidmätningar. Den fysiska kulan är 2 mm, men probmekanismen rör sig och skaftet böjs innan kontakten registreras. Kalibreringen tar hänsyn till den rörelsen. Maskinens förskjutning mellan prob och spindel kalibreras separat.
+
+## Mät den effektiva diametern
+
+1. Fäst en passbit eller mätpinne med känt mått. Använd din vanliga finmatning.
+2. Under **Centrum**, mät passbitens kända mått med **X-ribba** eller **Y-ribba**, eller mät en stående pinne med **Tapp**. För en pinne, mät igen från det uppmätta centrumet innan du läser av diametern.
+3. Läs **Råmått** på resultatsidan. **Effektiv diameter = |råmått − känt mått|**. En 10 mm passbit med råmåttet 11.94 mm ger till exempel **1.94 mm**.
+4. Ange värdet i **Probkulans diameter** och mät igen för att kontrollera det.
+
+För en pinne, använd medelvärdet av råmåtten i X och Y.
+
+## Tillbakagång
 
 **Tillbakagång** är sträckan som proben backar efter varje grov- och finprobning. Den måste låta probkontakten släppa. Finsökningen går tillbaka till grovprobningens kontaktläge och får fortsätta ytterligare 0.5 mm förbi det.
 

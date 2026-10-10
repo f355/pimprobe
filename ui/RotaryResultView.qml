@@ -19,6 +19,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import "controls"
+import "controls/HelpText.js" as HelpText
 
 RowLayout {
     id: view
@@ -27,32 +28,68 @@ RowLayout {
     ColumnLayout {
         Layout.preferredWidth: Theme.columnWidth
         Layout.fillHeight: true
-        spacing: 8
+        spacing: 12
         Label {
             text: view.flow.leveling ? I18n.tr('Surface alignment') : I18n.tr('Rotary axis')
             font.pixelSize: 24
             color: Theme.text
         }
-        Loader {
+        ColumnLayout {
             Layout.fillWidth: true
+            spacing: 12
+            Label {
+                text: view.flow.leveling ? I18n.tr('Touches · G53 · mm') : I18n.tr('Axis centers · G53 · mm')
+                color: Theme.textMuted
+                font.pixelSize: 18
+            }
+            GridLayout {
+                Layout.fillWidth: true
+                columns: 3
+                columnSpacing: 12
+                rowSpacing: 8
+                Repeater {
+                    model: ["X", "Y", "Z"]
+                    Label {
+                        required property string modelData
+                        text: modelData
+                        Layout.fillWidth: true
+                        Layout.preferredWidth: 1
+                        color: Theme.textMuted
+                        font.pixelSize: 18
+                    }
+                }
+                Repeater {
+                    model: view.flow.leveling ? ((view.flow.result.level || {}).touches || []) : (view.flow.result.stations || [])
+                    RowLayout {
+                        id: station
+                        required property var modelData
+                        required property int index
+                        readonly property var point: view.flow.leveling ? modelData : modelData.center
+                        Layout.columnSpan: 3
+                        Layout.fillWidth: true
+                        spacing: 12
+                        Repeater {
+                            model: [0, 1, 2]
+                            Label {
+                                required property int modelData
+                                text: Number(station.point[modelData]).toFixed(3)
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: 1
+                                color: Theme.text
+                                font.family: view.flow.codeFont
+                                font.pixelSize: 20
+                            }
+                        }
+                    }
+                }
+            }
+            HelpTip {
+                title: view.flow.leveling ? I18n.tr('Touches · G53 · mm') : I18n.tr('Axis centers · G53 · mm')
+                text: view.flow.leveling ? HelpText.descriptions.rotaryTouches : HelpText.descriptions.rotaryCenters
+            }
+        }
+        Item {
             Layout.fillHeight: true
-            sourceComponent: view.flow.leveling ? surfaceDiagram : axisDiagram
-            Component {
-                id: axisDiagram
-                RotaryDiagram {
-                    enabled: false
-                    caption: ""
-                }
-            }
-            Component {
-                id: surfaceDiagram
-                RotaryLevelButton {
-                    vertical: view.flow.operation !== "horizontal"
-                    negativeY: view.flow.operation === "verticalNegative"
-                    enabled: false
-                    caption: ""
-                }
-            }
         }
     }
     Rectangle {
@@ -78,6 +115,8 @@ RowLayout {
                 Layout.preferredWidth: 112
                 onClicked: wcsPicker.open()
                 Accessible.name: I18n.tr('Choose result work coordinates')
+                helpTitle: Accessible.name
+                helpText: HelpText.descriptions["Choose result work coordinates"]
             }
         }
         ScrollView {
@@ -88,92 +127,53 @@ RowLayout {
             clip: true
             ColumnLayout {
                 width: details.availableWidth
-                spacing: 8
-                Label {
-                    text: view.flow.leveling ? I18n.tr('Touches · G53 · mm') : I18n.tr('Axis centers · G53 · mm')
-                    color: Theme.textMuted
-                    font.pixelSize: 18
-                }
-                GridLayout {
-                    Layout.fillWidth: true
-                    columns: 3
-                    columnSpacing: 12
-                    rowSpacing: 8
-                    Repeater {
-                        model: ["X", "Y", "Z"]
-                        Label {
-                            required property string modelData
-                            text: modelData
-                            Layout.fillWidth: true
-                            Layout.preferredWidth: 1
-                            color: Theme.textMuted
-                            font.pixelSize: 18
-                        }
-                    }
-                    Repeater {
-                        model: view.flow.leveling ? ((view.flow.result.level || {}).touches || []) : (view.flow.result.stations || [])
-                        RowLayout {
-                            id: station
-                            required property var modelData
-                            required property int index
-                            readonly property var point: view.flow.leveling ? modelData : modelData.center
-                            Layout.columnSpan: 3
-                            Layout.fillWidth: true
-                            spacing: 12
-                            Repeater {
-                                model: [0, 1, 2]
-                                Label {
-                                    required property int modelData
-                                    text: Number(station.point[modelData]).toFixed(3)
-                                    Layout.fillWidth: true
-                                    Layout.preferredWidth: 1
-                                    color: Theme.text
-                                    font.family: view.flow.codeFont
-                                    font.pixelSize: 20
-                                }
-                            }
-                        }
-                    }
-                }
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 1
-                    color: Theme.divider
-                }
+                spacing: 12
                 Repeater {
                     model: view.flow.leveling ? [
                         {
                             label: "A correction",
-                            value: (view.flow.result.level || {}).correction
+                            value: (view.flow.result.level || {}).correction,
+                            help: HelpText.descriptions.aCorrection
                         },
                         {
                             label: "Remaining tilt",
-                            value: (view.flow.result.level || {}).residual
+                            value: (view.flow.result.level || {}).residual,
+                            help: HelpText.descriptions.remainingTilt
                         }
                     ] : [
                         {
                             label: "Axis angle in X/Y",
-                            value: view.flow.result.xyAngle
+                            value: view.flow.result.xyAngle,
+                            help: HelpText.descriptions.xyAngle
                         },
                         {
                             label: "Axis angle in X/Z",
-                            value: view.flow.result.xzAngle
+                            value: view.flow.result.xzAngle,
+                            help: HelpText.descriptions.xzAngle
                         }
                     ]
                     RowLayout {
+                        id: angle
                         required property var modelData
                         Layout.fillWidth: true
+                        Layout.preferredHeight: 56
+                        spacing: 12
                         Label {
                             text: I18n.tr(parent.modelData.label)
                             Layout.fillWidth: true
                             color: Theme.text
                             font.pixelSize: 20
+                            wrapMode: Text.WordWrap
                         }
                         Label {
                             text: I18n.tr('%1°', [Number(parent.modelData.value || 0).toFixed(4)])
                             color: Theme.text
                             font.family: view.flow.codeFont
                             font.pixelSize: 24
+                        }
+                        HelpTip {
+                            title: I18n.tr(angle.modelData.label)
+                            text: angle.modelData.help
                         }
                     }
                 }

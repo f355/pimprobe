@@ -20,6 +20,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import "controls"
 import "ReviewPlan.js" as ReviewPlan
+import "controls/HelpText.js" as HelpText
 
 RowLayout {
     id: review
@@ -160,6 +161,7 @@ RowLayout {
                         NumberField {
                             objectName: "review-" + option.modelData.key
                             Accessible.name: I18n.tr(option.modelData.label)
+                            helpText: HelpText.option(option.modelData.key, review.config.family)
                             Layout.preferredWidth: 112
                             Layout.preferredHeight: 56
                             editor: editor

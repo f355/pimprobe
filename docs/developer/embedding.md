@@ -33,7 +33,9 @@ Set `showHeader: false` when the host supplies the header. The page exposes:
 
 - `headerControls`: a component containing the probe deploy switch.
 - `pageTitle`, `busy` and `subpageOpen`: current navigation and operation state.
-- `requestBack()`, `openHelp()` and `openWcs()`: header actions.
+- `requestBack()` and `openWcs()`: header actions.
+- `openHelp()`: toggle control explanations; `helpMode` reports whether help is active.
+- `openGuide()`: open the operator guide index.
 - `leaveRequested` and `alarmRequested`: requests for host navigation.
 - `settingsContribution`: optional host controls for the Settings page.
 - `updateAvailable`: shows a notification dot on the Settings tab.
@@ -41,6 +43,11 @@ Set `showHeader: false` when the host supplies the header. The page exposes:
 Pass `uiFontFamily` and `monoFontFamily` for text. A `controls/Style.qml` object
 sets colors, control sizes and layout spacing through the page's `style`
 property. The controls share that style within the QML engine.
+
+For help across a host-supplied header, set `helpContainer` to the item enclosing
+both header and page. Give that item a `contextHelp` property bound to the
+page's `contextHelp`, then use `HelpButton` and `HelpTip` from `ui/controls`.
+The help button shows X while help is active.
 
 The `controls/I18n` singleton selects the interface language. Set
 `systemLanguage` to `en`, `zh_CN` or `sv` to supply a host default. A saved

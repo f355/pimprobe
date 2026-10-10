@@ -8,11 +8,11 @@
 //
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import QtQuick
 import QtQuick.Controls
@@ -20,38 +20,37 @@ import QtQuick.Layouts
 
 LabButton {
     id: control
-    property bool probeSelected: true
-    text: probeSelected ? I18n.tr('Probe') : I18n.tr('Tool')
-    implicitWidth: 96
+    property bool extended: false
+    property bool stateKnown: true
+    property bool moving: false
+    implicitWidth: 120
     implicitHeight: 56
-    padding: 4
-    font.pixelSize: 18
+    padding: 0
     background: null
-    Accessible.name: I18n.tr('Coordinate reference: %1', [text])
-    onClicked: probeSelected = !probeSelected
-
+    text: moving ? I18n.tr("Moving") : !stateKnown ? I18n.tr("Unknown") : extended ? I18n.tr("Extended") : I18n.tr("Retracted")
+    Accessible.name: text
     contentItem: ColumnLayout {
         spacing: 0
         Repeater {
-            model: ["Probe", "Tool"]
+            model: ["Retracted", "Extended"]
             Rectangle {
-                required property string modelData
+                id: state
                 required property int index
-                readonly property bool active: control.probeSelected === (index === 0)
-                implicitWidth: label.implicitWidth + 8
-                implicitHeight: label.implicitHeight
+                required property string modelData
+                readonly property bool active: control.stateKnown && !control.moving && control.extended === (index === 1)
+                readonly property color stateColor: index === 0 ? Theme.danger : Theme.accentBright
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                color: active ? Theme.accentWash : "transparent"
                 radius: 4
+                color: active ? Qt.rgba(stateColor.r, stateColor.g, stateColor.b, 0.16) : "transparent"
                 Label {
-                    id: label
                     anchors.fill: parent
-                    text: I18n.tr(parent.modelData)
-                    color: parent.active ? Theme.accentBright : Theme.textMuted
+                    text: I18n.tr(state.modelData)
                     font.family: control.font.family
-                    font.pixelSize: control.font.pixelSize
-                    font.weight: parent.active ? Font.DemiBold : Font.Normal
+                    font.pixelSize: 18
+                    font.weight: state.active ? Font.DemiBold : Font.Normal
+                    color: state.stateColor
+                    opacity: state.active ? 1 : 0.35
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
                 }

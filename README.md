@@ -43,9 +43,8 @@ and Node.js. The development scripts locate Homebrew Qt and rustup on macOS.
 Run `./dev/preview.sh` for an 800 x 480 preview with simulated stock.
 UI tests use an isolated mock service and temporary settings.
 
-Operator text lives in `docs/`; each probing tab uses its own page as contextual
-help during previews and packaging. Screenshots and guide navigation sit inside
-`guide-only` comment blocks. Refresh screenshots with
+Operator text lives in `docs/` and supplies the on-screen Guide.
+Screenshots sit inside `guide-only` comment blocks. Refresh screenshots with
 `./dev/test-ui.sh dev/screenshots`.
 
 ```sh

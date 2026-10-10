@@ -21,6 +21,12 @@ use tokio::sync::broadcast;
 /// Stock geometry expressed as the probe-ball-center collision envelope.
 #[derive(Debug, Clone)]
 pub enum MockGeometry {
+    SlopedPlane {
+        measured: Axis,
+        along: Axis,
+        origin: Position,
+        slope: f64,
+    },
     RotatingPlane {
         pivot: [f64; 2],
         distance: f64,
@@ -66,6 +72,13 @@ impl MockGeometry {
     pub fn intersect(&self, axis: Axis, position: Position, delta: f64) -> Option<f64> {
         let i = axis.index();
         match self {
+            Self::SlopedPlane {
+                measured,
+                along,
+                origin,
+                slope,
+            } => (*measured == axis)
+                .then(|| origin[i] + slope * (position[along.index()] - origin[along.index()])),
             Self::RotatingPlane {
                 pivot,
                 distance,
@@ -321,7 +334,22 @@ impl MockController {
         c.validate()?;
         let mut inner = self.inner.lock().unwrap();
         let s = inner.state.position;
-        inner.geometry = if c.z {
+        inner.geometry = if c.family == "angle" {
+            let (measured, along, direction) = c.angle_axes();
+            let search = match measured {
+                Axis::X => c.x_search_distance,
+                Axis::Y => c.y_search_distance,
+                Axis::Z => c.depth,
+            };
+            let mut origin = s;
+            origin[measured.index()] += f64::from(direction) * search * 0.4;
+            MockGeometry::SlopedPlane {
+                measured,
+                along,
+                origin,
+                slope: if measured == Axis::X { -0.02 } else { 0.02 },
+            }
+        } else if c.z {
             MockGeometry::Plane {
                 axis: Axis::Z,
                 coordinate: s[2] - c.depth * 0.4,

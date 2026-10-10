@@ -57,6 +57,14 @@ ProbeButton {
             if (control.zApproach) {
                 targetX = width / 2;
                 targetY = height / 2;
+                Draw.referencePlane(context, left, top, right, bottom, Theme.axisZ);
+            } else if (control.xApproach && control.yApproach) {
+                Draw.cornerPoint(context, targetX, targetY, control.xApproach, -control.yApproach,
+                    Theme.axisX, Theme.axisY);
+            } else if (control.xApproach) {
+                Draw.referenceLine(context, targetX, top, targetX, bottom, Theme.axisX);
+            } else {
+                Draw.referenceLine(context, left, targetY, right, targetY, Theme.axisY);
             }
 
             var probeX = (left + right) / 2;
@@ -75,8 +83,6 @@ ProbeButton {
 
             context.strokeStyle = Theme.text;
             Draw.crosshair(context, probeX, probeY);
-
-            Draw.measuredPoint(context, targetX, targetY, Theme.accentBright);
         }
     }
 }

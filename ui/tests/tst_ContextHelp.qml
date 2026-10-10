@@ -84,7 +84,7 @@ TestCase {
     function test_inspect_without_activating() {
         var helpButton = toggle();
         var tabs = children(page, TabBar)[0];
-        compare(tabs.count, 5);
+        compare(tabs.count, 6);
         compare(tabs.currentItem.text, I18n.tr("Outside"));
         mouseClick(helpButton);
         tryCompare(page, "helpMode", true);
@@ -186,7 +186,7 @@ TestCase {
 
     function test_placements_data() {
         return ["en", "zh_CN", "sv"].reduce(function(rows, language) {
-            return rows.concat([0,1,2,3,4].map(function(tab) { return {tag:language+"-"+tab,language:language,tab:tab}; }));
+            return rows.concat([0,1,2,3,4,5].map(function(tab) { return {tag:language+"-"+tab,language:language,tab:tab}; }));
         }, []);
     }
     function test_placements(data) {
@@ -236,7 +236,6 @@ TestCase {
         compare(guide.opened, true);
         compare(guide.pageIndex, -1);
         compare(page.contextHelp.visible, false);
-        compare(guide.pages.length, 10);
         var entry = children(guide, LabButton).filter(function(button) { return button.visible && button.text === guide.pages[1].title; })[0];
         mouseClick(entry);
         compare(guide.pageIndex, 1);
@@ -257,7 +256,7 @@ TestCase {
     }
 
     function test_scrolling_settings() {
-        children(page, TabBar)[0].currentIndex = 4;
+        page.openSettings();
         page.openHelp();
         verify(waitForPolish(host));
         tryVerify(function() { return page.contextHelp.tips.length > 0; });

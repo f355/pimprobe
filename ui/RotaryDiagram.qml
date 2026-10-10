@@ -54,6 +54,7 @@ ProbeButton {
             });
             c.fillRect(chuckLeft, height * 0.15, chuckRight - chuckLeft, height * 0.70);
             c.strokeRect(chuckLeft, height * 0.15, chuckRight - chuckLeft, height * 0.70);
+            Draw.referenceDashes(c, 0, cy, width, cy, [Theme.axisZ, Theme.axisY], 0);
 
             var first = width * 0.43, second = width * 0.77;
             [first, second].forEach(function(x) {
@@ -64,10 +65,7 @@ ProbeButton {
             });
             c.strokeStyle = Theme.text;
             Draw.crosshair(c, first, cy);
-            c.translate(first, cy);
-            c.scale(0.6, 0.6);
-            c.strokeStyle = Theme.accentBright;
-            Draw.crosshair(c, 0, 0);
+            Draw.referencePoint(c, first, cy, [Theme.axisY, Theme.axisZ]);
         }
     }
 }

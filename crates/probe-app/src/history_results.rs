@@ -67,17 +67,23 @@ impl ProbeApp {
             MeasurementResult::Routine(routine) => {
                 routine.wcs = wcs;
                 routine.zeroed = false;
+                if let Some(angle) = &mut routine.angle {
+                    angle.rotation_applied = false;
+                }
                 routine.point = std::array::from_fn(|i| {
                     routine.machine_point[i]
                         .map(|v| v - (state.position[i] - state.work_position[i]))
                 });
-                !routine.axes.is_empty()
-                    && routine.axes.iter().all(|axis| {
-                        ["X", "Y", "Z"]
-                            .iter()
-                            .position(|a| a == axis)
-                            .is_some_and(|i| routine.machine_point[i].is_some_and(f64::is_finite))
-                    })
+                routine.angle.is_some()
+                    || (!routine.axes.is_empty()
+                        && routine.axes.iter().all(|axis| {
+                            ["X", "Y", "Z"]
+                                .iter()
+                                .position(|a| a == axis)
+                                .is_some_and(|i| {
+                                    routine.machine_point[i].is_some_and(f64::is_finite)
+                                })
+                        }))
             }
             MeasurementResult::Rotary(rotary) => {
                 rotary.wcs = wcs;
@@ -138,6 +144,9 @@ impl ProbeApp {
                         MeasurementResult::Routine(result) => {
                             if result.wcs != wcs {
                                 result.zeroed = false;
+                                if let Some(angle) = &mut result.angle {
+                                    angle.rotation_applied = false;
+                                }
                             }
                             result.wcs = wcs;
                             result.point = std::array::from_fn(|i| {
@@ -175,14 +184,18 @@ impl ProbeApp {
                     "work_zero"
                 }
                 HistoryAction::Rotation => {
-                    let MeasurementResult::Rotary(result) = &mut opened.result else {
-                        return Err(AppError::invalid(
-                            "result",
-                            "This measurement has no rotary alignment",
-                        ));
-                    };
-                    pimprobe_core::align_rotary(app.device.as_ref(), result).await?;
-                    result.rotation_applied = true;
+                    match &mut opened.result {
+                        MeasurementResult::Routine(result) => {
+                            *result =
+                                pimprobe_core::rotate_angle_result(app.device.as_ref(), result)
+                                    .await?;
+                        }
+                        MeasurementResult::Rotary(result) => {
+                            pimprobe_core::align_rotary(app.device.as_ref(), result).await?;
+                            result.rotation_applied = true;
+                        }
+                        MeasurementResult::Repeatability(_) => unreachable!(),
+                    }
                     "apply_xy_alignment"
                 }
             };

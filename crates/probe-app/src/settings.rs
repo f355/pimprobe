@@ -168,6 +168,8 @@ fn rules() -> Vec<Rule> {
         ("insideDepth", 5., Parameter::Travel),
         ("insideXSearchDistance", 10., Parameter::SearchDistance),
         ("insideYSearchDistance", 10., Parameter::SearchDistance),
+        ("anglePointSpacing", 20., Parameter::SearchDistance),
+        ("angleSearchDistance", 10., Parameter::Travel),
     ] {
         rules.push(Rule {
             key,

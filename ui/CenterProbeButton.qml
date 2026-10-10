@@ -84,6 +84,12 @@ ProbeButton {
                     }
                     c.stroke();
                 }
+                if (z)
+                    Draw.referencePlane(c, left, top, right, bottom, Theme.axisZ);
+                else if (onlyX)
+                    Draw.referenceDashes(c, cx, 0, cx, height, [Theme.axisX]);
+                else if (onlyY)
+                    Draw.referenceDashes(c, 0, cy, width, cy, [Theme.axisY]);
                 c.strokeStyle = Theme.text;
                 c.lineWidth = 2.5;
                 if (!z && !onlyY) {
@@ -96,7 +102,8 @@ ProbeButton {
                 }
                 c.strokeStyle = Theme.text;
                 Draw.crosshair(c, cx, cy);
-                Draw.measuredPoint(c, cx, cy, Theme.accentBright);
+                if (!z && !onlyX && !onlyY)
+                    Draw.referencePoint(c, cx, cy, [Theme.axisX, Theme.axisY]);
             }
         }
         Label {

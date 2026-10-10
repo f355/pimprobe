@@ -135,10 +135,10 @@ TestCase {
             {tag:"01-outside", kind:"tab", tab:0},
             {tag:"02-inside", kind:"tab", tab:1},
             {tag:"03-center", kind:"tab", tab:2},
-            {tag:"04-rotary", kind:"tab", tab:3},
-            {tag:"05-settings", kind:"tab", tab:4},
+            {tag:"04-rotary", kind:"tab", tab:4},
+            {tag:"05-settings", kind:"tab", tab:5},
             {tag:"06-distance-keypad", kind:"edit", tab:0},
-            {tag:"07-settings-keypad", kind:"edit", tab:4},
+            {tag:"07-settings-keypad", kind:"edit", tab:5},
             {tag:"08-settings-scroll", kind:"settings-scroll"},
             {tag:"09-retracted", kind:"retracted"},
             {tag:"10-disconnected", kind:"disconnected"},
@@ -147,8 +147,8 @@ TestCase {
             {tag:"13-outside-help", kind:"help", tab:0},
             {tag:"14-inside-help", kind:"help", tab:1},
             {tag:"15-center-help", kind:"help", tab:2},
-            {tag:"16-rotary-help", kind:"help", tab:3},
-            {tag:"17-settings-help", kind:"help", tab:4},
+            {tag:"16-rotary-help", kind:"help", tab:4},
+            {tag:"17-settings-help", kind:"help", tab:5},
             {tag:"18-exit", kind:"exit"},
             {tag:"19-exit-error", kind:"exit-error"},
             {tag:"20-utilities", kind:"utilities"},
@@ -199,17 +199,17 @@ TestCase {
             {tag:"65-valley-review", kind:"operation-review", family:"center", selection:"x-valley"},
             {tag:"66-pocket-z-review", kind:"operation-review", family:"inside", selection:{x:0,y:0,z:true}},
             {tag:"67-update-marker", kind:"update-marker", tab:0},
-            {tag:"68-settings-update-marker", kind:"update-marker", tab:4},
+            {tag:"68-settings-update-marker", kind:"update-marker", tab:5},
             {tag:"69-outside-help-details", kind:"help-details", tab:0},
-            {tag:"70-rotary-help-details", kind:"help-details", tab:3},
-            {tag:"71-settings-help-details", kind:"help-details", tab:4},
+            {tag:"70-rotary-help-details", kind:"help-details", tab:4},
+            {tag:"71-settings-help-details", kind:"help-details", tab:5},
             {tag:"72-help-path", kind:"help-image", tab:0},
             {tag:"73-help-coordinates", kind:"help-tip", title:"Coordinates"},
             {tag:"74-help-wcs", kind:"help-tip", title:"Work coordinates"},
             {tag:"76-help-actuator", kind:"help-tip", title:"Extend / Retract"},
             {tag:"77-help-tabs", kind:"help-tip", title:"Probing tabs"},
             {tag:"78-help-distance", kind:"help-tip", title:"X search distance", tab:1},
-            {tag:"79-help-settings", kind:"help-tip", title:"Probe ball diameter", tab:4},
+            {tag:"79-help-settings", kind:"help-tip", title:"Probe ball diameter", tab:5},
             {tag:"80-guide-index", kind:"guide"},
             {tag:"81-help-retracted", kind:"help", tab:0, actuator:0},
             {tag:"82-help-result-contacts", kind:"inside", helpTitle:"Contacts · G53 · mm"},
@@ -217,7 +217,12 @@ TestCase {
             {tag:"84-help-rotary-centers", kind:"rotary", helpTitle:"Axis centers · G53 · mm"},
             {tag:"85-help-rotary-tilt", kind:"level", helpTitle:"Remaining tilt"},
             {tag:"86-help-repeatability-spread", kind:"repeat-result", helpTitle:"Std dev"},
-            {tag:"87-help-confirmation", kind:"review", help:true}
+            {tag:"87-help-confirmation", kind:"review", help:true},
+            {tag:"88-angle", kind:"tab", tab:3},
+            {tag:"89-angle-review", kind:"operation-review", family:"angle", selection:"x-plus"},
+            {tag:"90-slope-review", kind:"operation-review", family:"angle", selection:"z-y"},
+            {tag:"91-angle-result", kind:"angle-result", selection:"x-plus"},
+            {tag:"92-slope-result", kind:"angle-result", selection:"z-y"}
         ];
         return ["en", "zh_CN", "sv"].reduce(function(rows, language) {
             return rows.concat(screens.map(function(screen) {
@@ -245,7 +250,7 @@ TestCase {
             var field = children(page, NumberField).filter(function(f) { return f.visible; })[0];
             field.editor.begin(field);
         } else if (kind === "settings-scroll") {
-            tabs.currentIndex = 4;
+            page.openSettings();
             var scroll = children(children(page, ProbeSetupPanel)[0], Flickable)[0];
             scroll.contentY = scroll.contentHeight - scroll.height;
         } else if (kind === "retracted") {
@@ -313,6 +318,12 @@ TestCase {
                     config:Pages.routine(client.values,"outside",{x:0,y:0,z:true},54),error:"No contact"}
             ];
             component(HistoryFlow).showHistory();
+        } else if (kind === "angle-result") {
+            page.openRoutineReview("angle", data.selection);
+            var angleFlow = component(ProbeFlow);
+            angleFlow.acceptResult({point:[null,null,null], machinePoint:[null,null,null], returned:true, zeroed:false,
+                angle: {plane:data.selection === "z-y" ? "Y/Z" : "X/Y", degrees:1.1458, difference:0.4, spacing:20,
+                    touches:data.selection === "z-y" ? [[-120,-110,-40,0],[-120,-90,-39.6,0]] : [[-120,-110,-40,0],[-120.4,-90,-40,0]], rotationSupported:data.selection !== "z-y"}}, "screen-angle");
         } else if (kind === "operation-review") {
             page.openRoutineReview(data.family,data.selection);
             var review = component(OperationReview);

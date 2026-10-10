@@ -19,7 +19,7 @@ import { fileURLToPath } from "node:url";
 import { buildCatalog, languages } from "./build-i18n.mjs";
 
 const docs = new URL("../docs/", import.meta.url);
-const guideNames = ["README", "outside", "inside", "center", "rotary", "settings", "results", "editing", "history", "repeatability"];
+const guideNames = ["README", "outside", "inside", "center", "angle", "rotary", "settings", "results", "editing", "history", "repeatability"];
 
 export function renderPage(name, source = docs) {
     const markdown = readFileSync(new URL(name, source), "utf8");

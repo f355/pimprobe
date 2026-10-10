@@ -24,11 +24,10 @@ ProbeButton {
 
     required property int xApproach
     required property int yApproach
-    property bool zApproach: false
-    helpTitle: zApproach ? I18n.tr("Z surface") : I18n.tr(xApproach && yApproach ? "Inside %1 corner" : "Inside %1 edge",
+    helpTitle: I18n.tr(xApproach && yApproach ? "Inside %1 corner" : "Inside %1 edge",
         [(xApproach ? "X" + (xApproach > 0 ? "+" : "-") : "") + (xApproach && yApproach ? "/" : "") + (yApproach ? "Y" + (yApproach > 0 ? "+" : "-") : "")])
-    helpText: HelpText.edge(true, zApproach, xApproach && yApproach)
-    diagramLabel: zApproach ? I18n.tr('Z surface') : "X " + xApproach + ", Y " + yApproach
+    helpText: HelpText.edge(true, false, xApproach && yApproach)
+    diagramLabel: "X " + xApproach + ", Y " + yApproach
 
     contentItem: ProbeDiagram {
         id: diagram
@@ -44,49 +43,49 @@ ProbeButton {
             var bottom = height * 0.70;
             var centerX = width / 2;
             var centerY = height / 2;
-            var probeX = control.zApproach ? centerX : centerX - control.xApproach * 14;
-            var probeY = control.zApproach ? centerY : centerY + control.yApproach * 14;
+            var probeX = centerX - control.xApproach * 14;
+            var probeY = centerY + control.yApproach * 14;
 
             context.fillStyle = Theme.panelRaised;
             context.fillRect(margin, margin, width - 2 * margin, height - 2 * margin);
             context.fillStyle = Theme.stock;
-            if (control.zApproach) {
-                context.fillRect(left, top, right - left, bottom - top);
-            } else {
-                if (control.xApproach < 0)
-                    context.fillRect(margin, margin, left - margin, height - 2 * margin);
-                else if (control.xApproach > 0)
-                    context.fillRect(right, margin, width - right - margin, height - 2 * margin);
-                if (control.yApproach > 0)
-                    context.fillRect(margin, margin, width - 2 * margin, top - margin);
-                else if (control.yApproach < 0)
-                    context.fillRect(margin, bottom, width - 2 * margin, height - bottom - margin);
-            }
+            if (control.xApproach < 0)
+                context.fillRect(margin, margin, left - margin, height - 2 * margin);
+            else if (control.xApproach > 0)
+                context.fillRect(right, margin, width - right - margin, height - 2 * margin);
+            if (control.yApproach > 0)
+                context.fillRect(margin, margin, width - 2 * margin, top - margin);
+            else if (control.yApproach < 0)
+                context.fillRect(margin, bottom, width - 2 * margin, height - bottom - margin);
             context.strokeStyle = Theme.stockEdge;
             context.lineWidth = 1;
             context.beginPath();
-            if (control.zApproach) {
-                context.rect(left, top, right - left, bottom - top);
-            } else {
-                if (control.xApproach < 0) {
-                    context.moveTo(left, control.yApproach > 0 ? top : margin);
-                    context.lineTo(left, control.yApproach < 0 ? bottom : height - margin);
-                } else if (control.xApproach > 0) {
-                    context.moveTo(right, control.yApproach > 0 ? top : margin);
-                    context.lineTo(right, control.yApproach < 0 ? bottom : height - margin);
-                }
-                if (control.yApproach > 0) {
-                    context.moveTo(control.xApproach < 0 ? left : margin, top);
-                    context.lineTo(control.xApproach > 0 ? right : width - margin, top);
-                } else if (control.yApproach < 0) {
-                    context.moveTo(control.xApproach < 0 ? left : margin, bottom);
-                    context.lineTo(control.xApproach > 0 ? right : width - margin, bottom);
-                }
+            if (control.xApproach < 0) {
+                context.moveTo(left, control.yApproach > 0 ? top : margin);
+                context.lineTo(left, control.yApproach < 0 ? bottom : height - margin);
+            } else if (control.xApproach > 0) {
+                context.moveTo(right, control.yApproach > 0 ? top : margin);
+                context.lineTo(right, control.yApproach < 0 ? bottom : height - margin);
+            }
+            if (control.yApproach > 0) {
+                context.moveTo(control.xApproach < 0 ? left : margin, top);
+                context.lineTo(control.xApproach > 0 ? right : width - margin, top);
+            } else if (control.yApproach < 0) {
+                context.moveTo(control.xApproach < 0 ? left : margin, bottom);
+                context.lineTo(control.xApproach > 0 ? right : width - margin, bottom);
             }
             context.stroke();
 
             var targetX = control.xApproach < 0 ? left : control.xApproach > 0 ? right : centerX;
             var targetY = control.yApproach > 0 ? top : control.yApproach < 0 ? bottom : centerY;
+
+            if (control.xApproach && control.yApproach)
+                Draw.cornerPoint(context, targetX, targetY, -control.xApproach, control.yApproach,
+                    Theme.axisX, Theme.axisY);
+            else if (control.xApproach)
+                Draw.referenceLine(context, targetX, margin, targetX, height - margin, Theme.axisX);
+            else
+                Draw.referenceLine(context, margin, targetY, width - margin, targetY, Theme.axisY);
 
             context.strokeStyle = Theme.text;
             context.lineWidth = 3;
@@ -101,12 +100,6 @@ ProbeButton {
 
             context.strokeStyle = Theme.text;
             Draw.crosshair(context, probeX, probeY);
-
-            if (control.zApproach) {
-                targetX = centerX;
-                targetY = centerY;
-            }
-            Draw.measuredPoint(context, targetX, targetY, Theme.accentBright);
         }
     }
 }

@@ -20,6 +20,7 @@ import QtQuick
 import "controls"
 import QtQuick.Controls
 import QtQuick.Layouts
+import "ProbePages.js" as Pages
 
 PageView {
     id: flow
@@ -62,6 +63,8 @@ PageView {
     property var historyDetails: null
     property string logText: ""
     property var result: []
+    property var angle: null
+    signal rotationSaved
     property var spans: [null, null, null]
     property var rawPoint: [null, null, null]
     property var rawSpans: [null, null, null]
@@ -123,6 +126,8 @@ PageView {
             Qt.callLater(scrollLogToEnd);
     }
     readonly property string description: {
+        if (routine.family === "angle")
+            return I18n.tr("Measuring %1", [I18n.tr(Pages.angleName(routine.feature))]);
         if (routine.family === "center") {
             var descriptions = {
                 "boss": "Probing boss center.",
@@ -163,6 +168,7 @@ PageView {
         failure = "";
         logText = "";
         result = [];
+        angle = null;
         spans = [null, null, null];
         rawPoint = [null, null, null];
         rawSpans = [null, null, null];
@@ -294,6 +300,7 @@ PageView {
     }
 
     function acceptResult(measurement, id) {
+        angle = measurement.angle || null;
         rawPoint = measurement.rawPoint || [null, null, null];
         rawSpans = measurement.rawSpans || [null, null, null];
         result = measurement.point;
@@ -374,6 +381,21 @@ PageView {
             completedID = id;
             workZeroSaved();
             appendLog("; G" + routine.wcs + " work zero confirmed");
+            client.refresh();
+        });
+    }
+
+    function rotateResult() {
+        if (!completedID || busy) return;
+        var id = completedID;
+        failure = "";
+        zeroRequest.send(historical ? "history.rotation" : "routine.rotation", {id: id}, function(reply) {
+            if (!reply.ok || !reply.data) {
+                failure = reply.error || "Unable to set work coordinate rotation";
+                return;
+            }
+            acceptResult(reply.data, id);
+            rotationSaved();
             client.refresh();
         });
     }
@@ -462,11 +484,17 @@ PageView {
                 }
 
                 ProbeResultView {
-                    visible: flow.phase === "result" && !flow.sourceVisible
+                    visible: flow.phase === "result" && !flow.sourceVisible && flow.routine.family !== "angle"
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     flow: flow
                     editor: resultEditor
+                }
+                AngleResultView {
+                    visible: flow.phase === "result" && !flow.sourceVisible && flow.routine.family === "angle"
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    flow: flow
                 }
             }
             RowLayout {
@@ -495,7 +523,7 @@ PageView {
                 }
                 LabButton {
                     text: I18n.tr('Set Work Zero')
-                    visible: flow.phase === "result"
+                    visible: flow.phase === "result" && flow.routine.family !== "angle"
                     enabled: !flow.busy && flow.completedID.length > 0
                     Layout.preferredWidth: 184
                     Layout.preferredHeight: 56
@@ -505,7 +533,7 @@ PageView {
                 }
                 LabButton {
                     text: I18n.tr('Return to start')
-                    visible: flow.phase === "result" && !flow.historical && (flow.routine.family !== "inside" || flow.routine.z)
+                    visible: flow.phase === "result" && !flow.historical && flow.routine.family !== "angle" && (flow.routine.family !== "inside" || flow.routine.z)
                     enabled: !flow.busy && !flow.returned && flow.completedID.length > 0
                     Layout.preferredWidth: 208
                     Layout.preferredHeight: 56
@@ -520,6 +548,16 @@ PageView {
                     Layout.preferredHeight: 56
                     font.pixelSize: 20
                     onClicked: flow.goToMeasured()
+                }
+                LabButton {
+                    text: I18n.tr('Set X/Y rotation')
+                    visible: flow.phase === "result" && flow.angle !== null && flow.angle.rotationSupported
+                    enabled: !flow.busy && flow.completedID.length > 0
+                    Layout.preferredWidth: 240
+                    Layout.preferredHeight: 56
+                    primary: true
+                    helpText: I18n.tr("Rotate the selected work coordinate system to match this face's measured X/Y angle. Its zero stays in place.")
+                    onClicked: flow.rotateResult()
                 }
                 LabButton {
                     visible: flow.phase !== "running"

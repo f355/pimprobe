@@ -238,7 +238,7 @@ Pane {
         if (compactLayout)
             settingsPage.open();
         else
-            tabs.currentIndex = 4;
+            tabs.currentIndex = tabs.count - 1;
     }
     function openUtilities() {
         if (busy)
@@ -577,7 +577,7 @@ Pane {
                     color: Theme.page
                 }
                 Repeater {
-                    model: page.compactLayout ? ["Outside", "Inside", "Center", "Rotary"] : ["Outside", "Inside", "Center", "Rotary", "Settings"]
+                    model: page.compactLayout ? ["Outside", "Inside", "Center", "Angle", "Rotary"] : ["Outside", "Inside", "Center", "Angle", "Rotary", "Settings"]
                     LabTabButton {
                         required property string modelData
                         implicitHeight: 56
@@ -586,13 +586,14 @@ Pane {
                         text: I18n.tr(modelData)
                         notification: modelData === "Settings" && page.updateAvailable
                         font.family: page.uiFontFamily
+                        font.pixelSize: 18
                     }
                 }
             }
             HelpTip {
                 target: tabs
                 title: I18n.tr("Probing tabs")
-                text: I18n.tr("Choose Outside for stock edges, Inside for pocket walls, Center for opposite sides, or Rotary for the fourth axis. Settings contains ball diameter, feeds and utilities.")
+                text: I18n.tr("Choose Outside for stock edges, Inside for pocket walls, Center for opposite sides, Angle for face angles, or Rotary for the fourth axis. Settings contains ball diameter, feeds and utilities.")
             }
         }
 
@@ -644,6 +645,29 @@ Pane {
                         height: Math.min(340, parent.height)
                         onSelected: function (feature) {
                             page.openRoutineReview("center", feature);
+                        }
+                    }
+                }
+                ProbePanel {
+                    settings: page.settings
+                    editor: numericEditor
+                    parameters: Pages.angle
+                    GridLayout {
+                        anchors.fill: parent
+                        columns: 2
+                        rowSpacing: 8
+                        columnSpacing: 8
+                        Repeater {
+                            model: Pages.angleFeatures
+                            AngleProbeButton {
+                                required property string modelData
+                                feature: modelData
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                Layout.preferredWidth: 172
+                                Layout.preferredHeight: 104
+                                onClicked: page.openRoutineReview("angle", feature)
+                            }
                         }
                     }
                 }

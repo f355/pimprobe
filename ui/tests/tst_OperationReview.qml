@@ -81,7 +81,13 @@ TestCase {
             {tag:"block", family:"center", selection:"block", keys:["xSearchDistance","ySearchDistance","depth"]},
             {tag:"hole", family:"center", selection:"hole", keys:["xSearchDistance","ySearchDistance"]},
             {tag:"Y ridge", family:"center", selection:"y-ridge", keys:["ySearchDistance","depth"]},
-            {tag:"X valley", family:"center", selection:"x-valley", keys:["xSearchDistance"]}
+            {tag:"X valley", family:"center", selection:"x-valley", keys:["xSearchDistance"]},
+            {tag:"X+ angle", family:"angle", selection:"x-plus", keys:["ySearchDistance","xSearchDistance"]},
+            {tag:"X- angle", family:"angle", selection:"x-minus", keys:["ySearchDistance","xSearchDistance"]},
+            {tag:"Y+ angle", family:"angle", selection:"y-plus", keys:["xSearchDistance","ySearchDistance"]},
+            {tag:"Y- angle", family:"angle", selection:"y-minus", keys:["xSearchDistance","ySearchDistance"]},
+            {tag:"Z slope X", family:"angle", selection:"z-x", keys:["xSearchDistance","depth"]},
+            {tag:"Z slope Y", family:"angle", selection:"z-y", keys:["ySearchDistance","depth"]}
         ];
     }
     function test_distance_options(data) {
@@ -90,14 +96,17 @@ TestCase {
             .map(function(option) { return option.key; }),data.keys);
         verify(Animations.clips[plan.clip]);
     }
-    function test_motion_and_clip_change() {
-        var illustration = createTemporaryObject(illustrationComponent,host.contentItem);
+    function test_motion_and_clip_change_data() {
+        return [{tag:"surface", clip:"z-surface"}, {tag:"angle", clip:"angle-z-x"}, {tag:"axis", clip:"rotary-axis"}];
+    }
+    function test_motion_and_clip_change(data) {
+        var illustration = createTemporaryObject(illustrationComponent,host.contentItem,{clip:data.clip});
         verify(illustration);
         var sprite = findChild(illustration,"motionSprite");
         verify(waitForPolish(illustration));
         verify(waitForRendering(illustration));
         tryVerify(function() { return sprite.currentFrame > 0; },3000);
-        sprite.running = false;
+        sprite.pause();
         sprite.currentFrame = 0;
         waitForRendering(illustration);
         var first = grabImage(illustration);
@@ -108,8 +117,14 @@ TestCase {
         waitForRendering(illustration);
         var third = grabImage(illustration);
         verify(!first.equals(second) || !first.equals(third),"The rendered probe moves");
-        illustration.clip = "rotary-axis";
-        sprite.running = true;
+        sprite.currentFrame = 54;
+        verify(waitForRendering(illustration));
+        var dim = grabImage(illustration);
+        sprite.currentFrame = 60;
+        verify(waitForRendering(illustration));
+        verify(!dim.equals(grabImage(illustration)),"The result pulses at the end of the loop");
+        illustration.clip = data.clip === "z-surface" ? "rotary-axis" : "z-surface";
+        sprite.resume();
         tryVerify(function() { return sprite.currentFrame > 0; },3000);
         verify(waitForRendering(illustration));
         verify(!third.equals(grabImage(illustration)),"Changing the operation changes its illustration");

@@ -161,7 +161,7 @@ RowLayout {
                         NumberField {
                             objectName: "review-" + option.modelData.key
                             Accessible.name: I18n.tr(option.modelData.label)
-                            helpText: HelpText.option(option.modelData.key, review.config.family)
+                            helpText: review.config.family === "angle" ? HelpText.option(option.modelData.label === "Point spacing" ? "anglePointSpacing" : option.modelData.label === "Search distance" ? "angleSearchDistance" : option.modelData.key, "angle") : HelpText.option(option.modelData.key, review.config.family)
                             Layout.preferredWidth: 112
                             Layout.preferredHeight: 56
                             editor: editor

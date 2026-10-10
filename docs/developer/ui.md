@@ -40,8 +40,9 @@ prepares the moves from the current machine position. The pages run the returned
 token. Saved settings are unchanged.
 
 `MotionIllustration` plays PNG frame sheets from `ui/animations`. The scenes
-use Three.js in `dev/animations`; QML plays the rendered frames. Rendering
-requires Node.js and Chrome:
+use Three.js in `dev/animations`; QML plays the rendered frames. Each loop ends
+with a pulsing result in the axis colours while the probe and path fade out.
+Rendering requires Node.js and Chrome:
 
 ```sh
 npm ci --prefix dev/animations
@@ -50,8 +51,8 @@ node dev/animations/gallery.mjs
 ```
 
 The gallery is saved as `build/ui-review/motion-loops.html`. The renderer checks
-for movement, visible pixels and probe framing. Each frame sheet fits inside a
-2048 × 2048 texture.
+for movement, a pulsing result, visible pixels and probe framing. Each frame
+sheet fits inside a 2048 × 2048 texture.
 
 ## Checking screens
 

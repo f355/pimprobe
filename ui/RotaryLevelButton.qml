@@ -40,6 +40,7 @@ ProbeButton {
             var surface = size * 0.03;
             var halfSpacing = span * 0.25;
             var tilt = (button.vertical ? 1 : -1) * Math.PI / 12;
+            var referenceColor = button.vertical ? Theme.axisY : Theme.axisZ;
             c.translate(width / 2, height / 2);
 
             c.save();
@@ -76,20 +77,23 @@ ProbeButton {
 
             c.save();
             c.setLineDash([2, 4]);
-            c.strokeStyle = Theme.text;
+            c.strokeStyle = Theme.textMuted;
             c.strokeRect(-span / 2, surface, span, thickness);
             c.restore();
+            Draw.referenceDashes(c, -span / 2 - size * 0.08, surface,
+                span / 2 + size * 0.08, surface, [referenceColor]);
 
+            function faceHeight(x) {
+                return surface + thickness / 2 + x * Math.tan(tilt)
+                    - thickness / (2 * Math.cos(tilt));
+            }
             c.strokeStyle = Theme.text;
             c.lineWidth = 3;
             [-halfSpacing, halfSpacing].forEach(function(x) {
-                var contact = surface + thickness / 2 + x * Math.tan(tilt)
-                            - thickness / (2 * Math.cos(tilt));
+                var contact = faceHeight(x);
                 Draw.arrow(c, x, -size * 0.27, x, contact - 5);
             });
             Draw.crosshair(c, -halfSpacing, -size * 0.27);
-            c.strokeStyle = Theme.accentBright;
-            Draw.crosshair(c, 0, surface);
 
             var radius = size * 0.36;
             var start = Math.PI * (button.vertical ? 0.72 : 0.28);

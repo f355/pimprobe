@@ -37,6 +37,52 @@ fn config() -> Value {
 }
 
 #[tokio::test]
+async fn angle_results_can_rotate_another_wcs_and_be_applied_from_history() {
+    let (_temp, app, router) = app();
+    let mut value = config();
+    value["family"] = json!("angle");
+    value["feature"] = json!("y-plus");
+    value["y"] = json!(1);
+    value["z"] = json!(false);
+    value["xSearchDistance"] = json!(20);
+    let (_, body) = request(&router, "POST", "/api/v1/routine/review", value).await;
+    let review: Value = serde_json::from_str(&body).unwrap();
+    let token = json!({"id":review["id"]});
+    let position = app.device.state().position;
+    let (_, body) = request(&router, "POST", "/api/v1/routine/run", token.clone()).await;
+    let finished: Value = serde_json::from_str(body.lines().last().unwrap()).unwrap();
+    assert_eq!(finished["type"], "result", "{body}");
+    assert_eq!(finished["result"]["angle"]["rotationSupported"], true);
+    assert_eq!(app.device.state().position, position);
+    let (_, body) = request(
+        &router,
+        "POST",
+        "/api/v1/routine/wcs",
+        json!({"id":review["id"],"wcs":55}),
+    )
+    .await;
+    assert_eq!(serde_json::from_str::<Value>(&body).unwrap()["wcs"], 55);
+    let origin = app.device.state().wcs_origin;
+    let (_, body) = request(&router, "POST", "/api/v1/routine/rotation", token.clone()).await;
+    assert_eq!(
+        serde_json::from_str::<Value>(&body).unwrap()["angle"]["rotationApplied"],
+        true,
+        "{body}"
+    );
+    assert_eq!(app.device.state().wcs_origin, origin);
+    let (_, body) = request(&router, "POST", "/api/v1/logs/history/open", token.clone()).await;
+    let opened: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(opened["canApply"], true, "{body}");
+    let (_, body) = request(&router, "POST", "/api/v1/logs/history/rotation", token).await;
+    assert_eq!(
+        serde_json::from_str::<Value>(&body).unwrap()["angle"]["rotationApplied"],
+        true,
+        "{body}"
+    );
+    assert_eq!(app.device.state().position, position);
+}
+
+#[tokio::test]
 async fn saved_measurement_can_be_reopened_after_restart_and_zeroed_without_motion() {
     let (temp, app, router) = app();
     let (_, body) = request(&router, "POST", "/api/v1/routine/review", config()).await;

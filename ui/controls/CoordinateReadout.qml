@@ -49,10 +49,11 @@ LabButton {
                 id: axis
                 required property string modelData
                 required property int index
+                readonly property color axisColor: [Theme.axisX, Theme.axisY, Theme.axisZ][index]
                 Layout.preferredWidth: 144
                 Layout.fillHeight: true
                 color: "transparent"
-                border.color: Theme.divider
+                border.color: Qt.tint(Theme.divider, Qt.rgba(axisColor.r, axisColor.g, axisColor.b, 0.55))
                 radius: 4
                 ColumnLayout {
                     anchors.fill: parent
@@ -67,7 +68,7 @@ LabButton {
                             Layout.preferredWidth: 18
                             Layout.fillHeight: true
                             text: axis.modelData
-                            color: Theme.text
+                            color: axis.axisColor
                             font.family: control.monoFont
                             font.pixelSize: 22
                             verticalAlignment: Text.AlignBottom

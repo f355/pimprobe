@@ -23,6 +23,8 @@ use std::{
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct RoutineResult {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub angle: Option<AngleMeasurement>,
     pub point: [Option<f64>; 3],
     #[serde(default, rename = "machinePoint")]
     pub machine_point: [Option<f64>; 3],
@@ -249,11 +251,48 @@ pub async fn run<C: Controller + ?Sized>(
         inner: c,
         cancel: &cancel,
     };
-    tokio::select! {
+    p.check_state(&c.state(), p.start.position)?;
+    let rotation = if p.config.family == "angle" && rotary_supported(&p.start.firmware_version) {
+        p.start.wcs_rotation.filter(|angle| angle.abs() > 0.0001)
+    } else {
+        None
+    };
+    if rotation.is_some() {
+        observe(Progress {
+            kind: "script".into(),
+            message: format!("G10 L2 P{} R0 ; measure in machine axes", p.start.wcs - 53),
+            ..Progress::default()
+        });
+        write_rotary_rotation(c, p.start.wcs, 0.).await?;
+    }
+    let outcome = tokio::select! {
         biased;
         _=cancel.cancelled()=>Err(Error::Cancelled),
         result=run_inner(&controller,p,t,&observe)=>result,
+    };
+    if let Some(rotation) =
+        rotation.filter(|_| c.state().connected && c.state().ready && !c.state().motion_blocked)
+    {
+        observe(Progress {
+            kind: "script".into(),
+            message: format!(
+                "G10 L2 P{} R{} ; restore work rotation",
+                p.start.wcs - 53,
+                crate::script::number(rotation)
+            ),
+            ..Progress::default()
+        });
+        if let Err(error) = write_rotary_rotation(c, p.start.wcs, rotation).await {
+            return Err(match outcome {
+                Ok(_) => error,
+                Err(cause) => Error::Recovery {
+                    cause: Box::new(cause),
+                    recovery: Box::new(error),
+                },
+            });
+        }
     }
+    outcome
 }
 async fn run_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
     c: &C,
@@ -291,6 +330,7 @@ async fn run_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
     stream.command(-1, &refs, observe)?;
     set_modes(&c, Modes::PROBING).await?;
     let mut position = p.start.position;
+    let mut angle_touches = Vec::new();
     let execution: Result<(), Error> = async {
         for (index, step) in p.steps.iter().enumerate() {
             p.check_state(&c.state(), position)?;
@@ -372,6 +412,9 @@ async fn run_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
                         stream.declarations(index as isize, &refs, observe)?;
                     }
                     let contact = fine.ok_or(Error::NoContact)?;
+                    if p.config.family == "angle" {
+                        angle_touches.push(contact.position);
+                    }
                     let surface = surface_machine_coordinate(
                         &contact,
                         *axis,
@@ -423,6 +466,12 @@ async fn run_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
             stream.rest(index as isize, &refs, observe)?;
         }
         p.check_state(&c.state(), position)?;
+        if p.config.family == "angle" {
+            result.angle = Some(AngleMeasurement::from_touches(&p.config,
+                angle_touches.try_into().map_err(|_| Error::Compensation("Two angle measurements are required.".into()))?,
+                rotary_supported(&p.start.firmware_version))?);
+            result.returned = true;
+        }
         result.machine_point = std::array::from_fn(|i| {
             result.point[i].map(|v| v + p.start.position[i] - p.start.work_position[i])
         });

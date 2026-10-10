@@ -43,6 +43,17 @@ function describe(config, rotary) {
                 "Back off from the face. Show the final angle and touches."
             ];
         }
+    } else if (config.family === "angle") {
+        var xFace = config.feature.indexOf("x-") === 0;
+        var alongX = config.feature === "z-x" || config.feature.indexOf("y-") === 0;
+        options.push(distance(alongX ? "xSearchDistance" : "ySearchDistance", "Point spacing", 0.1, 1000));
+        options.push(distance(config.z ? "depth" : xFace ? "xSearchDistance" : "ySearchDistance", "Search distance"));
+        clip = "angle-" + config.feature;
+        phases = [
+            config.z ? "Start above the first touch point." : "Start beside the face at measuring height.",
+            alongX ? "Touch twice, moving X+ between points." : "Touch twice, moving Y+ between points.",
+            "Return to start. Calculate the face angle."
+        ];
     } else if (config.z) {
         clip = config.family === "inside" ? "z-pocket" : "z-surface";
         options.push(distance("depth", "Depth"));

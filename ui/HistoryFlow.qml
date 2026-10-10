@@ -160,6 +160,10 @@ PageView {
         } else {
             var result = entry.result || {};
             var config = entry.config || {};
+            if (result.angle) {
+                lines.push("", I18n.tr("Measured angle") + " " + result.angle.degrees.toFixed(4) + "°",
+                    I18n.tr("Change %1 mm over %2 mm", [number(result.angle.difference), number(result.angle.spacing)]));
+            }
             var point = result.machinePoint || [];
             if (point.some(function (value) {
                 return value !== null && value !== undefined;

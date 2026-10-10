@@ -46,6 +46,7 @@ QtObject {
             "rotary.zero": ["POST", "/rotary/zero"],
             "rotary.wcs": ["POST", "/rotary/wcs"],
             "rotary.rotation": ["POST", "/rotary/rotation"],
+            "routine.rotation": ["POST", "/routine/rotation"],
             "repeatability.run": ["POST", "/repeatability/run"],
             "repeatability.stop": ["POST", "/repeatability/stop"],
             "history.get": ["GET", "/logs/history"],

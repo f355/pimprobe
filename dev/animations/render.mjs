@@ -22,6 +22,7 @@ import {chromium} from 'playwright';
 
 const root = fileURLToPath(new URL('./',import.meta.url));
 const output = fileURLToPath(new URL('../../ui/animations/',import.meta.url));
+const stills = fileURLToPath(new URL('../../build/ui-review/motion-stills/',import.meta.url));
 const server = createServer(async (request,response) => {
     const path = resolve(root,'.' + new URL(request.url,'http://localhost').pathname);
     if (!path.startsWith(root)) { response.writeHead(403).end(); return; }
@@ -49,7 +50,10 @@ for (const feature of ['boss','block','hole','pocket','x-ridge','x-valley','y-ri
     operations.push('center-'+feature);
 for (const operation of ['axis','horizontal','vertical','verticalNegative'])
     operations.push('rotary-'+operation);
+for (const feature of ['x-minus','x-plus','y-minus','y-plus','z-x','z-y'])
+    operations.push('angle-'+feature);
 await mkdir(output,{recursive:true});
+await mkdir(stills,{recursive:true});
 const metadata = {};
 try {
     for (const operation of operations.filter(key => !process.argv[2] || key === process.argv[2])) {
@@ -68,7 +72,7 @@ try {
                     throw new Error('Probe body is outside the frame at '+frame);
                 context.drawImage(window.canvas,(frame%columns)*width,Math.floor(frame/columns)*height);
             }
-            const samples = [0,24,48].map(frame => {
+            const samples = [0,20,40,54,60].map(frame => {
                 const pixels = context.getImageData((frame%columns)*width,Math.floor(frame/columns)*height,width,height).data;
                 let hash = 0, colored = 0;
                 for (let i=0; i<pixels.length; i+=4) {
@@ -81,10 +85,15 @@ try {
         });
         if (errors.length) throw new Error(errors.join('\n'));
         if (result.samples.some(sample => sample.colored < 3000)) throw new Error(operation+': blank scene');
-        if (new Set(result.samples.map(sample => sample.hash)).size < 2) throw new Error(operation+': no movement');
+        if (new Set(result.samples.slice(0,3).map(sample => sample.hash)).size < 2)
+            throw new Error(operation+': no movement');
+        if (result.samples[3].hash === result.samples[4].hash)
+            throw new Error(operation+': the result highlight does not pulse');
         const data = Buffer.from(result.data,'base64');
         await writeFile(resolve(output,operation+'.png'),data);
         metadata[operation] = {frames:64,width:320,height:176,rate:8,phases:result.phases};
+        await page.evaluate(() => window.renderFrame(0.9));
+        await page.screenshot({path:resolve(stills,operation+'.png')});
         console.log(operation,Math.round(data.length/1024)+' KiB');
     }
     if (!process.argv[2]) {

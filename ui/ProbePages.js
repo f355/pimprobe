@@ -26,6 +26,14 @@ function searchFields(family) {
 var outside = searchFields("outside");
 var inside = searchFields("inside");
 var center = searchFields("center");
+var angle = [
+    {key: "anglePointSpacing", label: "Point spacing"},
+    {key: "angleSearchDistance", label: "Search distance"}
+];
+var angleFeatures = ["x-minus", "x-plus", "y-minus", "y-plus", "z-x", "z-y"];
+function angleName(feature) {
+    return ({"x-plus": "X+ face angle", "x-minus": "X− face angle", "y-plus": "Y+ face angle", "y-minus": "Y− face angle", "z-x": "Z slope along X", "z-y": "Z slope along Y"})[feature] || "";
+}
 var rotary = [
     {key: "rotaryRodDiameter", label: "Rod diameter"},
     {key: "rotaryXDistance", label: "X distance"},
@@ -42,6 +50,7 @@ var setup = [
 ];
 
 function featureName(routine) {
+    if (routine.family === "angle") return angleName(routine.feature);
     if (routine.z) return "Z surface";
     if (routine.family === "center") {
         var names = {
@@ -76,7 +85,15 @@ function routine(settings, family, selection, wcs) {
         coarseFeed: settings.coarseFeed,
         fineFeed: settings.fineFeed
     };
-    if (family === "center") {
+    if (family === "angle") {
+        config.feature = selection;
+        config.z = selection.indexOf("z-") === 0;
+        config.x = selection.indexOf("x-") === 0 ? (selection === "x-plus" ? 1 : -1) : 0;
+        config.y = selection.indexOf("y-") === 0 ? (selection === "y-plus" ? 1 : -1) : 0;
+        config.depth = settings.angleSearchDistance;
+        config.xSearchDistance = config.x ? settings.angleSearchDistance : settings.anglePointSpacing;
+        config.ySearchDistance = config.y ? settings.angleSearchDistance : settings.anglePointSpacing;
+    } else if (family === "center") {
         config.feature = selection;
         config.z = selection === "z";
         config.x = config.z || selection.indexOf("y-") === 0 ? 0 : 1;

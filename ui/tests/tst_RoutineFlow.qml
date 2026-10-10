@@ -147,6 +147,34 @@ TestCase {
         return result.data
     }
 
+    function test_angle_result_rotates_the_selected_work_coordinates() {
+        var before = api("/state").status.machinePosition
+        flow.showRoutine({family:"angle", feature:"x-plus", x:1, y:0, z:false,
+            wcs:54, zero:false, safeZOffset:40, depth:10, xSearchDistance:10, ySearchDistance:20,
+            retract:0.5, diameter:2, positioningFeed:1000, coarseFeed:300, fineFeed:50})
+        flow.proceed()
+        tryCompare(flow, "phase", "result", 10000)
+        compare(flow.failure, "")
+        verify(Math.abs(flow.angle.degrees - 1.1458) < 0.0001)
+        compare(api("/state").status.machinePosition, before)
+        flow.resultWcsRequested(55)
+        tryVerify(function() { return !flow.busy }, 3000)
+        compare(flow.routine.wcs, 55)
+        var button = descendants(flow.contentItem, LabButton).filter(function(control) {
+            return control.text === "Set X/Y rotation"
+        })[0]
+        mouseClick(button)
+        tryVerify(function() { return !flow.busy }, 3000)
+        compare(flow.failure, "")
+        verify(flow.angle.rotationApplied)
+        verify(button.enabled)
+        compare(api("/state").status.machinePosition, before)
+        flow.close()
+        var selected = false
+        http.request("wcs.select", {wcs:54}, function(reply) { selected = reply.ok })
+        tryVerify(function() { return selected }, 3000)
+    }
+
     function enterReviewValue(key, value, accept) {
         var field = findChild(flow, "review-" + key)
         verify(field !== null, key)

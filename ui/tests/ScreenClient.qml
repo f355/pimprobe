@@ -29,6 +29,7 @@ QtObject {
         centerXSearchDistance: 20, centerYSearchDistance: 20, centerDepth: 5,
         rotaryRodDiameter: 10, rotaryXDistance: 30, rotaryYDistance: 10,
         rotaryZDistance: 10, rotaryFeed: 360,
+        anglePointSpacing: 20, angleSearchDistance: 10,
         developmentUpdates: false, automaticUpdateChecks: true, language: "en"
     })
     property var program: [

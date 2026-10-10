@@ -239,6 +239,17 @@ fn persisted(event: OperationEvent, saved: std::io::Result<()>) -> OperationEven
 }
 
 fn routine_label(config: &RoutineConfig) -> String {
+    if config.family == "angle" {
+        return match config.feature.as_str() {
+            "x-plus" => "X+ face angle",
+            "x-minus" => "X− face angle",
+            "y-plus" => "Y+ face angle",
+            "y-minus" => "Y− face angle",
+            "z-x" => "Z slope along X",
+            _ => "Z slope along Y",
+        }
+        .into();
+    }
     if config.z {
         return "Z surface".into();
     }
@@ -443,9 +454,14 @@ impl ProbeApp {
         ])
         .await?;
         app.device.configure(&config)?;
-        let modes = pimprobe_core::query_modes(app.device.as_ref()).await?;
-        let mut state = app.device.state();
-        state.modes = modes;
+        let state = if config.family == "angle" {
+            pimprobe_core::query_rotary_state(app.device.as_ref()).await?
+        } else {
+            let modes = pimprobe_core::query_modes(app.device.as_ref()).await?;
+            let mut state = app.device.state();
+            state.modes = modes;
+            state
+        };
         let plan = pimprobe_core::review(state, config)?;
         let config = plan.config.clone();
         let program = plan.program();

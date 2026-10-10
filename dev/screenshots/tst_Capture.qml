@@ -52,8 +52,12 @@ TestCase {
     }
 
     function save(name) {
-        waitForRendering(window.contentItem)
-        wait(100)
+        verify(waitForPolish(window))
+        window.update()
+        verify(waitForRendering(window.contentItem))
+        verify(waitForPolish(window))
+        window.update()
+        verify(waitForRendering(window.contentItem))
         var path = Qt.resolvedUrl("../../docs/images/" + name + ".png").toString().replace("file://", "")
         grabImage(window.contentItem.parent).save(path)
     }
@@ -67,7 +71,7 @@ TestCase {
         verify(reply.ok)
         tryVerify(function() { return window.page.probeFullyExtended() }, 3000)
         var tabs = descendants(window.contentItem, TabBar)[0]
-        var names = ["outside", "inside", "center", "rotary", "settings"]
+        var names = ["outside", "inside", "center", "angle", "rotary", "settings"]
         for (var i = 0; i < names.length; ++i) {
             mouseClick(tabs.itemAt(i))
             save(names[i])
@@ -132,7 +136,7 @@ TestCase {
         tryVerify(function() { return reply !== null }, 3000)
         verify(reply.ok)
         var tabs = descendants(window.contentItem, TabBar)[0]
-        mouseClick(tabs.itemAt(4))
+        mouseClick(tabs.itemAt(tabs.count - 1))
         var utilities = descendants(window.contentItem, Button).filter(function(b) {
             return b.visible && b.text === "Utilities"
         })[0]

@@ -47,4 +47,7 @@ QtObject {
     readonly property color fieldBorder: (style || defaults).fieldBorder
     readonly property color stock: (style || defaults).stock
     readonly property color stockEdge: (style || defaults).stockEdge
+    readonly property color axisX: (style || defaults).axisX
+    readonly property color axisY: (style || defaults).axisY
+    readonly property color axisZ: (style || defaults).axisZ
 }

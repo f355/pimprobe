@@ -89,6 +89,7 @@ pub fn router(app: Arc<App>) -> Router {
         .route("/api/v1/routine/run", post(run))
         .route("/api/v1/routine/zero", post(zero))
         .route("/api/v1/routine/wcs", post(result_wcs))
+        .route("/api/v1/routine/rotation", post(result_rotation))
         .route("/api/v1/routine/return", post(return_start))
         .route("/api/v1/routine/measured", post(go_to_measured))
         .route("/api/v1/rotary/review", post(rotary::review))
@@ -227,6 +228,13 @@ async fn history_rotation(
             .apply_history_result(token.id, HistoryAction::Rotation)
             .await?,
     ))
+}
+
+async fn result_rotation(
+    State(app): State<Arc<App>>,
+    ApiJson(token): ApiJson<Token>,
+) -> Result<Json<pimprobe_core::RoutineResult>, ApiError> {
+    Ok(Json(app.probe.rotate_result(token).await?))
 }
 async fn export_logs(
     State(app): State<Arc<App>>,

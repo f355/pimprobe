@@ -15,6 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import * as THREE from './node_modules/three/build/three.module.js';
+import {ResultHighlight,axisColors} from './highlights.mjs';
 
 const key = new URLSearchParams(location.search).get('operation') || 'outside--1--1';
 const renderer = new THREE.WebGLRenderer({antialias:true, preserveDrawingBuffer:true});
@@ -39,6 +40,8 @@ const shaftMaterial = new THREE.MeshStandardMaterial({color:'#f2f5f4', metalness
 const ballMaterial = new THREE.MeshStandardMaterial({color:'#e46864', roughness:0.3, metalness:0.1});
 const stock = new THREE.Group();
 scene.add(stock);
+const result = new ResultHighlight();
+scene.add(result);
 
 function mesh(geometry, material, position, parent = scene) {
     const item = new THREE.Mesh(geometry, material);
@@ -67,9 +70,9 @@ scene.add(new THREE.LineSegments(bedGeometry, new THREE.LineBasicMaterial({color
 
 const axesOrigin = new THREE.Vector3(-9,-6,0.1);
 for (const [name,direction,color] of [
-    ['X',new THREE.Vector3(1,0,0),'#e9a29b'],
-    ['Y',new THREE.Vector3(0,1,0),'#a9d6b7'],
-    ['Z',new THREE.Vector3(0,0,1),'#a1c8e6']
+    ['X',new THREE.Vector3(1,0,0),axisColors[0]],
+    ['Y',new THREE.Vector3(0,1,0),axisColors[1]],
+    ['Z',new THREE.Vector3(0,0,1),axisColors[2]]
 ]) {
     scene.add(new THREE.ArrowHelper(direction,axesOrigin,2.3,color,0.45,0.3));
     const label = document.createElement('canvas');
@@ -91,6 +94,12 @@ cylinder(0.17, 4.6, [0,0,2.8], 'z', shaftMaterial, probe);
 cylinder(0.85, 1.4, [0,0,5.8], 'z', bodyMaterial, probe);
 cylinder(0.86, 0.25, [0,0,6.15], 'z',
     new THREE.MeshStandardMaterial({color:'#439e7e', roughness:0.6}), probe);
+const probeMaterials = [];
+probe.traverse(item => {
+    if (!item.material) return;
+    item.material.transparent = true;
+    probeMaterials.push(item.material);
+});
 
 const moves = [];
 let position = [0,0,5.4,0];
@@ -140,6 +149,8 @@ if (key === 'z-surface' || key === 'z-pocket') {
     move(position,0,0.6);
     touch(2,internal ? 0.6 : 3.6);
     move(start,2);
+    const z = internal ? 0 : 3, x = internal ? 5 : 6;
+    result.plane([[-x,-5,z],[x,-5,z],[x,5,z],[-x,5,z]],axisColors[2]);
 } else if (key.startsWith('outside') || key.startsWith('inside')) {
     const [,xs,ys] = /^(outside|inside)-(-?\d)-(-?\d)$/.exec(key).slice(1);
     const internal = key.startsWith('inside');
@@ -166,6 +177,9 @@ if (key === 'z-surface' || key === 'z-pocket') {
         }
     }
     if (!internal) move([x ? x*5 : start[0], y ? y*5 : start[1],5.4,0],2);
+    if (x && y) result.point([x*5,y*5,1.5],axisColors.slice(0,2));
+    else if (x) result.plane([[x*5,-5,0],[x*5,5,0],[x*5,5,3],[x*5,-5,3]],axisColors[0]);
+    else result.plane([[-5,y*5,0],[5,y*5,0],[5,y*5,3],[-5,y*5,3]],axisColors[1]);
 } else if (key.startsWith('center-')) {
     const feature = key.slice(7);
     const internal = ['hole','pocket','x-valley','y-valley'].includes(feature);
@@ -193,6 +207,52 @@ if (key === 'z-surface' || key === 'z-pocket') {
         const centered = position.slice(); centered[axis] = 0;
         move(centered,axis === 0 && y ? 1 : 2);
     }
+    if (x && y) result.point([0,0,1.5],axisColors.slice(0,2));
+    else if (x) result.plane([[0,-7,0],[0,7,0],[0,7,3],[0,-7,3]],axisColors[0],true);
+    else result.plane([[-7,0,0],[7,0,0],[7,0,3],[-7,0,3]],axisColors[1],true);
+} else if (key.startsWith('angle-')) {
+    const feature = key.slice(6);
+    const slope = feature.startsWith('z-');
+    const along = feature === 'z-x' || feature.startsWith('y-') ? 0 : 1;
+    const measured = slope ? 2 : 1 - along;
+    const direction = slope || feature.endsWith('minus') ? -1 : 1;
+    const tilt = 0.18;
+    if (slope) {
+        box([12,10,3],[0,0,0]);
+        stock.position.z = 1.5;
+        if (along === 0) stock.rotation.y = -tilt;
+        else stock.rotation.x = tilt;
+        position = [0,0,6,0];
+    } else {
+        box(measured === 0 ? [8,12,3] : [12,8,3],[0,0,1.5]);
+        stock.position.set(measured === 0 ? direction*2.5 : 0,
+            measured === 1 ? direction*2.5 : 0,0);
+        stock.rotation.z = tilt;
+        position = [0,0,1.5,0];
+        position[measured] = -direction*6;
+    }
+    position[along] = -3.5;
+    const start = position.slice();
+    move(start,0,0.6);
+    for (const offset of [-3.5,3.5]) {
+        const next = position.slice(); next[along] = offset;
+        move(next,1);
+        const contact = slope ? 1.5 + 2.1/Math.cos(tilt) + offset*Math.tan(tilt)
+            : direction*2.5 - direction*4.6/Math.cos(tilt)
+                + (measured === 0 ? -1 : 1)*offset*Math.tan(tilt);
+        touch(measured,contact);
+        const back = position.slice(); back[measured] = start[measured];
+        move(back,1);
+    }
+    move(start,2);
+    const origin = [0,0,slope ? 1.5+1.5/Math.cos(tilt) : 3.1];
+    origin[along] = -3.5;
+    if (!slope) origin[measured] = direction*2.5 - direction*4/Math.cos(tilt)
+        + (measured === 0 ? -1 : 1)*origin[along]*Math.tan(tilt);
+    else origin[2] += origin[along]*Math.tan(tilt);
+    const alongVector = [0,0,0]; alongVector[along] = 1;
+    result.angle(origin,alongVector,slope ? (along === 0 ? [0,-1,0] : [1,0,0]) : [0,0,1],
+        tilt,axisColors[measured]);
 } else if (key.startsWith('rotary-')) {
     stock.position.z = 3;
     cylinder(3.4,2,[-7,0,0],'x');
@@ -219,6 +279,7 @@ if (key === 'z-surface' || key === 'z-pocket') {
             }
         }
         move([-3,0,7,0],2);
+        result.dashed([-6,0,3],[8,0,3],[axisColors[2],axisColors[1]],false);
     } else {
         // The face turns around X; the probe remains vertical.
         stock.remove(stock.children.at(-1));
@@ -245,9 +306,13 @@ if (key === 'z-surface' || key === 'z-pocket') {
             }
         }
         move(vertical ? [0,-side*4,5.2,0] : [0,-2.5,7,0],2);
+        if (vertical) result.plane([[-5,-side,-0.5],[7,-side,-0.5],[7,-side,6.5],[-5,-side,6.5]],axisColors[1]);
+        else result.plane([[-5,-4,4],[7,-4,4],[7,4,4],[-5,4,4]],axisColors[2]);
     }
 }
-move(position,2,0.9);
+const motionDuration = moves.reduce((time,step) => time + step.duration,0);
+const resultDuration = motionDuration*0.4;
+move(position,2,resultDuration);
 // Keep the ball and body in the fixed camera throughout the loop.
 camera.updateMatrixWorld();
 let extent = 0;
@@ -273,6 +338,11 @@ const trail = new THREE.Line(pathGeometry,new THREE.LineBasicMaterial({color:'#7
 scene.add(trail);
 
 window.renderFrame = function(fraction) {
+    const resultProgress = THREE.MathUtils.clamp((fraction*total-motionDuration)/resultDuration,0,1);
+    const fade = result.animate(resultProgress);
+    for (const material of probeMaterials) material.opacity = 1-fade;
+    probe.visible = fade < 1;
+    trail.material.opacity = 0.5*(1-fade);
     let time = fraction * total, current = moves[0];
     const visited = [moves[0].from.slice(0,3)];
     for (const step of moves) {
@@ -288,7 +358,7 @@ window.renderFrame = function(fraction) {
     const top = probe.position.clone().add(new THREE.Vector3(0,0,6.35)).project(camera);
     window.probeTop = {x:top.x,y:top.y};
     if (key.startsWith('rotary-')) stock.rotation.x = (key === 'rotary-axis' ? -1 : 1) * point[3];
-    marker.visible = current.contact && amount > 0.75;
+    marker.visible = !resultProgress && current.contact && amount > 0.75;
     marker.position.copy(probe.position);
     ballMaterial.color.set(marker.visible ? '#91e3bd' : '#e46864');
     visited.push(point.slice(0,3));

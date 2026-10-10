@@ -44,4 +44,7 @@ QtObject {
     property color fieldBorder: "#586568"
     property color stock: "#586B64"
     property color stockEdge: "#A2B9B0"
+    property color axisX: "#F18B8B"
+    property color axisY: "#7ED5B1"
+    property color axisZ: "#88B8F1"
 }

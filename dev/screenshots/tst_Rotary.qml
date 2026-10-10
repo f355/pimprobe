@@ -55,7 +55,7 @@ TestCase {
         verify(reply.ok);
         tryVerify(function() { return window.page.probeFullyExtended(); },3000);
         var tabs = descendants(window.contentItem,TabBar)[0];
-        mouseClick(tabs.itemAt(3));
+        mouseClick(tabs.itemAt(4));
         save("rotary");
         var button = findChild(window.contentItem, "rotaryCalibrationButton");
         mouseClick(button);

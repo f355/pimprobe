@@ -17,6 +17,8 @@
 .pragma library
 
 var descriptions = {
+    "angleSpacing": "Distance along the face between touches: Y+ for X faces, X+ for Y faces, or the named axis for Z slopes. Both points must lie on the same flat face.",
+    "angleSearch": "Maximum travel toward the face at each point. The probe returns to its starting clearance before moving to the second point.",
     "outsideSearch": "Distance to move outward from the starting position before lowering, then search back toward the stock.",
     "insideSearch": "Maximum distance from the starting position toward the pocket wall.",
     "centerSearch": "Distance from the starting position to search on each side. For a boss, block or ridge, it also puts the ball outside the stock before lowering.",
@@ -88,7 +90,7 @@ function option(key, family) {
         probeDiameter: "diameter", retractDistance: "retract",
         rotaryRodDiameter: "rodDiameter", rotaryXDistance: "xDistance",
         rotaryYDistance: "yDistance", rotaryZDistance: "zDistance",
-        safeZOffset: "safeZ"
+        safeZOffset: "safeZ", anglePointSpacing: "angleSpacing", angleSearchDistance: "angleSearch"
     };
     return descriptions[aliases[key] || key] || "";
 }

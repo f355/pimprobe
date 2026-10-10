@@ -62,8 +62,10 @@ impl Default for RoutineConfig {
 }
 impl RoutineConfig {
     pub fn validate(&self) -> Result<(), Error> {
-        if !matches!(self.family.as_str(), "inside" | "outside" | "center")
-            || !(-1..=1).contains(&self.x)
+        if !matches!(
+            self.family.as_str(),
+            "inside" | "outside" | "center" | "angle"
+        ) || !(-1..=1).contains(&self.x)
             || !(-1..=1).contains(&self.y)
             || self.z == (self.x != 0 || self.y != 0)
         {
@@ -75,6 +77,21 @@ impl RoutineConfig {
             return Err(Error::InvalidConfig(
                 "Select a work coordinate system from G54 to G59.".into(),
             ));
+        }
+        if self.family == "angle" {
+            let expected = match self.feature.as_str() {
+                "x-plus" => (1, 0, false),
+                "x-minus" => (-1, 0, false),
+                "y-plus" => (0, 1, false),
+                "y-minus" => (0, -1, false),
+                "z-x" | "z-y" => (0, 0, true),
+                _ => return Err(Error::InvalidConfig("Choose an angle measurement.".into())),
+            };
+            if (self.x, self.y, self.z) != expected || self.zero {
+                return Err(Error::InvalidConfig(
+                    "The probing axes do not match the selected angle measurement.".into(),
+                ));
+            }
         }
         if self.family == "center" {
             let expected = match self.feature.as_str() {
@@ -198,7 +215,33 @@ pub fn review(state: State, config: RoutineConfig) -> Result<RoutinePlan, Error>
         steps: Vec::new(),
     };
     let c = p.config.clone();
-    if c.z {
+    if c.family == "angle" {
+        let (measured, along, direction) = c.angle_axes();
+        let search = match measured {
+            Axis::X => c.x_search_distance,
+            Axis::Y => c.y_search_distance,
+            Axis::Z => c.depth,
+        };
+        let spacing = if along == Axis::X {
+            c.x_search_distance
+        } else {
+            c.y_search_distance
+        };
+        for index in 0..2 {
+            if index == 1 {
+                p.mov(along, &format!("start_{}", along.name()), spacing);
+            }
+            p.contact(
+                measured,
+                direction,
+                search,
+                f64::from(direction) * search,
+                &format!("angle_{index}"),
+            );
+            p.mov(measured, &format!("start_{}", measured.name()), 0.);
+        }
+        p.mov(along, &format!("start_{}", along.name()), 0.);
+    } else if c.z {
         p.contact(Axis::Z, -1, c.depth, -c.depth, "z");
         p.mov(Axis::Z, "start_z", 0.0);
     } else if c.family == "center" {
@@ -244,7 +287,7 @@ pub fn review(state: State, config: RoutineConfig) -> Result<RoutinePlan, Error>
             );
         }
     }
-    if !c.z {
+    if !c.z && c.family != "angle" {
         if c.family == "inside" {
             let targets = p
                 .axes()
@@ -280,7 +323,9 @@ pub fn plan_routine(state: State, config: RoutineConfig) -> Result<RoutinePlan, 
 }
 impl RoutinePlan {
     pub fn axes(&self) -> Vec<Axis> {
-        if self.config.z {
+        if self.config.family == "angle" {
+            vec![]
+        } else if self.config.z {
             vec![Axis::Z]
         } else {
             [(Axis::X, self.config.x), (Axis::Y, self.config.y)]
@@ -392,13 +437,15 @@ impl RoutinePlan {
                 "The probe calibration changed during this operation.".into(),
             ));
         }
-        if !finite(s.work_position)
-            || (0..3).any(|i| {
-                ((s.position[i] - s.work_position[i])
-                    - (self.start.position[i] - self.start.work_position[i]))
-                    .abs()
-                    > 0.05
-            })
+        // Angle measurement clears WCS rotation while travelling along machine axes.
+        if self.config.family != "angle"
+            && (!finite(s.work_position)
+                || (0..3).any(|i| {
+                    ((s.position[i] - s.work_position[i])
+                        - (self.start.position[i] - self.start.work_position[i]))
+                        .abs()
+                        > 0.05
+                }))
         {
             return Err(Error::Preflight(
                 "The work zero changed during this operation.".into(),

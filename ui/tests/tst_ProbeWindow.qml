@@ -143,8 +143,8 @@ TestCase {
     function test_settings_scroll_to_rotary_feed() {
         probeWindow.requestActivate()
         var tabs = descendants(probeWindow.contentItem, TabBar)[0]
-        mouseClick(tabs.itemAt(4))
-        var panel = descendants(probeWindow.contentItem, ProbePanel)[4]
+        mouseClick(tabs.itemAt(tabs.count - 1))
+        var panel = descendants(probeWindow.contentItem, ProbeSetupPanel)[0]
         var scroll = descendants(panel, Flickable)[0]
         tryVerify(function() { return scroll.contentHeight > scroll.height })
         scroll.contentY = scroll.contentHeight - scroll.height
@@ -274,7 +274,7 @@ TestCase {
 
     function test_utilities_opens_repeatability() {
         var tabs = descendants(probeWindow.contentItem, TabBar)[0]
-        mouseClick(tabs.itemAt(4))
+        mouseClick(tabs.itemAt(tabs.count - 1))
 
         function visibleContentButton(text) {
             return descendants(probeWindow.contentItem, Button).filter(function(button) {
@@ -324,8 +324,8 @@ TestCase {
 
         var tabs = descendants(probeWindow.contentItem, TabBar)[0]
         tryVerify(function() { return tabs.enabled && !probeWindow.page.controlsLocked() }, 3000)
-        mouseClick(tabs.itemAt(4))
-        tryCompare(tabs, "currentIndex", 4)
+        mouseClick(tabs.itemAt(tabs.count - 1))
+        tryCompare(tabs, "currentIndex", tabs.count - 1)
         verify(waitForPolish(probeWindow))
         var utilities = descendants(probeWindow.contentItem, Button).filter(function(button) {
             return button.visible && button.text === "Utilities"
@@ -361,7 +361,7 @@ TestCase {
 
     function test_update_page_checks_release_channel_and_installs_selected_build() {
         var tabs = descendants(probeWindow.contentItem, TabBar)[0]
-        mouseClick(tabs.itemAt(4))
+        mouseClick(tabs.itemAt(tabs.count - 1))
         var keypad = descendants(probeWindow.contentItem, NumericKeypad)[0]
         verify(!keypad.visible)
         var original = Api.request
@@ -408,7 +408,7 @@ TestCase {
                 return control.visible && control.text === "Development releases"
             })[0]
             verify(channel !== undefined)
-            verify(tabs.itemAt(4).notification)
+            verify(tabs.itemAt(tabs.count - 1).notification)
             verify(checkButton.notification)
             verify(waitForPolish(probeWindow))
             mouseClick(channel)

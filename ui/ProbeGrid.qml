@@ -43,7 +43,7 @@ GridLayout {
                     y: (1 - Math.floor(index / 3)) * direction,
                     z: index === 4
                 })
-            sourceComponent: grid.inside ? insideButton : outsideButton
+            sourceComponent: grid.inside && !routine.z ? insideButton : outsideButton
             Component {
                 id: outsideButton
                 OutsideProbeButton {
@@ -58,7 +58,6 @@ GridLayout {
                 InsideProbeButton {
                     xApproach: cell.routine.x
                     yApproach: cell.routine.y
-                    zApproach: cell.routine.z
                     onClicked: grid.selected(cell.routine)
                 }
             }

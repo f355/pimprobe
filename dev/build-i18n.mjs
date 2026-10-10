@@ -101,7 +101,7 @@ export function collectSources(ui = uiSource) {
             for (const corner of [false, true]) add(help.edge(inside, z, corner), 'ui/controls/HelpText.js');
     for (const feature of ['boss', 'block', 'hole', 'pocket', 'x-ridge', 'x-valley', 'z'])
         add(help.center(feature), 'ui/controls/HelpText.js');
-    for (const fields of [pages.outside, pages.inside, pages.center, pages.rotary, pages.setup])
+    for (const fields of [pages.outside, pages.inside, pages.center, pages.angle, pages.rotary, pages.setup])
         for (const field of fields) {
             add(field.label, 'ui/ProbePages.js');
             add(field.unit || 'mm', 'ui/ProbePages.js');
@@ -129,6 +129,8 @@ export function collectSources(ui = uiSource) {
         if (feature !== 'z') add(feature.replace('-', ' ') + ' center', 'service history labels');
     }
     for (const operation of ['axis', 'horizontal', 'vertical', 'verticalNegative']) plan({operation}, true);
+    for (const feature of ['x-plus', 'x-minus', 'y-plus', 'y-minus', 'z-x', 'z-y'])
+        plan(pages.routine({}, 'angle', feature, 54));
 
     // These labels arrive from the service rather than literal UI models.
     for (const english of ['success', 'failed', 'interrupted', 'Rotary axis calibration', 'Align vertical surface toward Y-',

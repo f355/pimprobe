@@ -5,9 +5,12 @@ Välj en mätning:
 - [Utvändigt](outside.md): ämnets kant, ett utvändigt hörn eller ovansidan.
 - [Invändigt](inside.md): en fickvägg, ett invändigt hörn eller en bottenyta.
 - [Centrum](center.md): centrum på en tapp, ett block, ett hål, en ficka, en ribba eller ett spår.
+- [Vinkel](angle.md): ytvinkel i X/Y eller Z-lutning längs X eller Y.
 - [Rundaxel](rotary.md): rundaxelns centrum eller en ytas vinkel.
 
-Korset på varje knapp markerar **probkulans** startläge, inte spindelns. Pilarna pekar mot ytorna som kulan ska känna av; den gröna punkten markerar resultatet.
+Korset markerar **probkulans** startläge. Vita pilar visar rörelser; kryssade cirklar visar probning nedåt i en vy ovanifrån.
+
+Referenser använder axelfärgerna: **X röd, Y grön, Z blå**. En punkt visar en möjlig nollpunkt, en linje eller skrafferad yta visar ett nollplan och en vinklad linje visar den uppmätta riktningen. Markeringarna visar vad du kan ställa in från resultatet; enbart mätningen ändrar inte arbetskoordinatsystemet.
 
 <!-- guide-only -->
 ![Reglage för utvändig probning](../images/outside.png)
@@ -15,7 +18,7 @@ Korset på varje knapp markerar **probkulans** startläge, inte spindelns. Pilar
 
 ## Starta en mätning
 
-Välj en bild för att öppna bekräftelseskärmen. Animationen visar rörelsevägen. Jämför vägen med ämnet och spännjärnen; kontrollera även probskaftets frigång.
+Välj en bild för att öppna bekräftelseskärmen. Den visar rörelsevägen. Jämför vägen med ämnet och spännjärnen; kontrollera även probskaftets frigång.
 
 Här kan du ändra avstånd och matningar enbart för denna körning. **Fortsätt** startar från kulans position när du trycker, så du kan fortfarande köra manuellt före start. **Avbryt** återgår utan rörelse.
 

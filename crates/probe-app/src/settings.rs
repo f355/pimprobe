@@ -138,7 +138,7 @@ pub enum SettingsError {
 struct Rule {
     key: &'static str,
     default: Value,
-    range: NumericRange,
+    range: Option<NumericRange>,
 }
 
 fn rules() -> Vec<Rule> {
@@ -163,7 +163,7 @@ fn rules() -> Vec<Rule> {
         rules.push(Rule {
             key,
             default: json!(value),
-            range: parameter.range(),
+            range: Some(parameter.range()),
         });
     }
     for (key, value, minimum, maximum) in [
@@ -176,7 +176,17 @@ fn rules() -> Vec<Rule> {
         rules.push(Rule {
             key,
             default: json!(value),
-            range: NumericRange { minimum, maximum },
+            range: Some(NumericRange { minimum, maximum }),
+        });
+    }
+    for (key, value) in [
+        ("developmentUpdates", false),
+        ("automaticUpdateChecks", true),
+    ] {
+        rules.push(Rule {
+            key,
+            default: json!(value),
+            range: None,
         });
     }
     rules
@@ -186,7 +196,9 @@ pub fn schema() -> Map<String, Value> {
     rules()
         .into_iter()
         .map(|rule| {
-            let mut entry = serde_json::to_value(rule.range).unwrap();
+            let mut entry = rule
+                .range
+                .map_or_else(|| json!({}), |range| serde_json::to_value(range).unwrap());
             entry["default"] = rule.default;
             (rule.key.to_owned(), entry)
         })
@@ -194,7 +206,10 @@ pub fn schema() -> Map<String, Value> {
 }
 
 fn valid(rule: &Rule, value: &Value) -> bool {
-    value.as_f64().is_some_and(|n| rule.range.contains(n))
+    match rule.range {
+        Some(range) => value.as_f64().is_some_and(|n| range.contains(n)),
+        None => value.is_boolean(),
+    }
 }
 
 /// Validated probing preferences. Serialization uses the public setting names.

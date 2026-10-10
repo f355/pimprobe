@@ -52,6 +52,7 @@ Pane {
         }
     }
     property Component settingsContribution
+    property bool updateAvailable: false
     signal leaveRequested
     signal exitCancelled
     signal alarmRequested
@@ -665,6 +666,7 @@ Pane {
                         implicitHeight: 56
                         height: tabs.height
                         text: modelData
+                        notification: modelData === "Settings" && page.updateAvailable
                         font.family: page.uiFontFamily
                     }
                 }

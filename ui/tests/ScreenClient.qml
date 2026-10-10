@@ -28,7 +28,8 @@ QtObject {
         insideXSearchDistance: 10, insideYSearchDistance: 10, insideDepth: 5,
         centerXSearchDistance: 20, centerYSearchDistance: 20, centerDepth: 5,
         rotaryRodDiameter: 10, rotaryXDistance: 30, rotaryYDistance: 10,
-        rotaryZDistance: 10, rotaryFeed: 360
+        rotaryZDistance: 10, rotaryFeed: 360,
+        developmentUpdates: false, automaticUpdateChecks: true
     })
     property var program: [
         "; Move over the edge and lower down",
@@ -63,7 +64,8 @@ QtObject {
         var data = {};
         if (operation === "settings.schema") {
             Object.keys(values).forEach(function(key) {
-                data[key] = {minimum: 0.01, maximum: 10000};
+                data[key] = typeof values[key] === "boolean" ? {default: values[key]}
+                    : {minimum: 0.01, maximum: 10000};
             });
         } else if (operation === "settings.get") data = values;
         else if (operation === "settings.update") {
@@ -74,6 +76,8 @@ QtObject {
         else if (operation === "rotary.review")
             data = {id: "screen-rotary", config: args, program: program.join("\n"), simulated: true};
         else if (operation === "history.get") data = history;
+        else if (operation === "updates.check")
+            data = {currentVersion: "2026.10.0", available: null};
         else if (operation === "wcs.select")
             state = Object.assign({}, state, {status: Object.assign({}, state.status, {wcs: args.wcs})});
         else if (operation === "probe.set")

@@ -57,6 +57,7 @@ ApplicationWindow {
         id: probePage
         anchors.fill: parent
         client: http
+        updateAvailable: updateDialog.updateAvailable
         uiFontFamily: window.font.family
         monoFontFamily: window.availableFonts.indexOf("DejaVu Sans Mono") !== -1 ? "DejaVu Sans Mono" : Qt.platform.os === "osx" ? "Menlo" : "monospace"
         onLeaveRequested: Qt.quit()
@@ -67,6 +68,7 @@ ApplicationWindow {
                 implicitHeight: 56
                 font.pixelSize: 19
                 primary: true
+                notification: updateDialog.updateAvailable
                 onClicked: updateDialog.show()
             }
         }
@@ -74,6 +76,7 @@ ApplicationWindow {
     UpdateFlow {
         id: updateDialog
         client: http
+        settings: probePage.settings
         uiFont: window.font.family
     }
 }

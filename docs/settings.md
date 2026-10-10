@@ -47,6 +47,8 @@ Maximum chuck rotation speed in degrees per minute during rotary operations. XYZ
 
 ## Software update
 
-**Check for updates** opens the release page and shows the notes for the newest stable release. Turn on **Include development releases** to check the rolling development build instead.
+**Check for updates** shows the notes for the newest version in your selected channel. Turn on **Development releases** for the rolling development build, or turn it off for releases. The choice is saved across updates and restarts.
+
+**Check automatically** checks GitHub each time the interface starts. It is on by default. A green dot on the Settings tab and Check for updates button means a new version is available in the selected channel.
 
 **Install update** downloads and verifies the release installer, then restarts the interface to install it. Leave the machine idle with the spindle stopped while updating.

@@ -23,9 +23,13 @@ import QtQuick.Layouts
 Popup {
     id: flow
     required property var client
+    required property ProbeSettings settings
     property string uiFont: "sans-serif"
     property string phase: "loading"
-    property bool development: false
+    readonly property bool development: settings.values.developmentUpdates === true
+    readonly property bool automaticChecks: settings.values.automaticUpdateChecks !== false
+    readonly property bool updateAvailable: available !== null
+    property bool startupChecked: false
     property string currentVersion: ""
     property var available: null
     property string errorText: ""
@@ -52,9 +56,19 @@ Popup {
         repeat: true
         onTriggered: flow.pollStatus()
     }
+    Connections {
+        target: flow.settings
+        function onLoadedChanged() { flow.checkOnStartup(); }
+    }
+    Component.onCompleted: checkOnStartup()
+
+    function checkOnStartup() {
+        if (startupChecked || !settings.loaded) return;
+        startupChecked = true;
+        if (automaticChecks) reload();
+    }
 
     function show() {
-        development = false;
         open();
         reload();
     }
@@ -110,7 +124,6 @@ Popup {
         });
     }
     onClosed: {
-        checkRequest.cancel();
         installRequest.cancel();
         statusRequest.cancel();
         statusTimer.stop();
@@ -142,15 +155,28 @@ Popup {
                     font.pixelSize: 18
                     wrapMode: Text.WordWrap
                 }
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 16
                 ProbeSwitch {
-                    Layout.preferredWidth: 360
-                    Layout.preferredHeight: 56
-                    text: "Include development releases"
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 48
+                    text: "Check automatically"
+                    font.pixelSize: 20
+                    checked: flow.automaticChecks
+                    enabled: flow.settings.loaded && flow.phase !== "installing"
+                    onClicked: flow.settings.setValue("automaticUpdateChecks", checked)
+                }
+                ProbeSwitch {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 48
+                    text: "Development releases"
                     font.pixelSize: 20
                     checked: flow.development
-                    enabled: flow.phase !== "installing"
+                    enabled: flow.settings.loaded && flow.phase !== "installing"
                     onClicked: {
-                        flow.development = !flow.development;
+                        flow.settings.setValue("developmentUpdates", checked);
                         flow.reload();
                     }
                 }
@@ -160,7 +186,7 @@ Popup {
                 Layout.fillHeight: flow.phase !== "available"
                 visible: flow.phase !== "available"
                 text: flow.phase === "loading" ? "Checking for updates..."
-                    : flow.phase === "current" ? "You have the latest release."
+                    : flow.phase === "current" ? (flow.development ? "You have the latest development build." : "You have the latest release.")
                     : flow.phase === "installing" ? "Installing update. The interface will restart."
                     : flow.errorText
                 color: flow.phase === "error" ? Theme.danger : Theme.text

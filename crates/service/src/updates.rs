@@ -419,7 +419,7 @@ fn installer_asset(release: &Release) -> Option<&ReleaseAsset> {
     })
 }
 
-fn stable_version(tag: &str) -> Option<(u32, u32, u32)> {
+pub(crate) fn stable_version(tag: &str) -> Option<(u32, u32, u32)> {
     let mut parts = tag.split('.');
     let year = parts.next()?;
     let month = parts.next()?;

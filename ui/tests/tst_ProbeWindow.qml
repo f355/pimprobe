@@ -38,6 +38,7 @@ TestCase {
         id: updateFlowFixture
         UpdateFlow {
             client: probeWindow.page.client
+            settings: probeWindow.page.settings
             width: 800
             height: 480
         }
@@ -404,12 +405,16 @@ TestCase {
                 })
             })
             var channel = descendants(overlay, Switch).filter(function(control) {
-                return control.visible && control.text === "Include development releases"
+                return control.visible && control.text === "Development releases"
             })[0]
             verify(channel !== undefined)
+            verify(tabs.itemAt(4).notification)
+            verify(checkButton.notification)
+            verify(waitForPolish(probeWindow))
             mouseClick(channel)
             tryCompare(checks, "length", 2)
             verify(checks[1].indexOf("development=true") !== -1)
+            compare(probeWindow.page.settings.values.developmentUpdates, true)
             tryVerify(function() {
                 return descendants(overlay, TextArea).some(function(area) {
                     return area.visible && area.text.indexOf("Development fix") !== -1

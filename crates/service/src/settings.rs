@@ -36,11 +36,19 @@ impl JsonSettingsStore {
 }
 impl SettingsStore for JsonSettingsStore {
     fn load(&self) -> std::io::Result<ProbeSettings> {
-        let saved: Map<String, Value> = match fs::read(&self.path) {
+        let mut saved: Map<String, Value> = match fs::read(&self.path) {
             Ok(data) => serde_json::from_slice(&data).map_err(std::io::Error::other)?,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Map::new(),
             Err(e) => return Err(e),
         };
+        if !saved.contains_key("developmentUpdates")
+            && let Ok(version) = fs::read_to_string(self.path.with_file_name("VERSION"))
+        {
+            saved.insert(
+                "developmentUpdates".into(),
+                Value::Bool(crate::updates::stable_version(version.trim()).is_none()),
+            );
+        }
         let values = ProbeSettings::from_saved(saved.clone());
         if values.snapshot() != saved {
             self.save(&values)?;
@@ -79,7 +87,7 @@ mod tests {
         let defaults = settings.snapshot();
         settings
             .update(
-                json!({"coarseFeed":123,"safeZOffset":25,"centerXSearchDistance":120,"centerYSearchDistance":150})
+                json!({"coarseFeed":123,"safeZOffset":25,"centerXSearchDistance":120,"centerYSearchDistance":150,"developmentUpdates":true,"automaticUpdateChecks":false})
                     .as_object()
                     .unwrap()
                     .clone(),
@@ -90,6 +98,8 @@ mod tests {
         assert_eq!(reopened["centerXSearchDistance"], 120);
         assert_eq!(reopened["centerYSearchDistance"], 150);
         assert_eq!(reopened["safeZOffset"], 25);
+        assert_eq!(reopened["developmentUpdates"], true);
+        assert_eq!(reopened["automaticUpdateChecks"], false);
         assert_eq!(
             reopened["outsideYSearchDistance"],
             defaults["outsideYSearchDistance"]
@@ -105,9 +115,39 @@ mod tests {
             json!({"coarseFeed":123,"retractDistance":0}),
             json!({"surprise":1}),
             json!({"safeZOffset":false}),
+            json!({"developmentUpdates":1}),
+            json!({"automaticUpdateChecks":"yes"}),
         ] {
             assert!(settings.update(patch.as_object().unwrap().clone()).is_err());
             assert_eq!(settings.snapshot(), before);
+        }
+    }
+
+    #[test]
+    fn update_channel_starts_with_the_installed_build_and_keeps_the_saved_choice() {
+        for (version, development) in [("2026.10.0", false), ("abcdef0", true)] {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("settings.json");
+            fs::write(dir.path().join("VERSION"), version).unwrap();
+            let mut saved = ProbeSettings::default().snapshot();
+            saved.remove("developmentUpdates");
+            saved.remove("automaticUpdateChecks");
+            fs::write(&path, serde_json::to_vec(&saved).unwrap()).unwrap();
+            let mut settings = open(&path).unwrap();
+            assert_eq!(settings.snapshot()["developmentUpdates"], development);
+            assert_eq!(settings.snapshot()["automaticUpdateChecks"], true);
+            settings
+                .update(
+                    json!({"developmentUpdates": !development})
+                        .as_object()
+                        .unwrap()
+                        .clone(),
+                )
+                .unwrap();
+            assert_eq!(
+                open(path).unwrap().snapshot()["developmentUpdates"],
+                !development
+            );
         }
     }
 

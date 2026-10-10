@@ -21,6 +21,7 @@ Button {
     id: control
     property bool primary: false
     property bool selected: false
+    property bool notification: false
     property color textColor: selected ? Theme.accentBright : primary ? Theme.primaryText : Theme.text
 
     implicitHeight: Theme.buttonHeight
@@ -47,5 +48,11 @@ Button {
         border.color: control.selected || control.activeFocus ? Theme.accentBright : Theme.divider
         radius: Theme.radius
         opacity: control.enabled ? 1 : 0.55
+    }
+    NotificationDot {
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.margins: 8
+        visible: control.notification
     }
 }

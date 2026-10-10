@@ -19,6 +19,7 @@ import QtQuick.Controls
 
 TabButton {
     id: control
+    property bool notification: false
     font.pixelSize: Theme.textSize
     padding: 6
 
@@ -40,5 +41,11 @@ TabButton {
             visible: control.checked
             color: Theme.accentBright
         }
+    }
+    NotificationDot {
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.margins: 6
+        visible: control.notification
     }
 }

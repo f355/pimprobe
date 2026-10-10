@@ -41,13 +41,14 @@ TestCase {
             id: page
             anchors.fill: parent
             client: client
+            updateAvailable: updates.updateAvailable
             uiFontFamily: host.font.family
             monoFontFamily: "DejaVu Sans Mono"
             settingsContribution: Component {
-                LabButton { text: "Check for updates"; onClicked: updates.show() }
+                LabButton { text: "Check for updates"; primary: true; notification: updates.updateAvailable; onClicked: updates.show() }
             }
         }
-        UpdateFlow { id: updates; client: client; uiFont: host.font.family }
+        UpdateFlow { id: updates; client: client; settings: page.settings; uiFont: host.font.family }
     }
     readonly property var point: [-120.128, -95.204, -90.375]
     readonly property var readingRows: [
@@ -85,6 +86,7 @@ TestCase {
         client.state = client.readyState();
         children(page, PageView).forEach(function(view) { if (view.opened) view.close(); });
         updates.close();
+        updates.available = null;
         findChild(page, "exitDialog").close();
         children(host.Overlay.overlay, WorkCoordinatePicker).forEach(function(view) { view.close(); });
         children(page, NumberField).forEach(function(field) { field.editor.cancel(); field.deselect(); });
@@ -184,14 +186,18 @@ TestCase {
             {tag:"63-face-review", kind:"rotary-review", operation:"vertical"},
             {tag:"64-boss-review", kind:"operation-review", family:"center", selection:"boss"},
             {tag:"65-valley-review", kind:"operation-review", family:"center", selection:"x-valley"},
-            {tag:"66-pocket-z-review", kind:"operation-review", family:"inside", selection:{x:0,y:0,z:true}}
+            {tag:"66-pocket-z-review", kind:"operation-review", family:"inside", selection:{x:0,y:0,z:true}},
+            {tag:"67-update-marker", kind:"update-marker", tab:0},
+            {tag:"68-settings-update-marker", kind:"update-marker", tab:4}
         ];
     }
     function test_layout(data) {
         var tabs = children(page, TabBar)[0];
         var kind = data.kind;
         if (data.tab !== undefined) tabs.currentIndex = data.tab;
-        if (kind === "tab") {
+        if (kind === "update-marker") {
+            updates.available = {name: "Update", notes: "Changes"};
+        } else if (kind === "tab") {
             // The tab index above selects the routine controls.
         } else if (kind === "edit") {
             var field = children(page, NumberField).filter(function(f) { return f.visible; })[0];
@@ -280,7 +286,7 @@ TestCase {
             updates.phase = kind === "update-current" ? "current" : kind === "update-error" ? "error"
                 : kind === "update-installing" ? "installing" : "available";
             updates.errorText = "Could not reach GitHub. Check the network connection and try again.";
-            updates.development = kind === "update-dev";
+            page.settings.setValue("developmentUpdates", kind === "update-dev");
             if (kind === "update-confirm") mouseClick(button(updates.contentItem,"Install update"));
         } else {
             var feature = kind === "ridge" ? "x-ridge" : kind;

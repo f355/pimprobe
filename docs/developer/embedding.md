@@ -36,6 +36,7 @@ Set `showHeader: false` when the host supplies the header. The page exposes:
 - `requestBack()`, `openHelp()` and `openWcs()`: header actions.
 - `leaveRequested` and `alarmRequested`: requests for host navigation.
 - `settingsContribution`: optional host controls for the Settings page.
+- `updateAvailable`: shows a notification dot on the Settings tab.
 
 Pass `uiFontFamily` and `monoFontFamily` for text. A `controls/Style.qml` object
 sets colors, control sizes and layout spacing through the page's `style`

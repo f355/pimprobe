@@ -88,6 +88,16 @@ fn position(s: &str) -> Result<Position, String> {
     v.try_into().map_err(|_| "expected four coordinates".into())
 }
 
+fn probe_actuator(value: i32) -> Option<i32> {
+    match value {
+        0..=3 => Some(value),
+        // Expanded actuator reports use 6/7 for extending/retracting.
+        6 => Some(3),
+        7 => Some(2),
+        _ => None,
+    }
+}
+
 pub fn parse_line(line: &str) -> Result<Option<Record>, String> {
     let line = line.trim();
     let line = if let Some(report) = line.strip_prefix("[SerialReport:") {
@@ -198,7 +208,8 @@ pub fn parse_line(line: &str) -> Result<Option<Record>, String> {
                     status.homed = value.as_bytes().get(7) == Some(&b'1');
                     // The thirtieth compact field is the probe actuator state.
                     compact_actuator = value.as_bytes().get(29).and_then(|byte| {
-                        (b'0'..=b'3').contains(byte).then(|| i32::from(byte - b'0'))
+                        byte.checked_sub(b'0')
+                            .and_then(|value| probe_actuator(i32::from(value)))
                     });
                 }
                 "MPos" => {
@@ -222,10 +233,8 @@ pub fn parse_line(line: &str) -> Result<Option<Record>, String> {
                     fields |= 8;
                 }
                 "PM" => {
-                    status.probe_actuator = number(value)?;
-                    if !(0..=3).contains(&status.probe_actuator) {
-                        return Err("invalid actuator state".into());
-                    }
+                    status.probe_actuator =
+                        probe_actuator(number(value)?).ok_or("invalid actuator state")?;
                     status.probe_actuator_known = true;
                 }
                 "Pn" => {
@@ -308,7 +317,7 @@ mod tests {
 
     #[test]
     fn numbered_reports_with_compact_actuator_state() {
-        for actuator in 0..=3 {
+        for (actuator, expected) in [(0, 0), (1, 1), (2, 2), (3, 3), (6, 3), (7, 2)] {
             let mut compact = b"000000010010110011010000001010001001000001".to_vec();
             compact[29] = b'0' + actuator;
             let line = format!(
@@ -319,7 +328,19 @@ mod tests {
                 panic!("expected status");
             };
             assert!(status.complete && status.homed && status.probe_actuator_known);
-            assert_eq!(status.probe_actuator, i32::from(actuator));
+            assert_eq!(status.probe_actuator, expected);
+        }
+    }
+
+    #[test]
+    fn probe_actuator_reports_use_common_transition_states() {
+        for (actuator, expected) in [(0, 0), (1, 1), (2, 2), (3, 3), (6, 3), (7, 2)] {
+            let line = format!("<Ready|MPos:0,0,0,0|PM:{actuator}>");
+            let Some(Record::Status(status)) = parse_line(&line).unwrap() else {
+                panic!("expected status");
+            };
+            assert!(status.probe_actuator_known);
+            assert_eq!(status.probe_actuator, expected);
         }
     }
 

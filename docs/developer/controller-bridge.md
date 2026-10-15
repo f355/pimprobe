@@ -74,3 +74,10 @@ wire contract the same across supported CNC_Lab versions; clients may receive
 different subsets of controller records depending on the signals available in
 the host application.
 
+## Probe Actuator Reports
+
+The controller client reads actuator state from `PM` or the thirtieth character
+of `MS`. It uses 0 for retracted, 1 for extended, 2 for retracting and 3 for
+extending. Firmware can report the transitions as 2/3 or 7/6; the client maps
+both formats to the same application states.
+

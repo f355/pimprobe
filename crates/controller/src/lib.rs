@@ -678,6 +678,48 @@ mod tests {
         c.shutdown().await;
     }
     #[tokio::test]
+    async fn probe_extension_and_retraction_keep_the_controller_session() {
+        for (extending, retracting) in [(3, 2), (6, 7)] {
+            let (_path, _listener, controller, mut socket) = ready().await;
+            let session = controller.snapshot().session_id;
+            for (extended, transition, normalized) in [(true, extending, 3), (false, retracting, 2)]
+            {
+                controller.set_probe_extended(extended).await.unwrap();
+                assert_eq!(
+                    frame::read_frame(&mut socket).await.unwrap(),
+                    (b'Q', if extended { b"M122\n" } else { b"M121\n" }.to_vec())
+                );
+                data(
+                    &mut socket,
+                    &format!("<Ready|MPos:-5,-5,-5,0|WPos:0,0,0,0|PM:{transition}>\n"),
+                )
+                .await;
+                wait_for(&controller, |s| {
+                    s.status
+                        .as_ref()
+                        .is_some_and(|s| s.probe_actuator == normalized)
+                })
+                .await;
+                let snapshot = controller.snapshot();
+                assert!(snapshot.connected && snapshot.actuator_pending);
+                assert_eq!(snapshot.session_id, session);
+                data(
+                    &mut socket,
+                    &format!(
+                        "<Ready|MPos:-5,-5,-5,0|WPos:0,0,0,0|PM:{}>\n",
+                        i32::from(extended)
+                    ),
+                )
+                .await;
+                wait_for(&controller, |s| !s.actuator_pending).await;
+                assert_eq!(controller.state().probe_extended, extended);
+                assert_eq!(controller.snapshot().session_id, session);
+            }
+            controller.shutdown().await;
+        }
+    }
+
+    #[tokio::test]
     async fn wcs_requires_status_and_propagates_errors() {
         let (_path, _listener, c, mut socket) = ready().await;
         let copy = c.clone();

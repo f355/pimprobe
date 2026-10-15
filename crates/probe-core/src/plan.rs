@@ -435,16 +435,23 @@ impl RoutinePlan {
                 "The probe calibration changed during this operation.".into(),
             ));
         }
-        // Angle measurement clears WCS rotation while travelling along machine axes.
-        if self.config.family != "angle"
-            && (!finite(s.work_position)
-                || (0..3).any(|i| {
-                    ((s.position[i] - s.work_position[i])
-                        - (self.start.position[i] - self.start.work_position[i]))
-                        .abs()
-                        > 0.05
-                }))
-        {
+        let same_rotation =
+            (s.wcs_rotation.unwrap_or(0.) - self.start.wcs_rotation.unwrap_or(0.)).abs() < 0.0001;
+        let changed = if same_rotation {
+            !within(
+                s.work_position,
+                self.start.work_position_at(s.position),
+                0.05,
+            )
+        } else {
+            // Rotation is cleared during motion; the origin and offsets stay fixed.
+            s.wcs_origin
+                .zip(self.start.wcs_origin)
+                .is_none_or(|(actual, expected)| !within(actual, expected, 0.05))
+                || !within(s.coordinate_offset, self.start.coordinate_offset, 0.05)
+                || (s.tool_length_offset - self.start.tool_length_offset).abs() > 0.05
+        };
+        if !finite(s.work_position) || changed {
             return Err(Error::Preflight(
                 "The work zero changed during this operation.".into(),
             ));

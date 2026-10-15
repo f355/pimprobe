@@ -1,4 +1,21 @@
-# Z Coordinates
+# Coordinates
+
+## X/Y Rotation
+
+Probing and result-page moves follow the machine axes. On firmware with work
+coordinate rotation, these operations clear the selected WCS rotation for the
+movement and restore it afterward. Results use the captured WCS rotation when
+converting machine coordinates to work coordinates:
+
+```text
+work X change = cos(angle) × machine X change + sin(angle) × machine Y change
+work Y change = −sin(angle) × machine X change + cos(angle) × machine Y change
+```
+
+The same conversion applies when changing WCS on a result or reopening a
+measurement from history.
+
+## Z Coordinates
 
 The controller reports carriage position in `MPos` and tool position in `WPos`.
 For Z, their relationship is:
@@ -8,9 +25,8 @@ WPos Z = MPos Z − work origin Z − G92 Z − active TLO
 ```
 
 `$#` reports the active tool-length offset as `[TLO:…]`. `$201` is the
-stored tool length; `G43.1` and `G49` can change the active offset without
-changing that setting. The last number in `[PROBE:…]` is `$202`, the stored
-ETS contact, rather than the active TLO.
+stored tool length. Use the reported active offset for coordinate calculations.
+The last number in `[PROBE:…]` is `$202`, the stored ETS contact.
 
 Probing reads `$#` before capturing its starting coordinates and again before
 setting work zero. Each read waits for the selected work origin, G92, TLO and
@@ -31,8 +47,8 @@ both measurements and movement calculations. The probe DRO uses the same
 conversion.
 
 Tool measurement changes `$201` and `$202` by the same amount, keeping their
-difference constant. `G49` cancels the active TLO without changing `$202`, so
-the conversion needs both values even when the active TLO is zero.
+difference constant. The conversion needs both the active TLO and `$202`,
+including when the active TLO is zero.
 
 ## Setting Work Zero
 

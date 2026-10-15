@@ -97,6 +97,93 @@ fn near(a: f64, b: f64) {
     assert!((a - b).abs() < 1e-8, "{a} != {b}");
 }
 
+#[tokio::test]
+async fn routines_and_result_moves_use_machine_axes_with_a_rotated_wcs() {
+    for feature in ["outside_1_1", "inside_1_-1", "center_hole"] {
+        let mut state = mock().state();
+        state.wcs_rotation = Some(30.);
+        state.wcs_origin = None;
+        let controller = MockController::with_state(state);
+        let cfg = config(feature);
+        controller.configure(&cfg).unwrap();
+        let start = controller.state();
+        let plan = review(start.clone(), cfg).unwrap();
+        let result = run(
+            &controller,
+            &plan,
+            TimingPolicy::default(),
+            CancellationToken::new(),
+            |_| {},
+        )
+        .await
+        .unwrap_or_else(|e| panic!("{feature}: {e}"));
+        assert_eq!(controller.state().wcs_rotation, start.wcs_rotation);
+        assert_eq!(controller.state().modes, start.modes);
+        let point = result.machine_point;
+        let dx = point[0].unwrap() - start.position[0];
+        let dy = point[1].unwrap() - start.position[1];
+        let (sin, cos) = 30_f64.to_radians().sin_cos();
+        near(
+            result.point[0].unwrap(),
+            start.work_position[0] + cos * dx + sin * dy,
+        );
+        near(
+            result.point[1].unwrap(),
+            start.work_position[1] - sin * dx + cos * dy,
+        );
+        if feature.starts_with("inside") {
+            go_to_measured(
+                &controller,
+                &plan,
+                &result,
+                20.,
+                TimingPolicy::default(),
+                CancellationToken::new(),
+                |_| {},
+            )
+            .await
+            .unwrap();
+            for (i, measured) in point.into_iter().enumerate().take(2) {
+                near(
+                    controller.state().position[i] + start.probe_offset[i],
+                    measured.unwrap(),
+                );
+            }
+        }
+        let result = zero_result(
+            &controller,
+            &plan,
+            &result,
+            [0.; 3],
+            TimingPolicy::default(),
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+        let origin = controller.state().wcs_origin.unwrap();
+        near(origin[0], point[0].unwrap());
+        near(origin[1], point[1].unwrap());
+        return_to_start(
+            &controller,
+            &plan,
+            &result,
+            TimingPolicy::default(),
+            CancellationToken::new(),
+            |_| {},
+        )
+        .await
+        .unwrap();
+        for (actual, expected) in controller.state().position.into_iter().zip(start.position) {
+            assert!(
+                (actual - expected).abs() < 0.0015,
+                "{feature}: {actual} != {expected}"
+            );
+        }
+        assert_eq!(controller.state().wcs_rotation, start.wcs_rotation);
+        assert_eq!(controller.state().modes, start.modes);
+    }
+}
+
 #[test]
 fn external_search_starts_at_the_entered_distance() {
     for feature in ["center_block", "center_boss"] {
@@ -109,6 +196,45 @@ fn external_search_starts_at_the_entered_distance() {
             assert!(program.iter().any(|s| s == command), "{program:?}");
         }
     }
+}
+
+#[tokio::test]
+async fn missing_contact_restores_the_work_rotation_and_modes() {
+    let mut state = mock().state();
+    state.wcs_rotation = Some(-12.);
+    state.wcs_origin = None;
+    let controller = MockController::with_state(state);
+    let start = controller.state();
+    let plan = review(start.clone(), config("inside_1_0")).unwrap();
+    let error = run(
+        &controller,
+        &plan,
+        TimingPolicy::default(),
+        CancellationToken::new(),
+        |_| {},
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(error, Error::CoarseNoContact), "{error}");
+    assert_eq!(controller.state().wcs_rotation, start.wcs_rotation);
+    assert_eq!(controller.state().modes, start.modes);
+}
+
+#[test]
+fn single_axis_result_includes_the_other_probe_offset_in_rotated_work_coordinates() {
+    let mut state = mock().state();
+    state.wcs_rotation = Some(90.);
+    let mut result = RoutineResult {
+        axes: vec!["X".into()],
+        machine_point: [Some(state.position[0] - 2.), None, None],
+        ..Default::default()
+    };
+    result.update_work_coordinates(&state);
+    near(
+        result.point[0].unwrap(),
+        state.work_position[0] + state.probe_offset[1],
+    );
+    assert_eq!(result.point[1..], [None, None]);
 }
 
 #[test]

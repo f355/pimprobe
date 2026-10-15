@@ -454,14 +454,7 @@ impl ProbeApp {
         ])
         .await?;
         app.device.configure(&config)?;
-        let state = if config.family == "angle" {
-            pimprobe_core::query_rotary_state(app.device.as_ref()).await?
-        } else {
-            let modes = pimprobe_core::query_modes(app.device.as_ref()).await?;
-            let mut state = pimprobe_core::query_coordinates(app.device.as_ref()).await?;
-            state.modes = modes;
-            state
-        };
+        let state = pimprobe_core::query_rotary_state(app.device.as_ref()).await?;
         let plan = pimprobe_core::review(state, config)?;
         let config = plan.config.clone();
         let program = plan.program();
@@ -838,7 +831,7 @@ impl ProbeApp {
                     json!({"offsets":token.offsets,"message":error.to_string()}),
                 ));
             } else if let Ok(result) = &updated {
-                results::rebase_start(&mut plan.start, &app.device.state());
+                plan.start.rebase_work_coordinates(&app.device.state());
                 let saved = app.logs.action(
                     &token.id,
                     "work_zero",

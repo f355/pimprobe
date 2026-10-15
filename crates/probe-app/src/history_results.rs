@@ -70,10 +70,7 @@ impl ProbeApp {
                 if let Some(angle) = &mut routine.angle {
                     angle.rotation_applied = false;
                 }
-                routine.point = std::array::from_fn(|i| {
-                    routine.machine_point[i]
-                        .map(|v| v - (state.position[i] - state.work_position[i]))
-                });
+                routine.update_work_coordinates(&state);
                 routine.angle.is_some()
                     || (!routine.axes.is_empty()
                         && routine.axes.iter().all(|axis| {
@@ -149,10 +146,7 @@ impl ProbeApp {
                                 }
                             }
                             result.wcs = wcs;
-                            result.point = std::array::from_fn(|i| {
-                                result.machine_point[i]
-                                    .map(|v| v - (state.position[i] - state.work_position[i]))
-                            });
+                            result.update_work_coordinates(&state);
                         }
                         MeasurementResult::Rotary(result) => {
                             if result.wcs != wcs {

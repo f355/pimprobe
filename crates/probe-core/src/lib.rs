@@ -140,6 +140,28 @@ pub struct State {
 }
 pub type ControllerState = State;
 
+impl State {
+    pub fn work_position_at(&self, machine: Position) -> Position {
+        let delta: Position = std::array::from_fn(|i| machine[i] - self.position[i]);
+        let (sin, cos) = self.wcs_rotation.unwrap_or(0.).to_radians().sin_cos();
+        [
+            self.work_position[0] + cos * delta[0] + sin * delta[1],
+            self.work_position[1] - sin * delta[0] + cos * delta[1],
+            self.work_position[2] + delta[2],
+            self.work_position[3] + delta[3],
+        ]
+    }
+
+    pub fn rebase_work_coordinates(&mut self, current: &State) {
+        self.wcs = current.wcs;
+        self.work_position = current.work_position_at(self.position);
+        self.wcs_origin = current.wcs_origin;
+        self.wcs_rotation = current.wcs_rotation;
+        self.coordinate_offset = current.coordinate_offset;
+        self.tool_length_offset = current.tool_length_offset;
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Contact {

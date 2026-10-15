@@ -637,6 +637,26 @@ impl Controller for MockController {
             )));
         }
         let start = inner.state.position;
+        let (sin, cos) = inner
+            .state
+            .wcs_rotation
+            .unwrap_or(0.)
+            .to_radians()
+            .sin_cos();
+        let mut delta = [0.; 3];
+        for &(axis, value) in &axes {
+            delta[axis.index()] = value;
+        }
+        let machine_delta = [
+            cos * delta[0] - sin * delta[1],
+            sin * delta[0] + cos * delta[1],
+            delta[2],
+        ];
+        let axes: Vec<_> = [Axis::X, Axis::Y, Axis::Z]
+            .into_iter()
+            .zip(machine_delta)
+            .filter(|(_, delta)| delta.abs() > 1e-10)
+            .collect();
         let mut fraction = 1.0_f64;
         let probe = matches!(words[0], "G38.2" | "G38.3");
         let mut hit = false;
@@ -657,7 +677,9 @@ impl Controller for MockController {
         for (axis, delta) in axes {
             let i = axis.index();
             inner.state.position[i] = start[i] + delta * fraction;
-            inner.state.work_position[i] += delta * fraction;
+        }
+        for (i, value) in delta.into_iter().enumerate() {
+            inner.state.work_position[i] += value * fraction;
         }
         inner.state.position[3] += a_delta * fraction;
         inner.state.work_position[3] += a_delta * fraction;

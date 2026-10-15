@@ -72,6 +72,7 @@ async fn fixed_fixture_can_be_measured_without_setting_work_zero() {
     let mut state = MockController::new().state();
     state.probe_extended = true;
     state.wcs = 55;
+    state.wcs_rotation = Some(30.);
     state.work_position = [31.0, -47.0, 12.0, 0.0];
     let machine = MockController::with_state(state.clone());
     let mut corner = state.position;
@@ -114,6 +115,7 @@ async fn fixed_fixture_can_be_measured_without_setting_work_zero() {
         assert!((actual.unwrap() - expected).abs() < 0.002);
     }
     assert_eq!(machine.state().wcs, 55);
+    assert_eq!(machine.state().wcs_rotation, Some(30.));
 }
 
 #[tokio::test]

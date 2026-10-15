@@ -345,15 +345,19 @@ pub async fn run_repeatability<C: RepeatabilityController + ?Sized>(
     observe: impl Fn(RepeatabilityEvent) + Send + Sync,
 ) -> Result<(), Error> {
     check_repeatability(c, options, settings)?;
-    let c = Cancellable {
+    let controller = Cancellable {
         inner: c,
         cancel: &cancel,
     };
-    tokio::select! {
-        biased;
-        _ = cancel.cancelled() => Err(Error::Cancelled),
-        result = repeat_inner(&c, options, settings, report, &stop, &observe) => result,
-    }
+    let progress = |event| observe(RepeatabilityEvent::Progress(event));
+    crate::runtime::in_machine_axes(c, &progress, async {
+        tokio::select! {
+            biased;
+            _ = cancel.cancelled() => Err(Error::Cancelled),
+            result = repeat_inner(&controller, options, settings, report, &stop, &observe) => result,
+        }
+    })
+    .await
 }
 
 async fn repeat_inner<C: RepeatabilityController + ?Sized>(

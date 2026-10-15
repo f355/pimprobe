@@ -49,6 +49,23 @@ pub struct RoutineResult {
     #[serde(skip)]
     pub settled: bool,
 }
+
+impl RoutineResult {
+    pub fn update_work_coordinates(&mut self, state: &State) {
+        let mut machine = state.position;
+        machine[0] += state.probe_offset[0];
+        machine[1] += state.probe_offset[1];
+        machine[2] -= state.probe_offset[2];
+        for (i, value) in self.machine_point.iter().enumerate() {
+            if let Some(value) = value {
+                machine[i] = *value;
+            }
+        }
+        let work = state.work_position_at(machine);
+        self.point = std::array::from_fn(|i| self.machine_point[i].map(|_| work[i]));
+    }
+}
+
 pub async fn query_modes<C: Controller + ?Sized>(c: &C) -> Result<Modes, Error> {
     let mut rx = c.subscribe();
     tokio::time::timeout(Duration::from_secs(3), async {
@@ -252,24 +269,35 @@ pub async fn run<C: Controller + ?Sized>(
         cancel: &cancel,
     };
     p.check_state(&c.state(), p.start.position)?;
-    let rotation = if p.config.family == "angle" && rotary_supported(&p.start.firmware_version) {
-        p.start.wcs_rotation.filter(|angle| angle.abs() > 0.0001)
-    } else {
-        None
-    };
+    let mut result = in_machine_axes(c, &observe, async {
+        tokio::select! {
+            biased;
+            _ = cancel.cancelled() => Err(Error::Cancelled),
+            result = run_inner(&controller, p, t, &observe) => result,
+        }
+    })
+    .await?;
+    result.update_work_coordinates(&p.start);
+    Ok(result)
+}
+
+pub(crate) async fn in_machine_axes<C: Controller + ?Sized, T>(
+    c: &C,
+    observe: &(impl Fn(Progress) + Send + Sync),
+    operation: impl std::future::Future<Output = Result<T, Error>>,
+) -> Result<T, Error> {
+    let start = c.state();
+    preflight_machine(&start)?;
+    let rotation = start.wcs_rotation.filter(|angle| angle.abs() > 0.0001);
     if rotation.is_some() {
         observe(Progress {
             kind: "script".into(),
-            message: format!("G10 L2 P{} R0 ; measure in machine axes", p.start.wcs - 53),
+            message: format!("G10 L2 P{} R0 ; move in machine axes", start.wcs - 53),
             ..Progress::default()
         });
-        write_rotary_rotation(c, p.start.wcs, 0.).await?;
+        write_rotary_rotation(c, start.wcs, 0.).await?;
     }
-    let outcome = tokio::select! {
-        biased;
-        _=cancel.cancelled()=>Err(Error::Cancelled),
-        result=run_inner(&controller,p,t,&observe)=>result,
-    };
+    let outcome = operation.await;
     if let Some(rotation) =
         rotation.filter(|_| c.state().connected && c.state().ready && !c.state().motion_blocked)
     {
@@ -277,12 +305,12 @@ pub async fn run<C: Controller + ?Sized>(
             kind: "script".into(),
             message: format!(
                 "G10 L2 P{} R{} ; restore work rotation",
-                p.start.wcs - 53,
+                start.wcs - 53,
                 crate::script::number(rotation)
             ),
             ..Progress::default()
         });
-        if let Err(error) = write_rotary_rotation(c, p.start.wcs, rotation).await {
+        if let Err(error) = write_rotary_rotation(c, start.wcs, rotation).await {
             return Err(match outcome {
                 Ok(_) => error,
                 Err(cause) => Error::Recovery {
@@ -351,11 +379,7 @@ async fn run_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
                     result.raw_point[axis.index()] = Some((raw_low + raw_high) / 2.0);
                     result.raw_spans[axis.index()] = Some((raw_high - raw_low).abs());
                     refs.insert(format!("surface_{n}"), center);
-                    result.point[axis.index()] = Some(
-                        center
-                            - (p.start.position[axis.index()]
-                                - p.start.work_position[axis.index()]),
-                    );
+                    result.machine_point[axis.index()] = Some(center);
                 }
                 RoutineStep::Contact {
                     axis,
@@ -425,11 +449,7 @@ async fn run_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
                     refs.insert(format!("surface_{measurement}"), surface);
                     if measurement == axis.name() {
                         result.raw_point[axis.index()] = Some(contact.position[axis.index()]);
-                        result.point[axis.index()] = Some(
-                            surface
-                                - (p.start.position[axis.index()]
-                                    - p.start.work_position[axis.index()]),
-                        );
+                        result.machine_point[axis.index()] = Some(surface);
                     }
                 }
                 RoutineStep::Move { targets } => {
@@ -472,9 +492,6 @@ async fn run_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
                 rotary_supported(&p.start.firmware_version))?);
             result.returned = true;
         }
-        result.machine_point = std::array::from_fn(|i| {
-            result.point[i].map(|v| v + p.start.position[i] - p.start.work_position[i])
-        });
         if p.config.zero {
             stream.command(p.steps.len() as isize, &refs, observe)?;
             write_zero(&c, p, &result, [0.0; 3], t).await?;
@@ -554,6 +571,10 @@ async fn write_zero<C: Controller + ?Sized>(
     let state = query_coordinates(c).await?;
     let mut rx = c.subscribe();
     p.check_state(&state, state.position)?;
+    if state.wcs_rotation.is_some_and(|angle| angle.abs() > 0.0001) {
+        zero_recorded_result(c, result, offsets).await?;
+        return Ok(());
+    }
     let mut desired = state.work_position;
     let mut words = Vec::new();
     for a in p.axes() {
@@ -721,11 +742,14 @@ pub async fn return_to_start<C: Controller + ?Sized>(
         inner: c,
         cancel: &cancel,
     };
-    tokio::select! {
-        biased;
-        _ = cancel.cancelled() => Err(Error::Cancelled),
-        result = return_inner(&controller, p, result, t, &observe) => result,
-    }
+    in_machine_axes(c, &observe, async {
+        tokio::select! {
+            biased;
+            _ = cancel.cancelled() => Err(Error::Cancelled),
+            result = return_inner(&controller, p, result, t, &observe) => result,
+        }
+    })
+    .await
 }
 
 pub async fn go_to_measured<C: Controller + ?Sized>(
@@ -741,11 +765,14 @@ pub async fn go_to_measured<C: Controller + ?Sized>(
         inner: c,
         cancel: &cancel,
     };
-    tokio::select! {
-        biased;
-        _ = cancel.cancelled() => Err(Error::Cancelled),
-        result = measured_inner(&controller, p, result, clearance, t, &observe) => result,
-    }
+    in_machine_axes(c, &observe, async {
+        tokio::select! {
+            biased;
+            _ = cancel.cancelled() => Err(Error::Cancelled),
+            result = measured_inner(&controller, p, result, clearance, t, &observe) => result,
+        }
+    })
+    .await
 }
 
 async fn measured_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
@@ -769,9 +796,7 @@ async fn measured_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
     let state = c.state();
     let mut check = p.clone();
     if result.zeroed {
-        check.start.work_position = std::array::from_fn(|i| {
-            p.start.position[i] - (state.position[i] - state.work_position[i])
-        });
+        check.start.rebase_work_coordinates(&state);
     }
     check.check_state(&state, state.position)?;
     let z_target = state.position[2] + clearance;
@@ -877,10 +902,7 @@ async fn return_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
     let state = c.state();
     let mut check = p.clone();
     if result.zeroed {
-        // Setting work zero changes the offset, not the saved machine position.
-        check.start.work_position = std::array::from_fn(|i| {
-            p.start.position[i] - (state.position[i] - state.work_position[i])
-        });
+        check.start.rebase_work_coordinates(&state);
     }
     check.check_state(&state, state.position)?;
     let scripted = AtomicBool::new(false);

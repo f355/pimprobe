@@ -15,15 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use super::*;
-use pimprobe_core::{RotaryResult, RoutineResult, State};
-
-pub(super) fn rebase_start(start: &mut State, state: &State) {
-    start.wcs = state.wcs;
-    start.work_position =
-        std::array::from_fn(|i| start.position[i] - (state.position[i] - state.work_position[i]));
-    start.wcs_origin = state.wcs_origin;
-    start.wcs_rotation = state.wcs_rotation;
-}
+use pimprobe_core::{RotaryResult, RoutineResult};
 
 impl ProbeApp {
     pub async fn rotate_result(
@@ -44,7 +36,7 @@ impl ProbeApp {
             let updated = pimprobe_core::rotate_angle_result(app.device.as_ref(), &result).await;
             let saved = updated.as_ref().unwrap_or(&result).clone();
             if updated.is_ok() {
-                rebase_start(&mut plan.start, &app.device.state());
+                plan.start.rebase_work_coordinates(&app.device.state());
                 log_warning(app.logs.action(
                     &request.id,
                     "apply_xy_alignment",
@@ -97,11 +89,9 @@ impl ProbeApp {
                 }
             }
             result.wcs = state.wcs;
-            result.point = std::array::from_fn(|i| {
-                result.machine_point[i].map(|v| v - (state.position[i] - state.work_position[i]))
-            });
+            result.update_work_coordinates(&state);
             plan.config.wcs = state.wcs;
-            rebase_start(&mut plan.start, &state);
+            plan.start.rebase_work_coordinates(&state);
             log_warning(
                 app.logs
                     .action(&request.id, "result_wcs", json!({"result":result})),
@@ -152,7 +142,7 @@ impl ProbeApp {
                 result.rotation_applied = false;
             }
             result.wcs = state.wcs;
-            rebase_start(&mut plan.start, &state);
+            plan.start.rebase_work_coordinates(&state);
             log_warning(
                 app.logs
                     .action(&request.id, "result_wcs", json!({"result":result})),

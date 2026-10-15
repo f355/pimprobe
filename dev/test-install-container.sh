@@ -80,6 +80,7 @@ test -x /userdata/pimprobe/bin/pimprobe-service
 test -f /userdata/pimprobe/ui/Main.qml
 test "$(readlink /root/app/libpimprobeproxyplugin.so)" = /userdata/pimprobe/lib/libpimprobeproxyplugin.so
 test -f /etc/systemd/system/pimprobe-service.service
+test -f /etc/systemd/system/nestpad.service.d/pimprobe.conf
 cmp /userdata/pimprobe/config.json /expected-config.json
 printf '{"coarseFeed":42}\n' >/userdata/pimprobe/settings.json
 printf '{"listenAddress":"127.0.0.1:8137","travelLimits":[210,235,123]}\n' >/userdata/pimprobe/config.json
@@ -87,6 +88,7 @@ mkdir -p /userdata/pimprobe-data
 printf 'saved probe history\n' >/userdata/pimprobe-data/history.jsonl
 cp /userdata/pimprobe/settings.json /tmp/expected-settings
 cp /userdata/pimprobe/config.json /tmp/expected-config
+cp /etc/systemd/system/nestpad.service.d/pimprobe.conf /tmp/expected-plugin-hook
 printf 'obsolete UI\n' >/userdata/pimprobe/ui/Old.qml
 touch /tmp/service-active
 sh /package.run -y
@@ -116,6 +118,7 @@ kill -0 "$ui_pid"
 test "$(cat /userdata/pimprobe/VERSION)" = 'old version'
 test -e /tmp/service-active
 grep -q PIMPROBE_TEST /etc/systemd/system/pimprobe-service.service.d/test.conf
+cmp /etc/systemd/system/nestpad.service.d/pimprobe.conf /tmp/expected-plugin-hook
 kill "$ui_pid"
 wait "$ui_pid" 2>/dev/null || true
 rm -f /run/pimprobe-ui.pid
@@ -136,6 +139,7 @@ test -z "$(find /userdata -maxdepth 1 -name 'pimprobe-rollback.*')"
 cmp /userdata/pimprobe/settings.json /tmp/expected-settings
 # Uninstall must work even when the UI runtime is broken, and preserve unrelated data.
 mkdir -p /userdata/other-app /root/.config/pimprobe
+printf '[Service]\nEnvironment=OTHER_PLUGIN=1\n' >/etc/systemd/system/nestpad.service.d/other.conf
 touch /userdata/other-app/keep /root/.config/pimprobe/settings.json
 touch /run/pimprobe-controller.sock /run/pimprobe-ui.lock
 touch /tmp/missing-library
@@ -149,6 +153,8 @@ test ! -e /root/.config/pimprobe
 test ! -L /root/app/libpimprobeproxyplugin.so
 test ! -L /root/app/libpimprobelauncherplugin.so
 test ! -e /etc/systemd/system/pimprobe-service.service
+test ! -e /etc/systemd/system/nestpad.service.d/pimprobe.conf
+test -f /etc/systemd/system/nestpad.service.d/other.conf
 test ! -e /run/pimprobe-controller.sock
 test ! -e /run/pimprobe-ui.lock
 test -f /userdata/other-app/keep

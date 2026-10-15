@@ -20,6 +20,7 @@ payload=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 destination=/userdata/pimprobe
 vendor=/root/app
 unit=/etc/systemd/system/pimprobe-service.service
+plugin_hook=/etc/systemd/system/nestpad.service.d/pimprobe.conf
 restart=no
 yes=false
 uninstall=false
@@ -103,6 +104,10 @@ rollback_installation() {
             rm -f "$vendor/$name"
             if [ -L "$rollback/$name" ]; then cp -a "$rollback/$name" "$vendor/$name"; fi
         done
+        rm -f "$plugin_hook"
+        if [ -f "$rollback/nestpad-pimprobe.conf" ]; then
+            cp -p "$rollback/nestpad-pimprobe.conf" "$plugin_hook"
+        fi
     fi
     if [ "$unit_changed" = true ]; then
         rm -rf "$unit" "$unit.d" /etc/systemd/system/multi-user.target.wants/pimprobe-service.service
@@ -164,6 +169,7 @@ if [ "$uninstall" = false ]; then
     for name in libpimprobeproxyplugin.so libpimprobelauncherplugin.so; do
         if [ -L "$vendor/$name" ]; then cp -a "$vendor/$name" "$rollback/"; fi
     done
+    if [ -f "$plugin_hook" ]; then cp -p "$plugin_hook" "$rollback/nestpad-pimprobe.conf"; fi
 fi
 if [ -L /etc/systemd/system/multi-user.target.wants/pimprobe-service.service ]; then unit_was_enabled=true; fi
 if [ "$restart" = yes ]; then
@@ -180,6 +186,7 @@ if [ "$uninstall" = true ]; then
         systemctl disable pimprobe-service
     fi
     rm -f "$vendor/libpimprobeproxyplugin.so" "$vendor/libpimprobelauncherplugin.so"
+    rm -f "$plugin_hook"
     rm -rf "$unit" "$unit.d" /etc/systemd/system/multi-user.target.wants/pimprobe-service.service
     rm -rf "$destination" /userdata/pimprobe-data /root/.config/pimprobe /root/.local/share/pimprobe /root/.cache/pimprobe
     rm -rf /userdata/backups/pimprobe-* /userdata/pimprobe-stage.* /userdata/pimprobe-update.*
@@ -197,6 +204,8 @@ else
     for name in libpimprobeproxyplugin.so libpimprobelauncherplugin.so; do
         ln -sfn "$destination/lib/$name" "$vendor/$name"
     done
+    mkdir -p "$(dirname "$plugin_hook")"
+    cp "$payload/nestpad-pimprobe.conf" "$plugin_hook"
     unit_changed=true
     cp "$payload/pimprobe-service.service" "$unit"
     systemctl daemon-reload

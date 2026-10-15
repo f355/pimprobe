@@ -147,6 +147,9 @@ ssh -t root@<machine-host> 'sh /userdata/pimprobe-<git-version>.run'
 The installer checks the archive, machine layout and runtime dependencies, and
 preserves configuration and settings during upgrades.
 
+A startup hook recreates the plugin links before CNC_Lab starts, including
+after CNC_Lab application updates. PIMProbe's files live in `/userdata/pimprobe`.
+
 Reboot later to activate the installation, or use `-r` to restart CNC_Lab immediately.
 
 ```sh

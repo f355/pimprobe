@@ -46,6 +46,7 @@ test('self-extracting package preserves its payload and rejects corruption', () 
             ['ui/ProbeFlow.qml', 'app/ui/ProbeFlow.qml'],
             ['LICENSE.md', 'app/LICENSE.md'],
             ['README.md', 'app/README.md'],
+            ['packaging/nestpad-pimprobe.conf', 'nestpad-pimprobe.conf'],
             ['ui/fonts/Geist-Regular.otf', 'app/ui/fonts/Geist-Regular.otf'],
             ['ui/fonts/Geist-Medium.otf', 'app/ui/fonts/Geist-Medium.otf'],
             ['ui/fonts/Geist-Bold.otf', 'app/ui/fonts/Geist-Bold.otf'],

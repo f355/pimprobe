@@ -81,6 +81,7 @@ try {
     chmodSync(join(payload, 'app/bin/pimprobe-ui'), 0o755);
     copy(join(root, 'packaging/config.example.json'), 'app/config.json');
     copy(join(root, 'packaging/pimprobe-service.service'), 'pimprobe-service.service');
+    copy(join(root, 'packaging/nestpad-pimprobe.conf'), 'nestpad-pimprobe.conf');
     copy(join(root, 'packaging/install.sh'), 'install.sh');
     for (const name of ['LICENSE.md', 'README.md']) {
         copy(join(root, name), name);

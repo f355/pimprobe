@@ -59,6 +59,8 @@ public:
     virtual QByteArray saveState() const = 0;
     virtual bool restoreState(QByteArray &state) = 0;
     virtual void cleanup();
+    virtual bool handleBack();
+    virtual bool suppressGlobalProbeStateDialog() const;
     virtual void onAsyncToolInfoUpdated(
         const QList<AllData::HomeData::ToolInfo> &tools);
     virtual void onAcceptReadTool();

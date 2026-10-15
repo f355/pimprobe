@@ -175,12 +175,6 @@ pub fn check_repeatability<C: RepeatabilityController + ?Sized>(
     let target = measurement_start(&state);
     for axis in [Axis::X, Axis::Y, Axis::Z] {
         let i = axis.index();
-        check_path(
-            &state,
-            axis,
-            state.position[i].min(target[i]),
-            state.position[i].max(target[i]),
-        )?;
         if options.axes[i] {
             let mut at_target = state.clone();
             at_target.position = target;

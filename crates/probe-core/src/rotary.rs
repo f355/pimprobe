@@ -218,16 +218,6 @@ pub fn review_rotary(start: State, config: RotaryConfig) -> Result<RotaryPlan, E
                 .into(),
         ));
     }
-    if config.operation != RotaryOperation::Axis {
-        level::check_review(&start, &config)?;
-        return Ok(RotaryPlan { start, config });
-    }
-    check_path(
-        &start,
-        Axis::X,
-        start.position[0].min(start.position[0] + config.x_distance),
-        start.position[0].max(start.position[0] + config.x_distance),
-    )?;
     Ok(RotaryPlan { start, config })
 }
 
@@ -380,31 +370,6 @@ async fn track<C: Controller + ?Sized>(
     native: bool,
 ) -> Result<(), Error> {
     let count = ((to - from).abs() / 5.0).ceil() as usize;
-    let state = c.state();
-    let mut angles = vec![from.to_radians(), to.to_radians()];
-    let y = apex[1] - center[0];
-    let z = apex[2] + config.diameter / 2.0 - center[1];
-    let low = from.min(to).to_radians();
-    let high = from.max(to).to_radians();
-    // Include the extrema between endpoints, not just the arc's chord.
-    for critical in [(-z).atan2(y), y.atan2(z)] {
-        for half_turn in -2..=2 {
-            let angle = critical + f64::from(half_turn) * std::f64::consts::PI;
-            if (low..=high).contains(&angle) {
-                angles.push(angle);
-            }
-        }
-    }
-    for angle in angles {
-        let target = machine_tip(
-            &state,
-            orbit(center, apex, angle.to_degrees(), config.diameter / 2.0),
-        );
-        for axis in [Axis::Y, Axis::Z] {
-            let j = axis.index();
-            check_path(&state, axis, target[j], target[j])?;
-        }
-    }
     let steps = if native { 1 } else { count };
     for i in 1..=steps {
         let state = c.state();
@@ -1020,7 +985,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn native_tracking_rotates_the_ball_center_and_checks_interior_extrema() {
+    async fn native_tracking_rotates_the_ball_center() {
         let mut state = MockController::new().state();
         state.probe_extended = true;
         state.modes = Modes::PROBING;
@@ -1035,14 +1000,5 @@ mod tests {
         assert!(within(c.state().position, expected, 0.001));
         let command = c.commands().pop().unwrap();
         assert!(command.contains("J-0.250 K-9.000 A90.000"), "{command}");
-
-        state.position[2] = -0.01;
-        let c = MockController::with_state(state.clone());
-        let apex = tip(&state);
-        let center = [apex[1] - 1., apex[2] + 1. - 10.];
-        let error = track(&c, center, apex, 0., 90., &config, true)
-            .await
-            .unwrap_err();
-        assert!(error.to_string().contains("Z+"), "{error}");
     }
 }

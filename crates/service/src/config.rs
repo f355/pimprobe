@@ -18,11 +18,10 @@ use serde::Deserialize;
 use std::{net::SocketAddr, path::PathBuf};
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase", default, deny_unknown_fields)]
+#[serde(rename_all = "camelCase", default)]
 pub struct Config {
     pub controller_socket: PathBuf,
     pub listen_address: SocketAddr,
-    pub travel_limits: [f64; 3],
 }
 
 impl Default for Config {
@@ -30,7 +29,6 @@ impl Default for Config {
         Self {
             controller_socket: "/run/pimprobe-controller.sock".into(),
             listen_address: "127.0.0.1:8137".parse().unwrap(),
-            travel_limits: [210., 235., 125.],
         }
     }
 }
@@ -78,13 +76,6 @@ impl Options {
             config.listen_address = address
                 .parse()
                 .map_err(|e| format!("listen address: {e}"))?;
-        }
-        if config
-            .travel_limits
-            .iter()
-            .any(|v| !v.is_finite() || *v <= 0.)
-        {
-            return Err("travel limits must be finite and positive".into());
         }
         // Remote access needs an explicit authentication/access-control design.
         if !config.listen_address.ip().is_loopback() {

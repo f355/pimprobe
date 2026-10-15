@@ -83,7 +83,7 @@ test -f /etc/systemd/system/pimprobe-service.service
 test -f /etc/systemd/system/nestpad.service.d/pimprobe.conf
 cmp /userdata/pimprobe/config.json /expected-config.json
 printf '{"coarseFeed":42}\n' >/userdata/pimprobe/settings.json
-printf '{"listenAddress":"127.0.0.1:8137","travelLimits":[210,235,123]}\n' >/userdata/pimprobe/config.json
+printf '{"listenAddress":"127.0.0.1:18137"}\n' >/userdata/pimprobe/config.json
 mkdir -p /userdata/pimprobe-data
 printf 'saved probe history\n' >/userdata/pimprobe-data/history.jsonl
 cp /userdata/pimprobe/settings.json /tmp/expected-settings

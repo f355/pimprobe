@@ -141,18 +141,6 @@ fn internal_search_limits_use_each_axis_distance() {
 }
 
 #[test]
-fn travel_error_identifies_the_exhausted_direction() {
-    let mut state = mock().state();
-    state.position[1] = -18.6;
-    let error = review(state, config("center_hole"))
-        .unwrap_err()
-        .to_string();
-    assert!(error.contains("Y+"), "{error}");
-    assert!(error.contains("G53 Y"), "{error}");
-    assert!(error.contains("Move toward Y-"), "{error}");
-}
-
-#[test]
 fn preflight_errors_explain_what_needs_attention() {
     let base = mock().state();
     let cases: Vec<(State, &str)> = vec![
@@ -881,18 +869,16 @@ async fn guarded_contact_reverses_no_further_than_traversed_segment() {
 }
 
 #[test]
-fn preflight_configuration_and_envelope_errors_are_fail_closed() {
+fn review_rejects_unusable_machine_state_and_invalid_options() {
     let original = mock().state();
     let cfg = RoutineConfig::default();
     for mutate in [
         |s: &mut State| s.probe_extended = false,
         |s: &mut State| s.probe_offset_known = false,
-        |s: &mut State| s.travel_limits_known = false,
         |s: &mut State| s.position[0] = f64::NAN,
         |s: &mut State| s.modes.units = 0,
         |s: &mut State| s.work_position[0] = f64::INFINITY,
         |s: &mut State| s.wcs = 55,
-        |s: &mut State| s.position[2] = -0.6,
     ] {
         let mut s = original.clone();
         mutate(&mut s);

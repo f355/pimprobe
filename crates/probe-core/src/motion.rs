@@ -237,7 +237,6 @@ pub fn preview_contact(
         lo[i] += s.position[i];
         hi[i] += s.position[i];
     }
-    check_path(s, c.axis, lo[c.axis.index()], hi[c.axis.index()])?;
     let mut warnings = vec!["Fixed machine obstructions are not modeled".into()];
     if !s.probe_trigger_known {
         warnings.push("Controller does not report idle probe input".into());
@@ -306,12 +305,6 @@ pub(crate) async fn execute<C: Controller + ?Sized>(
     let i = s.delta.iter().position(|v| *v != 0.0).unwrap();
     let start = state.position;
     let end = std::array::from_fn(|j| start[j] + s.delta[j]);
-    for axis in [Axis::X, Axis::Y, Axis::Z] {
-        let j = axis.index();
-        if s.delta[j] != 0.0 {
-            check_path(&state, axis, start[j].min(end[j]), start[j].max(end[j]))?;
-        }
-    }
     let deadline = t.deadline(s)?;
     let mut inconsistent_ready = false;
     let mut probe_ready = false;

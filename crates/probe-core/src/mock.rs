@@ -267,8 +267,6 @@ impl MockController {
             probe_trigger_known: false,
             probe_triggered: false,
             probe_offset_known: true,
-            travel_limits_known: true,
-            travel_limits: [240.0, 235.0, 125.0, 0.0],
             position: [-120.0, -110.0, -60.0, 0.0],
             wcs: 54,
             work_position: [35.0, 20.0, -8.0, 0.0],

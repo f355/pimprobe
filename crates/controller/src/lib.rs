@@ -67,7 +67,6 @@ struct Inner {
     writer: Mutex<Option<OwnedWriteHalf>>,
     events: broadcast::Sender<Event>,
     action: Mutex<()>,
-    travel_limits: Position,
 }
 
 struct FrameWrite<'a> {
@@ -95,16 +94,16 @@ fn failure(e: impl std::fmt::Display) -> Error {
 }
 
 impl SocketController {
-    pub async fn connect(path: impl AsRef<Path>, travel_limits: Position) -> Result<Self, Error> {
+    pub async fn connect(path: impl AsRef<Path>) -> Result<Self, Error> {
         let path = Self::path(path)?;
         let socket = timeout(IO_TIMEOUT, UnixStream::connect(&path))
             .await
             .map_err(failure)?
             .map_err(failure)?;
-        Ok(Self::spawn(path, travel_limits, Some(socket)))
+        Ok(Self::spawn(path, Some(socket)))
     }
-    pub async fn start(path: impl AsRef<Path>, travel_limits: Position) -> Result<Self, Error> {
-        Ok(Self::spawn(Self::path(path)?, travel_limits, None))
+    pub async fn start(path: impl AsRef<Path>) -> Result<Self, Error> {
+        Ok(Self::spawn(Self::path(path)?, None))
     }
     fn path(path: impl AsRef<Path>) -> Result<PathBuf, Error> {
         if path.as_ref().as_os_str().is_empty() {
@@ -112,14 +111,13 @@ impl SocketController {
         }
         Ok(path.as_ref().to_owned())
     }
-    fn spawn(path: PathBuf, travel_limits: Position, socket: Option<UnixStream>) -> Self {
+    fn spawn(path: PathBuf, socket: Option<UnixStream>) -> Self {
         let (events, _) = broadcast::channel(512);
         let inner = Arc::new(Inner {
             stored: RwLock::new(Stored::default()),
             writer: Mutex::new(None),
             events,
             action: Mutex::new(()),
-            travel_limits,
         });
         let (stop, mut stopped) = watch::channel(false);
         let (finished, done) = watch::channel(false);
@@ -154,7 +152,6 @@ impl SocketController {
             plane: s.plane,
             coordinate_offset: s.coordinate_offset,
             tool_length_offset: s.tool_length_offset,
-            travel_limits: self.inner.travel_limits,
             ..Default::default()
         };
         if !state.connected {
@@ -172,9 +169,6 @@ impl SocketController {
             state.probe_offset_known = [33, 34, 35, 202]
                 .iter()
                 .all(|k| s.settings.get(k).is_some_and(|v| v.is_finite()));
-            state.travel_limits_known = self.inner.travel_limits[..3]
-                .iter()
-                .all(|v| v.is_finite() && *v > 0.0);
             state.position = status.m_pos;
             state.work_position = status.w_pos;
             state.wcs = status.wcs;
@@ -599,9 +593,7 @@ mod tests {
     }
     async fn ready() -> (SocketPath, UnixListener, SocketController, UnixStream) {
         let (path, listener) = listener();
-        let c = SocketController::connect(&path.0, [100.0; 4])
-            .await
-            .unwrap();
+        let c = SocketController::connect(&path.0).await.unwrap();
         let (mut socket, _) = listener.accept().await.unwrap();
         assert_eq!(
             frame::read_frame(&mut socket).await.unwrap(),
@@ -836,7 +828,7 @@ mod tests {
     async fn disconnected_start_is_available_and_commands_are_validated() {
         let (path, listener) = listener();
         drop(listener);
-        let c = SocketController::start(&path.0, [100.0; 4]).await.unwrap();
+        let c = SocketController::start(&path.0).await.unwrap();
         assert!(!c.state().connected);
         assert!(c.send("G54\nG55").await.is_err());
         assert!(c.send("G54").await.is_err());

@@ -118,8 +118,6 @@ pub struct State {
     pub probe_trigger_known: bool,
     pub probe_triggered: bool,
     pub probe_offset_known: bool,
-    pub travel_limits_known: bool,
-    pub travel_limits: Position,
     pub position: Position,
     pub wcs: i32,
     pub work_position: Position,
@@ -238,10 +236,6 @@ pub(crate) fn preflight_machine(s: &State) -> Result<(), Error> {
             "Could not read the probe calibration from the machine. Reconnect and try again.",
         ),
         (
-            s.travel_limits_known,
-            "Could not read the machine travel limits. Reconnect and try again.",
-        ),
-        (
             finite(s.position),
             "Could not read the machine position. Reconnect and try again.",
         ),
@@ -249,26 +243,6 @@ pub(crate) fn preflight_machine(s: &State) -> Result<(), Error> {
         if !ok {
             return Err(Error::Preflight(why.into()));
         }
-    }
-    Ok(())
-}
-pub(crate) fn check_path(s: &State, a: Axis, lo: f64, hi: f64) -> Result<(), Error> {
-    let limit = s.travel_limits[a.index()];
-    if !s.travel_limits_known || !positive(limit) || !lo.is_finite() || !hi.is_finite() || lo > hi {
-        return Err(Error::Preflight(format!(
-            "Cannot validate the {a} movement path"
-        )));
-    }
-    let low_limit = -limit + 0.5;
-    if lo < low_limit {
-        return Err(Error::Preflight(format!(
-            "Not enough {a}- travel: the routine reaches G53 {a}{lo:.3}, past the limit at {a}{low_limit:.3}. Move toward {a}+ or reduce the movement distance"
-        )));
-    }
-    if hi > 0.0 {
-        return Err(Error::Preflight(format!(
-            "Not enough {a}+ travel: the routine reaches G53 {a}{hi:.3}, past the limit at {a}0. Move toward {a}- or reduce the movement distance"
-        )));
     }
     Ok(())
 }

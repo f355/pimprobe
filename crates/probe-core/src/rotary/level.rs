@@ -44,28 +44,6 @@ fn distances(config: &RotaryConfig) -> (f64, f64) {
     }
 }
 
-pub(super) fn check_review(state: &State, config: &RotaryConfig) -> Result<(), Error> {
-    let (spacing, measured, direction) = axes(config.operation);
-    let i = spacing.index();
-    let j = measured.index();
-    let (spacing_distance, search_distance) = distances(config);
-    let second = state.position[i] + spacing_distance;
-    check_path(
-        state,
-        spacing,
-        state.position[i].min(second),
-        state.position[i].max(second),
-    )?;
-    let end = state.position[j] + f64::from(direction) * search_distance;
-    check_path(
-        state,
-        measured,
-        state.position[j].min(end),
-        state.position[j].max(end),
-    )?;
-    Ok(())
-}
-
 fn correction(operation: RotaryOperation, points: &[Position; 2]) -> f64 {
     let (spacing, measured, _) = axes(operation);
     let slope = (points[1][measured.index()] - points[0][measured.index()])

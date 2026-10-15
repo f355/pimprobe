@@ -15,7 +15,6 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use crate::*;
-use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -315,7 +314,6 @@ pub fn review(state: State, config: RoutineConfig) -> Result<RoutinePlan, Error>
             p.steps.push(RoutineStep::Move { targets });
         }
     }
-    p.validate_envelope()?;
     Ok(p)
 }
 pub fn plan_routine(state: State, config: RoutineConfig) -> Result<RoutinePlan, Error> {
@@ -450,78 +448,6 @@ impl RoutinePlan {
             return Err(Error::Preflight(
                 "The work zero changed during this operation.".into(),
             ));
-        }
-        Ok(())
-    }
-    pub fn validate_envelope(&self) -> Result<(), Error> {
-        let (mut lo, mut hi) = (self.start.position, self.start.position);
-        let mut refs = BTreeMap::<String, [f64; 2]>::new();
-        for a in [Axis::X, Axis::Y, Axis::Z] {
-            refs.insert(
-                format!("start_{}", a.name()),
-                [lo[a.index()], hi[a.index()]],
-            );
-        }
-        for step in &self.steps {
-            match step {
-                RoutineStep::Center { axis } => {
-                    let n = axis.name();
-                    let l = refs[&format!("surface_{n}_low")];
-                    let h = refs[&format!("surface_{n}_high")];
-                    refs.insert(
-                        format!("surface_{n}"),
-                        [(l[0] + h[0]) / 2.0, (l[1] + h[1]) / 2.0],
-                    );
-                }
-                RoutineStep::Contact {
-                    axis,
-                    config,
-                    limit,
-                    measurement,
-                } => {
-                    let i = axis.index();
-                    let d = f64::from(config.direction);
-                    let (cl, ch) = if d > 0.0 {
-                        (lo[i] - self.config.retract, limit + 0.5)
-                    } else {
-                        (limit - 0.5, hi[i] + self.config.retract)
-                    };
-                    check_path(
-                        &self.start,
-                        *axis,
-                        lo[i].min(cl).min(cl - d * self.config.retract),
-                        hi[i].max(ch).max(ch - d * self.config.retract),
-                    )?;
-                    let off = self.start.probe_offset[i] + d * self.config.diameter / 2.0;
-                    refs.insert(format!("surface_{measurement}"), [cl + off, ch + off]);
-                    lo[i] = cl - d * self.config.retract;
-                    hi[i] = ch - d * self.config.retract;
-                }
-                RoutineStep::Move { targets } => {
-                    for MoveTarget {
-                        axis,
-                        reference: target,
-                        offset,
-                    } in targets
-                    {
-                        let i = axis.index();
-                        let r = if target == &format!("current_{}", axis.name()) {
-                            [lo[i], hi[i]]
-                        } else {
-                            *refs.get(target).ok_or_else(|| {
-                                Error::InvalidConfig(format!(
-                                    "The value {target} needed for the next move is missing."
-                                ))
-                            })?
-                        };
-                        let l = r[0] + offset;
-                        let h = r[1] + offset;
-                        check_path(&self.start, *axis, lo[i].min(l), hi[i].max(h))?;
-                        lo[i] = l;
-                        hi[i] = h;
-                    }
-                }
-            }
         }
         Ok(())
     }

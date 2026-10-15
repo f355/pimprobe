@@ -269,17 +269,6 @@ TestCase {
         flow.close()
     }
 
-    function test_start_error_explains_the_blocked_direction() {
-        flow.showRoutine({family:"outside",x:-1,y:0,z:false,wcs:54,zero:false,safeZOffset:40,
-                          depth:5,xSearchDistance:1000,ySearchDistance:10,retract:0.5,diameter:4,
-                          positioningFeed:1000,coarseFeed:30,fineFeed:10})
-        flow.proceed()
-        tryVerify(function() { return !flow.reviewing }, 3000)
-        verify(flow.failure.indexOf("X+") !== -1, flow.failure)
-        verify(flow.failure.indexOf("Move toward X-") !== -1, flow.failure)
-        flow.close()
-    }
-
     function test_stream_start_error_keeps_service_message() {
         flow.startMotion("expired", "run")
         tryCompare(flow, "phase", "failed", 3000)

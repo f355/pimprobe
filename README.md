@@ -200,8 +200,8 @@ services. Run it only in a disposable container.
 ## Safety
 
 Secure the stock and check the full probe route against clamps, stock,
-the tool magazine and other obstacles. Travel-limit checks cover the
-machine envelope, not fixture geometry.
+the tool magazine and other obstacles. The controller enforces its configured
+travel limits.
 
 Positioning uses G38.3; contact releases use G1. Touching the probe while
 idle does not stop the machine. Use the physical emergency stop when needed.

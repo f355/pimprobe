@@ -352,18 +352,6 @@ async fn missed_or_excessively_tilted_surface_does_not_turn_the_chuck() {
     }
 }
 
-#[test]
-fn review_checks_search_and_second_touch_travel() {
-    let (machine, config) = fixture(RotaryOperation::Horizontal, 8., "1.0.35-a");
-    let mut state = machine.state();
-    state.position[1] = -2.;
-    assert!(review_rotary(state, config).is_err());
-    let (machine, config) = fixture(RotaryOperation::Vertical, 8., "1.0.35-a");
-    let mut state = machine.state();
-    state.position[2] = -2.;
-    assert!(review_rotary(state, config).is_err());
-}
-
 #[tokio::test]
 async fn contact_while_ascending_along_a_wall_aborts_before_rotation() {
     let (machine, mut config) = fixture(RotaryOperation::Vertical, -15., "1.0.35-a");

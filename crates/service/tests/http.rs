@@ -341,18 +341,14 @@ async fn application_errors_use_qt_compatible_envelopes() {
     )
     .await;
     let mut cfg = config();
-    cfg["family"] = json!("inside");
-    cfg["z"] = json!(false);
-    cfg["x"] = json!(0);
-    cfg["y"] = json!(1);
-    cfg["ySearchDistance"] = json!(1000);
+    cfg["wcs"] = json!(55);
     assert_api_error(
         &router,
         "POST",
         "/api/v1/routine/review",
         cfg,
         StatusCode::CONFLICT,
-        "Not enough Y+ travel",
+        "Select G55 before starting this operation",
     )
     .await;
     assert_api_error(

@@ -44,10 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let device = if options.mock {
         Device::Mock(Box::new(MockController::new()))
     } else {
-        let [x, y, z] = options.config.travel_limits;
-        Device::Machine(
-            SocketController::start(options.config.controller_socket, [x, y, z, 0.]).await?,
-        )
+        Device::Machine(SocketController::start(options.config.controller_socket).await?)
     };
     let app = App::new(
         device,

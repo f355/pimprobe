@@ -775,7 +775,6 @@ async fn measured_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
     }
     check.check_state(&state, state.position)?;
     let z_target = state.position[2] + clearance;
-    check_path(&state, Axis::Z, state.position[2], z_target)?;
     let mut xy_target = state.position;
     xy_target[2] = z_target;
     for axis in p.axes() {
@@ -783,12 +782,6 @@ async fn measured_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
         xy_target[i] = result.machine_point[i].ok_or_else(|| {
             Error::Preflight("The measured machine coordinate is missing.".into())
         })? - p.start.probe_offset[i];
-        check_path(
-            &state,
-            axis,
-            state.position[i].min(xy_target[i]),
-            state.position[i].max(xy_target[i]),
-        )?;
     }
 
     let scripted = AtomicBool::new(false);
@@ -890,15 +883,6 @@ async fn return_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
         });
     }
     check.check_state(&state, state.position)?;
-    for axis in [Axis::X, Axis::Y, Axis::Z] {
-        let i = axis.index();
-        check_path(
-            &state,
-            axis,
-            state.position[i].min(p.start.position[i]),
-            state.position[i].max(p.start.position[i]),
-        )?;
-    }
     let scripted = AtomicBool::new(false);
     let c = Observed {
         inner: c,

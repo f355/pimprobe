@@ -35,14 +35,14 @@ done
 fail() { echo "$*" >&2; exit 1; }
 [ "$(uname -s)" = Linux ] && [ "$(uname -m)" = aarch64 ] || fail 'This installer requires Linux ARM64.'
 [ "$(id -u)" = 0 ] || fail 'Run this installer as root.'
-for command in systemctl flock readlink; do
+for command in systemctl flock readlink wget; do
     command -v "$command" >/dev/null 2>&1 || fail "Required command missing: $command"
 done
 [ -x "$vendor/CNC_Lab" ] || fail 'Supported NestPad application not found in /root/app.'
 if [ "$uninstall" = false ]; then
-    [ -x /usr/bin/qmlscene ] && [ -d /usr/qml/QtQuick/Controls/Basic ] || fail 'Required Qt Quick runtime is missing.'
+    sh "$payload/app/bin/pimprobe-ui" --check
     for file in "$payload/app/bin/pimprobe-service" "$payload/app/lib/"*.so; do
-        report=$(LD_LIBRARY_PATH="$vendor" ldd "$file" 2>&1) || fail "Cannot load $file: $report"
+        report=$(LD_LIBRARY_PATH="$vendor${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" ldd "$file" 2>&1) || fail "Cannot load $file: $report"
         case "$report" in *'not found'*) fail "Missing runtime dependency for $file: $report" ;; esac
     done
 fi
@@ -192,6 +192,7 @@ if [ "$uninstall" = true ]; then
     rm -rf /userdata/backups/pimprobe-* /userdata/pimprobe-stage.* /userdata/pimprobe-update.*
     rm -f /run/pimprobe-controller.sock /run/pimprobe-ui.pid /run/pimprobe-ui.lock \
         /run/pimprobe-update-*.status
+    rm -rf /run/pimprobe-browser
     systemctl daemon-reload
     echo 'PIMProbe and its data removed. Installer files and shared system journals were left intact.'
 else

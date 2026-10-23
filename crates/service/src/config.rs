@@ -39,6 +39,7 @@ pub struct Options {
     pub settings: PathBuf,
     pub mock: bool,
     pub ready_token: String,
+    pub web_root: PathBuf,
 }
 
 impl Options {
@@ -49,6 +50,7 @@ impl Options {
         let mut settings = None;
         let mut mock = false;
         let mut ready_token = "manual".to_owned();
+        let mut web_root = PathBuf::from("/userdata/pimprobe/web");
         while let Some(arg) = args.next() {
             if arg == "--mock" {
                 mock = true;
@@ -62,6 +64,7 @@ impl Options {
                 "--listen" => listen = Some(value),
                 "--settings" => settings = Some(PathBuf::from(value)),
                 "--ready-token" => ready_token = value,
+                "--web-root" => web_root = value.into(),
                 _ => return Err(format!("unknown option {arg}")),
             }
         }
@@ -99,6 +102,7 @@ impl Options {
             settings,
             mock,
             ready_token,
+            web_root,
         })
     }
 }
@@ -121,13 +125,13 @@ mod tests {
                 "--listen",
                 "127.0.0.1:18137",
                 "--ready-token",
-                "qml-test",
+                "test-service",
             ]
             .map(str::to_owned),
         )
         .unwrap();
         assert!(options.mock);
         assert_eq!(options.config.listen_address.port(), 18137);
-        assert_eq!(options.ready_token, "qml-test");
+        assert_eq!(options.ready_token, "test-service");
     }
 }

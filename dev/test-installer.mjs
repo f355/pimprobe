@@ -43,14 +43,15 @@ test('self-extracting package preserves its payload and rejects corruption', () 
             ['target/linux/release/pimprobe-service', 'app/bin/pimprobe-service'],
             ['plugins/build-arm64/libpimprobeproxyplugin.so', 'app/lib/libpimprobeproxyplugin.so'],
             ['plugins/build-arm64/libpimprobelauncherplugin.so', 'app/lib/libpimprobelauncherplugin.so'],
-            ['ui/ProbeFlow.qml', 'app/ui/ProbeFlow.qml'],
+            ['web/dist/index.html', 'app/web/index.html'],
             ['LICENSE.md', 'app/LICENSE.md'],
             ['README.md', 'app/README.md'],
             ['packaging/nestpad-pimprobe.conf', 'nestpad-pimprobe.conf'],
-            ['ui/fonts/Geist-Regular.otf', 'app/ui/fonts/Geist-Regular.otf'],
-            ['ui/fonts/Geist-Medium.otf', 'app/ui/fonts/Geist-Medium.otf'],
-            ['ui/fonts/Geist-Bold.otf', 'app/ui/fonts/Geist-Bold.otf'],
-            ['ui/fonts/OFL.txt', 'app/ui/fonts/OFL.txt'],
+            ['web/assets/fonts/Geist-Regular.otf', 'app/web/media/fonts/Geist-Regular.otf'],
+            ['web/assets/fonts/Geist-Medium.otf', 'app/web/media/fonts/Geist-Medium.otf'],
+            ['web/assets/fonts/Geist-Bold.otf', 'app/web/media/fonts/Geist-Bold.otf'],
+            ['web/assets/fonts/OFL.txt', 'app/web/media/fonts/OFL.txt'],
+            ['web/assets/animations/z-surface.png', 'app/web/media/animations/z-surface.png'],
         ]) assert.deepEqual(readFileSync(join(extracted, target)), readFileSync(join(root, source)));
         assert.ok(existsSync(join(extracted, 'install.sh')));
         run('sh', [installer, '--extract', extracted], 1);

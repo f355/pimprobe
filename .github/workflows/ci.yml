@@ -34,25 +34,20 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake ninja-build fonts-dejavu-core fonts-noto-cjk netcat-openbsd
-      - name: Install Qt 6.9.1
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: '6.9.1'
-          host: linux_arm64
-          arch: linux_gcc_arm64
-          archives: icu qtbase qtdeclarative qtsvg
-          cache: true
       - name: Check Rust
         run: |
           cargo fmt --all --check
           cargo clippy --locked --workspace --all-targets -- -D warnings
           cargo test --locked --workspace
       - name: Check assets
-        run: node --test dev/test-assets.mjs dev/test-i18n.mjs
-      - name: Run UI tests
+        run: node --test dev/test-assets.mjs
+      - name: Build and test browser interface
         run: |
-          QT_DECLARATIVE_PREFIX="$QT_ROOT_DIR" \
-            QMLTESTRUNNER="$QT_ROOT_DIR/bin/qmltestrunner" ./dev/test-ui.sh
+          npm ci --prefix web
+          cd web
+          npx playwright install --with-deps chromium webkit
+          npm run build
+          npm test
       - name: Build Linux service
         run: |
           docker build -t pimprobe-rust-builder packaging
@@ -73,16 +68,18 @@ jobs:
           if [[ "$GITHUB_REF_TYPE" == tag ]]; then VERSION="$GITHUB_REF_NAME"; fi
           node dev/package.mjs --output dist/pimprobe.run \
             --version "$VERSION" --commit "$GITHUB_SHA"
-          docker run --rm \
-            -v "$PWD/dist/pimprobe.run:/package.run:ro" \
-            -v "$PWD/dev/test-install-container.sh:/test.sh:ro" \
-            -v "$PWD/packaging/config.example.json:/expected-config.json:ro" \
-            pimprobe-rust-builder sh /test.sh
       - uses: actions/upload-artifact@v4
         with:
           name: pimprobe
           path: dist/pimprobe.run
           if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-captures
+          path: |
+            web/test-results
+            web/src/help/test-results
 
   release-dev:
     name: Publish development release

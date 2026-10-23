@@ -60,7 +60,6 @@ struct Stored {
     snapshot: Snapshot,
     status_at: Option<Instant>,
     actuator_target: i32,
-    actuator_transition: bool,
 }
 struct Inner {
     stored: RwLock<Stored>,
@@ -297,7 +296,6 @@ impl SocketController {
             let mut stored = self.inner.stored.write().unwrap();
             stored.snapshot.actuator_pending = true;
             stored.actuator_target = target;
-            stored.actuator_transition = matches!(status.probe_actuator, 2 | 3);
         }
         let result = self.send(if extended { "M122" } else { "M121" }).await;
         if result.is_err() {
@@ -527,15 +525,11 @@ fn apply(inner: &Inner, record: Record) {
                     status.inherit_modal_fields(previous);
                 }
             }
-            if stored.snapshot.actuator_pending && status.probe_actuator_known {
-                if matches!(status.probe_actuator, 2 | 3) {
-                    stored.actuator_transition = true;
-                } else if stored.actuator_transition
-                    && status.probe_actuator == stored.actuator_target
-                {
-                    stored.snapshot.actuator_pending = false;
-                    stored.actuator_transition = false;
-                }
+            if stored.snapshot.actuator_pending
+                && status.probe_actuator_known
+                && status.probe_actuator == stored.actuator_target
+            {
+                stored.snapshot.actuator_pending = false;
             }
             event.status = Some(MotionStatus {
                 mode: status.mode.clone(),
@@ -655,16 +649,10 @@ mod tests {
         data(&mut socket, "ok\n").await;
         assert!(a.recv().await.unwrap().acknowledged);
         assert!(b.recv().await.unwrap().acknowledged);
-        data(&mut socket, "<Ready|MPos:-5,-5,-5,0|PM:1>\n").await;
-        a.recv().await.unwrap();
         assert!(c.snapshot().actuator_pending);
         assert!(!c.state().probe_extended);
         assert!(c.set_probe_extended(true).await.is_err());
-        data(
-            &mut socket,
-            "<Ready|MPos:-5,-5,-5,0|PM:3>\n<Ready|MPos:-5,-5,-5,0|PM:1>\n",
-        )
-        .await;
+        data(&mut socket, "<Ready|MPos:-5,-5,-5,0|PM:1>\n").await;
         wait_for(&c, |s| !s.actuator_pending).await;
         assert!(c.state().probe_extended);
         c.shutdown().await;

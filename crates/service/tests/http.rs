@@ -309,10 +309,9 @@ async fn assert_api_error(
     message: &str,
 ) {
     let (wire_status, body) = request(router, method, path, body).await;
-    assert_eq!(wire_status, StatusCode::OK, "{body}");
+    assert_eq!(wire_status, status, "{body}");
     let envelope: Value = serde_json::from_str(&body).unwrap();
     assert_eq!(envelope["error"], true, "{body}");
-    assert_eq!(envelope["status"], status.as_u16(), "{body}");
     assert!(
         envelope["message"].as_str().unwrap().contains(message),
         "{body}"
@@ -320,7 +319,7 @@ async fn assert_api_error(
 }
 
 #[tokio::test]
-async fn application_errors_use_qt_compatible_envelopes() {
+async fn application_errors_include_status_and_message() {
     let (_temp, _app, router) = app();
     assert_api_error(
         &router,
@@ -468,12 +467,18 @@ async fn repeatability_streams_each_reading_and_axis_statistics() {
 #[tokio::test]
 async fn repeatability_rejects_empty_axes_and_fractional_repetitions() {
     let (_temp, _app, router) = app();
-    for options in [
-        json!({"axes":[false,false,false],"repetitions":5,"home":false,"retract":true}),
-        json!({"axes":[true,true,true],"repetitions":1.5,"home":false,"retract":true}),
+    for (options, status) in [
+        (
+            json!({"axes":[false,false,false],"repetitions":5,"home":false,"retract":true}),
+            StatusCode::CONFLICT,
+        ),
+        (
+            json!({"axes":[true,true,true],"repetitions":1.5,"home":false,"retract":true}),
+            StatusCode::BAD_REQUEST,
+        ),
     ] {
         let (code, body) = request(&router, "POST", "/api/v1/repeatability/run", options).await;
-        assert_eq!(code, StatusCode::OK, "{body}");
+        assert_eq!(code, status, "{body}");
         let envelope: Value = serde_json::from_str(&body).unwrap();
         assert_eq!(envelope["error"], true, "{body}");
         assert!(

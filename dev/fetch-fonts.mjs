@@ -61,7 +61,7 @@ export async function fetchFonts(output) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-    let output = fileURLToPath(new URL('../ui/fonts', import.meta.url));
+    let output = fileURLToPath(new URL('../web/assets/fonts', import.meta.url));
     if (process.argv.length > 2) {
         if (process.argv.length !== 4 || process.argv[2] !== '--output')
             throw new Error('Usage: node dev/fetch-fonts.mjs [--output DIRECTORY]');

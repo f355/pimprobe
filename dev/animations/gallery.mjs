@@ -17,7 +17,7 @@
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 
 const output = new URL('../../build/ui-review/',import.meta.url);
-const clips = JSON.parse(await readFile(new URL('../../ui/animations/manifest.json',import.meta.url),'utf8'));
+const clips = JSON.parse(await readFile(new URL('../../web/assets/animations/manifest.json',import.meta.url),'utf8'));
 function title(key) {
     const sides = /^(outside|inside)-(-?\d)-(-?\d)$/.exec(key);
     if (sides) return sides[1]+' '+['X','Y'].map((axis,i) => Number(sides[i+2]) ? axis+(Number(sides[i+2]) > 0 ? '+' : '−') : '').filter(Boolean).join(' / ');
@@ -52,7 +52,7 @@ const observer=new IntersectionObserver(entries=>entries.forEach(entry=>{
             }
             requestAnimationFrame(draw);
         };
-        image.src='../../ui/animations/'+key+'.png';
+        image.src='../../web/assets/animations/'+key+'.png';
     }
 }));
 document.querySelectorAll('canvas').forEach(canvas=>observer.observe(canvas));

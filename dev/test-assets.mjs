@@ -19,9 +19,7 @@ import { readFileSync, readdirSync, existsSync, mkdtempSync, mkdirSync, writeFil
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { pathToFileURL } from "node:url";
 import test from "node:test";
-import { renderPage, helpSections } from "./build-help.mjs";
 import { releaseNotes } from "./release-notes.mjs";
 
 const root = new URL("../", import.meta.url);
@@ -47,29 +45,8 @@ test("rustup discovery puts the actual compiler on PATH", () => {
     }
 });
 
-test("operator guide compiler keeps headings and resolves shared image paths", () => {
-    const scratch = mkdtempSync(join(tmpdir(), "pimprobe-help-"));
-    try {
-        const source = pathToFileURL(scratch + "/");
-        writeFileSync(join(scratch, "page.md"), "# Title\n\nIntro.\n<!-- guide-only -->\n[Guide](README.md)\n<!-- /guide-only -->\n## Distance\n\n![Moves](../images/path.svg)\n\nSearch **X**.\n");
-        assert.equal(renderPage("page.md", source), "Intro.\n\n## Distance\n\n![Moves](images/path.svg)\n\nSearch **X**.\n");
-    } finally {
-        rmSync(scratch, { recursive: true, force: true });
-    }
-});
-
-test("help separates the introduction, foldable sections and illustrations", () => {
-    const sections = helpSections('Start here.\n\n## Distance\n\nUse 10 mm.\n\n![Moves](images/example.svg)\n\nAfter the touch.\n\n## Result\n\nRead the coordinates.');
-    assert.equal(sections.length, 3);
-    assert.deepEqual(sections[0], {title:'', blocks:[{text:'Start here.'}]});
-    assert.deepEqual(sections[1], {title:'Distance', blocks:[
-        {text:'Use 10 mm.'}, {image:'images/example.svg', caption:'Moves'}, {text:'After the touch.'}
-    ]});
-    assert.equal(sections[2].title, 'Result');
-});
-
 test("shell scripts have valid syntax", () => {
-    for (const path of ["dev/preview.sh", "dev/test-ui.sh", "dev/build-service.sh", "dev/test-install-container.sh", "packaging/pimprobe-ui", "packaging/install.sh", "packaging/self-extract.sh"]) {
+    for (const path of ["dev/build-service.sh", "dev/preview.sh", "packaging/pimprobe-ui", "packaging/install.sh", "packaging/self-extract.sh"]) {
         const result = spawnSync("sh", ["-n", new URL(path, root).pathname]);
         assert.equal(result.status, 0, result.stderr?.toString());
     }

@@ -1,0 +1,889 @@
+/* PIMProbe - touch probing for the Nestworks C500.
+ * Copyright (c) 2026 Konstantin Tcepliaev <f355@f355.org>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
+@font-face {
+  font-family: Geist;
+  src: url("/media/fonts/Geist-Regular.otf");
+}
+@font-face {
+  font-family: Geist;
+  src: url("/media/fonts/Geist-Bold.otf");
+  font-weight: 700;
+}
+.pp-app {
+  --pp-page: #202425;
+  --pp-header: #282e30;
+  --pp-panel: #282e30;
+  --pp-control: #343c3e;
+  --pp-divider: #586568;
+  --pp-text: #f0f3f3;
+  --pp-muted: #b1bdc0;
+  --pp-accent: #28785f;
+  --pp-bright: #7ed5b1;
+  --pp-warning: #e9bd62;
+  --pp-danger: #ff9292;
+  --pp-stock: #586b64;
+  --pp-stock-edge: #a2b9b0;
+  --pp-x: #f18b8b;
+  --pp-y: #7ed5b1;
+  --pp-z: #88b8f1;
+  --pp-column: 352px;
+  color: var(--pp-text);
+  background: var(--pp-page);
+  font:
+    20px Geist,
+    "DejaVu Sans",
+    sans-serif;
+  letter-spacing: 0;
+  width: 100%;
+  height: 100%;
+  min-width: 320px;
+  position: relative;
+  overflow: hidden;
+  color-scheme: dark;
+  display: flex;
+  flex-direction: column;
+}
+.pp-app * {
+  box-sizing: border-box;
+}
+.pp-view {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+.pp-view[hidden] {
+  display: none;
+}
+.pp-floating-guide {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+}
+.pp-error-row {
+  padding: 8px 16px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.pp-notification {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--pp-warning);
+}
+.pp-actuator {
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.pp-actuator-state {
+  display: block;
+  flex: none;
+  width: 100%;
+  font-size: 18px;
+  line-height: 24px;
+  border-radius: 4px;
+  color: var(--pp-danger);
+  opacity: 0.35;
+}
+.pp-actuator-state:nth-child(2) {
+  color: var(--pp-bright);
+}
+.pp-actuator-state.pp-current {
+  opacity: 1;
+  background: #ff929229;
+}
+.pp-actuator-state:nth-child(2).pp-current {
+  background: #7ed5b129;
+}
+.pp-app h1,
+.pp-app h2,
+.pp-app p {
+  margin: 0;
+}
+.pp-app h1,
+.pp-app h2 {
+  font-size: 24px;
+  font-weight: 500;
+}
+.pp-app button,
+.pp-app input,
+.pp-app select {
+  font: inherit;
+  letter-spacing: 0;
+  color: inherit;
+}
+.pp-app button {
+  touch-action: manipulation;
+  cursor: pointer;
+}
+.pp-app button:disabled,
+.pp-app input:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.pp-app button:focus-visible,
+.pp-app input:focus-visible {
+  outline: 2px solid var(--pp-bright);
+  outline-offset: 2px;
+}
+.pp-app .pp-muted {
+  color: var(--pp-muted);
+}
+.pp-app .pp-mono {
+  font-family: "DejaVu Sans Mono", Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+.pp-button {
+  border: 1px solid var(--pp-divider);
+  background: var(--pp-control);
+  border-radius: 8px;
+  min-height: 56px;
+  padding: 8px 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-shrink: 0;
+  line-height: 1.15;
+}
+.pp-button svg {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+.pp-button:active:not(:disabled) {
+  background: #4b585b;
+}
+.pp-primary {
+  background: var(--pp-accent);
+  border-color: var(--pp-accent);
+  color: #fff !important;
+}
+.pp-button.pp-danger {
+  color: var(--pp-danger);
+}
+.pp-selected {
+  border-color: var(--pp-bright);
+  background: #344d44;
+}
+.pp-icon {
+  width: 48px;
+  height: 48px;
+  min-height: 48px;
+  padding: 8px;
+  background: transparent;
+  border-color: transparent;
+}
+.pp-back svg {
+  width: 36px;
+  height: 36px;
+}
+.pp-page-header {
+  height: 64px;
+  flex-shrink: 0;
+  background: var(--pp-header);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+}
+.pp-page-header h1 {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 22px;
+}
+.pp-page-header > .pp-muted {
+  font-size: 18px;
+  white-space: nowrap;
+}
+.pp-guide-button {
+  min-height: 48px;
+}
+.pp-content {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  gap: 12px;
+}
+.pp-body {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.pp-columns {
+  display: grid;
+  grid-template-columns: minmax(0, var(--pp-column)) minmax(0, 1fr);
+  gap: 16px;
+  min-height: 0;
+  height: 100%;
+}
+.pp-scroll {
+  overflow: auto;
+  min-width: 0;
+  min-height: 0;
+  touch-action: pan-x pan-y;
+  overscroll-behavior: contain;
+}
+.pp-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.pp-actions > .pp-spacer {
+  flex: 1;
+}
+.pp-notice {
+  font-size: 18px;
+  color: var(--pp-warning);
+  overflow-wrap: anywhere;
+}
+.pp-notice.pp-error {
+  color: var(--pp-danger);
+}
+.pp-tabs {
+  height: 56px;
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  padding-right: 8px;
+}
+.pp-tabs > [role="tablist"] {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 4px;
+}
+.pp-tab {
+  min-height: 56px;
+  flex: 1;
+  padding: 4px;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  border-bottom: 3px solid transparent;
+  font-size: 18px !important;
+}
+.pp-tab[aria-selected="true"] {
+  border-bottom-color: var(--pp-bright);
+  background: var(--pp-panel);
+  color: var(--pp-bright);
+}
+.pp-actuator {
+  width: 120px;
+  margin-left: 16px;
+}
+.pp-actuator svg {
+  width: 24px;
+  height: 32px;
+}
+.pp-tabs-body {
+  flex: 1;
+  min-height: 0;
+  padding: 16px;
+}
+.pp-dimmed {
+  opacity: 0.35;
+}
+.pp-diagram-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  height: 100%;
+  max-height: 340px;
+  width: 100%;
+  align-self: center;
+}
+.pp-diagram-grid.pp-two-columns {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+}
+.pp-diagram-grid.pp-rotary-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+}
+.pp-routine-button {
+  padding: 8px;
+  min-width: 0;
+  min-height: 48px;
+  flex-direction: column;
+  gap: 0;
+}
+.pp-diagram-caption {
+  font-size: 18px;
+  line-height: 24px;
+  flex-shrink: 0;
+  min-height: 24px;
+}
+.pp-tabs .pp-actuator {
+  gap: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+.pp-app .pp-wcs-button {
+  color: var(--pp-bright);
+}
+.pp-app .pp-help-button svg {
+  width: 44px;
+  height: 44px;
+  stroke-width: 1.2;
+}
+.pp-app .pp-help-button {
+  padding: 0;
+}
+.pp-routine-button > svg {
+  width: 100%;
+  height: 100%;
+}
+.pp-parameters {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+  min-height: 0;
+}
+.pp-parameter {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 112px 68px;
+  gap: 12px;
+  align-items: center;
+  min-height: 56px;
+}
+.pp-parameter > label {
+  line-height: 1.2;
+  overflow-wrap: break-word;
+}
+.pp-unit {
+  font-size: 16px;
+  color: var(--pp-muted);
+}
+.pp-number {
+  width: 112px;
+  min-width: 0;
+  height: 56px;
+  text-align: right;
+  padding: 8px 12px;
+  border: 1px solid var(--pp-divider);
+  background: var(--pp-panel);
+  border-radius: 8px;
+  font-size: 24px !important;
+  font-variant-numeric: tabular-nums;
+}
+.pp-number::selection {
+  color: var(--pp-text);
+  background: var(--pp-accent);
+}
+.pp-keypad-slot {
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.pp-keypad-wrap {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pp-keypad {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+.pp-keypad .pp-button {
+  font-size: 40px;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 2px;
+}
+.pp-keypad svg {
+  width: 32px;
+  height: 32px;
+}
+.pp-keypad .pp-enter {
+  border-color: var(--pp-bright);
+  background: #344d44;
+}
+.pp-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 56px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  width: 100%;
+}
+.pp-switch {
+  display: block;
+  border: 1px solid var(--pp-divider);
+  width: 56px;
+  height: 30px;
+  background: var(--pp-control);
+  border-radius: 16px;
+  flex-shrink: 0;
+  padding: 3px;
+}
+.pp-switch > span {
+  display: block;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--pp-text);
+}
+[aria-checked="true"] > .pp-switch {
+  background: var(--pp-accent);
+  border-color: var(--pp-accent);
+}
+[aria-checked="true"] > .pp-switch > span {
+  transform: translateX(25px);
+}
+.pp-dialog {
+  background: var(--pp-panel);
+  color: var(--pp-text);
+  border: 1px solid var(--pp-divider);
+  border-radius: 8px;
+  padding: 24px;
+  width: min(704px, calc(100% - 32px));
+  max-height: calc(100% - 32px);
+  text-align: center;
+}
+.pp-dialog::backdrop {
+  background: #0008;
+}
+.pp-dialog h2 {
+  font-size: 28px;
+}
+.pp-dialog-message {
+  margin: 20px 0;
+  overflow: auto;
+  max-height: 180px;
+  line-height: 1.4;
+}
+.pp-dialog-actions {
+  display: flex;
+  gap: 16px;
+}
+.pp-dialog-actions > .pp-button {
+  flex: 1;
+  min-height: 80px;
+  font-size: 24px;
+}
+.pp-dro {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+.pp-coordinate {
+  width: 144px;
+  border: 1px solid var(--pp-divider);
+  border-radius: 4px;
+  padding: 2px 6px;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 0 4px;
+  text-align: right;
+}
+.pp-coordinate > b {
+  font-size: 22px;
+  font-weight: 400;
+}
+.pp-coordinate > strong {
+  font-size: 22px;
+  font-weight: 500;
+}
+.pp-coordinate > small {
+  grid-column: 2;
+  font-size: 16px;
+  color: var(--pp-muted);
+}
+.pp-coordinate:nth-child(1) {
+  border-color: #916566;
+}
+.pp-coordinate:nth-child(1) > b {
+  color: var(--pp-x);
+}
+.pp-coordinate:nth-child(2) {
+  border-color: #627f72;
+}
+.pp-coordinate:nth-child(2) > b {
+  color: var(--pp-y);
+}
+.pp-coordinate:nth-child(3) {
+  border-color: #637990;
+}
+.pp-coordinate:nth-child(3) > b {
+  color: var(--pp-z);
+}
+.pp-reference {
+  width: 96px;
+  display: flex;
+  flex-direction: column;
+  font-size: 18px;
+}
+.pp-reference > span {
+  flex: 1;
+  padding: 2px 6px;
+  text-align: center;
+  border-radius: 4px;
+  color: var(--pp-muted);
+}
+.pp-reference > span.pp-selected {
+  color: var(--pp-bright);
+}
+.pp-home-header {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 16px;
+  background: var(--pp-header);
+  flex-shrink: 0;
+}
+.pp-wcs-button {
+  min-width: 72px;
+  font-size: 22px;
+  color: var(--pp-bright);
+  font-weight: 700;
+}
+.pp-wcs-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  height: 100%;
+}
+.pp-wcs-grid .pp-button {
+  font-size: 30px;
+}
+.pp-settings-shortcuts {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow: auto;
+}
+.pp-language-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pp-language-selector > span {
+  font-size: 18px;
+}
+.pp-language-selector > div {
+  display: flex;
+  gap: 4px;
+}
+.pp-language-selector .pp-button {
+  flex: 1;
+  min-width: 0;
+  padding: 8px;
+  font-size: 18px;
+}
+.pp-review-illustration {
+  flex: 1;
+  min-height: 120px;
+  overflow: hidden;
+}
+.pp-review-left {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 8px;
+}
+.pp-review-phases {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pp-review-phase {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  color: var(--pp-muted);
+  font-size: 18px;
+  line-height: 1.2;
+}
+.pp-review-phase > b {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--pp-control);
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  font-size: 16px;
+}
+.pp-review-phase.pp-current {
+  color: var(--pp-text);
+}
+.pp-review-phase.pp-current > b {
+  background: var(--pp-accent);
+}
+.pp-section-label {
+  font-size: 16px;
+  color: var(--pp-muted);
+  margin-top: 8px;
+}
+.pp-log {
+  height: 100%;
+  margin: 0;
+  padding: 8px;
+  background: var(--pp-panel);
+  border-radius: 8px;
+  font:
+    18px/1.35 "DejaVu Sans Mono",
+    Menlo,
+    monospace;
+  white-space: pre;
+  overflow: auto;
+  touch-action: pan-x pan-y;
+}
+.pp-result-columns {
+  grid-template-columns: minmax(0, var(--pp-column)) 1px minmax(0, 1fr);
+}
+.pp-result-divider {
+  background: var(--pp-divider);
+}
+.pp-result-left {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+.pp-result-left h2 {
+  font-size: 24px;
+}
+.pp-result-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.pp-result-heading .pp-button {
+  width: 112px;
+}
+.pp-result-labels,
+.pp-result-axis {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 112px;
+  gap: 12px;
+  align-items: center;
+}
+.pp-result-labels {
+  font-size: 18px;
+  color: var(--pp-muted);
+  margin-bottom: 8px;
+}
+.pp-result-labels > span:last-child {
+  text-align: right;
+}
+.pp-result-axis {
+  margin-bottom: 8px;
+  min-height: 56px;
+}
+.pp-result-axis strong {
+  font-size: 28px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.pp-result-axis small {
+  display: block;
+  font-size: 16px;
+  color: var(--pp-muted);
+}
+.pp-dimension {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px 120px;
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+  font-size: 18px;
+}
+.pp-dimension > span:not(:first-child) {
+  text-align: right;
+  font-size: 24px;
+}
+.pp-large-reading {
+  font-size: 28px;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+}
+.pp-angle-value {
+  font-size: 42px;
+  color: var(--pp-bright);
+}
+.pp-result-actions > .pp-button {
+  padding: 8px 12px;
+}
+.pp-result-actions > .pp-log-toggle {
+  width: 96px;
+}
+.pp-result-actions > .pp-close {
+  width: 112px;
+}
+.pp-result-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 20px;
+}
+.pp-result-table td,
+.pp-result-table th {
+  text-align: right;
+  padding: 8px 4px;
+}
+.pp-result-table th {
+  font-weight: 400;
+  color: var(--pp-muted);
+  font-size: 18px;
+}
+@media (max-width: 680px) {
+  .pp-language-selector > div {
+    flex-direction: column;
+  }
+  .pp-app {
+    --pp-column: 44%;
+  }
+  .pp-home-header {
+    padding: 0 8px;
+    gap: 4px;
+  }
+  .pp-coordinate {
+    width: auto;
+    flex: 1;
+    min-width: 0;
+    padding: 2px 4px;
+  }
+  .pp-coordinate > strong {
+    font-size: 18px;
+  }
+  .pp-dro {
+    flex: 1;
+  }
+  .pp-reference {
+    width: 52px;
+    font-size: 16px;
+  }
+  .pp-wcs-button {
+    min-width: 52px;
+    padding: 4px;
+  }
+  .pp-parameter {
+    grid-template-columns: minmax(0, 1fr) 88px;
+    gap: 8px;
+  }
+  .pp-parameter .pp-number {
+    width: 88px;
+  }
+  .pp-parameter .pp-unit {
+    display: none;
+  }
+  .pp-tabs .pp-actuator {
+    width: 80px;
+    margin-left: 8px;
+  }
+  .pp-tab {
+    font-size: 16px !important;
+  }
+  .pp-tabs {
+    gap: 4px;
+  }
+  .pp-page-header {
+    gap: 8px;
+    padding: 0 8px;
+  }
+  .pp-page-header h1 {
+    font-size: 20px;
+  }
+  .pp-page-header > .pp-muted {
+    display: none;
+  }
+  .pp-content,
+  .pp-tabs-body {
+    padding: 12px;
+  }
+  .pp-columns {
+    gap: 12px;
+  }
+  .pp-actions {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .pp-actions > .pp-button {
+    flex: 1;
+    min-width: 96px;
+  }
+  .pp-keypad .pp-button {
+    font-size: 28px;
+    min-width: 32px;
+  }
+  .pp-keypad svg {
+    width: 24px;
+    height: 24px;
+  }
+  .pp-result-axis strong {
+    font-size: 22px;
+  }
+  .pp-result-labels,
+  .pp-result-axis {
+    grid-template-columns: minmax(0, 1fr) 88px;
+  }
+  .pp-result-axis .pp-number {
+    width: 88px;
+  }
+  .pp-dimension {
+    grid-template-columns: minmax(0, 1fr) 76px;
+  }
+  .pp-dimension > *:last-child {
+    display: none;
+  }
+  .pp-keypad {
+    gap: 4px;
+  }
+}

@@ -17,6 +17,34 @@
 
 set -eu
 
+language=en
+check=false
+for argument in "$@"; do
+    case "$argument" in
+        --check) check=true ;;
+        --language=*) language=${argument#*=} ;;
+        *) echo "Unknown option: $argument" >&2; exit 2 ;;
+    esac
+done
+
+# NestPad's shell wrapper adds its own flags; use Chromium's executable directly.
+browser=${PIMPROBE_BROWSER:-}
+if [ -z "$browser" ]; then
+    for candidate in /usr/lib/chromium/chromium-bin /usr/bin/chromium-bin /usr/bin/chromium-browser-bin \
+        /usr/lib/chromium/chromium /usr/lib/chromium/chrome \
+        /usr/lib/chromium-browser/chromium-browser /usr/bin/chromium /usr/bin/chromium-browser; do
+        if [ -x "$candidate" ] && [ "$(od -An -tx1 -N4 "$candidate" | tr -d ' \n')" = 7f454c46 ]; then
+            browser=$candidate
+            break
+        fi
+    done
+fi
+[ -n "$browser" ] && [ -x "$browser" ] || {
+    echo 'Chromium executable not found.' >&2
+    exit 1
+}
+[ "$check" = false ] || exit 0
+
 lock_file=/run/pimprobe-ui.lock
 pid_file=/run/pimprobe-ui.pid
 
@@ -42,13 +70,9 @@ if ! flock -n 9; then
 fi
 printf '%s\n' "$$" >"$pid_file"
 
-export XDG_RUNTIME_DIR=/var/run
-export WAYLAND_DISPLAY=wayland-0
-export QT_QPA_PLATFORM=wayland-egl
-export QT_PLUGIN_PATH=/usr/plugins
-export QT_QPA_FONTDIR=/usr/share/fonts
-export QML2_IMPORT_PATH=/usr/qml
-export LC_ALL=zh_CN.utf8
+export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/var/run}
+export WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-0}
+export LD_LIBRARY_PATH=$(dirname -- "$browser")
 
 ui_pid=""
 
@@ -63,6 +87,17 @@ cleanup() {
 trap cleanup EXIT
 trap 'cleanup; exit 0' INT TERM
 
-QT_QUICK_CONTROLS_STYLE=Basic /usr/bin/qmlscene /userdata/pimprobe/ui/Main.qml "$@" 9>&- &
+attempt=0
+until wget -q -T 1 -O /dev/null http://127.0.0.1:8137/; do
+    attempt=$((attempt + 1))
+    [ "$attempt" -lt 30 ] || { echo 'Probing service did not become ready.' >&2; exit 1; }
+    sleep 1
+done
+
+"$browser" --ozone-platform=wayland --disable-gpu --disable-dev-shm-usage \
+    --kiosk --app="http://127.0.0.1:8137/?language=$language" \
+    --lang="$language" --no-sandbox --no-first-run --no-default-browser-check \
+    --disable-session-crashed-bubble --disable-background-mode --password-store=basic \
+    --user-data-dir=/run/pimprobe-browser 9>&- &
 ui_pid=$!
 wait "$ui_pid"

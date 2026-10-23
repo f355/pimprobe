@@ -1,10 +1,11 @@
 /target/
 /build/
 /dist/
-/ui/HelpPages.js
-/ui/i18n/Catalog.js
-/ui/help/
-/ui/fonts/
+/web/assets/fonts/
 *.user
 .DS_Store
 /dev/animations/node_modules/
+/web/node_modules/
+/web/dist/
+/web/test-results/
+/web/playwright-report/

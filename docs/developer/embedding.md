@@ -23,56 +23,46 @@ result and error events. Dropping it requests cancellation. The machine guard
 stays held until the operation has stopped. A storage error after measurement
 can include the measured result in the error event.
 
-## QML Page
+## React Component
 
-Create `ProbePage` inside the host window and supply its `client`. Keep the page
-alive when navigating away: hiding it preserves an active run and its results.
-Destroying it cancels its requests.
+`web/src/ProbeApp.tsx` exports `ProbeApp`. Give its containing element a width
+and height; the touchscreen layout uses 800 × 480. Import `web/src/style.css`
+when the build system does not follow CSS imports automatically.
 
-Set `showHeader: false` when the host supplies the header. The page exposes:
+The optional `client` prop supplies the application operations. Without it,
+the component uses the HTTP API at `/api/v1`. A supplied `ProbeClient` implements:
 
-- `headerControls`: a component containing the probe deploy switch.
-- `pageTitle`, `busy` and `subpageOpen`: current navigation and operation state.
-- `requestBack()` and `openWcs()`: header actions.
-- `openHelp()`: toggle control explanations; `helpMode` reports whether help is active.
-- `openGuide()`: open the operator guide index.
-- `leaveRequested` and `alarmRequested`: requests for host navigation.
-- `settingsContribution`: optional host controls for the Settings page.
-- `updateAvailable`: shows a notification dot on the Settings tab.
+```ts
+request<T>(operation: string, arguments?: object, signal?: AbortSignal): Promise<T>;
+stream<T>(operation: string, arguments: object,
+          onEvent: (event: T) => void, signal?: AbortSignal): Promise<void>;
+```
 
-Pass `uiFontFamily` and `monoFontFamily` for text. A `controls/Style.qml` object
-sets colors, control sizes and layout spacing through the page's `style`
-property. The controls share that style within the QML engine.
+Requests return the operation's result or throw an error. Streams deliver
+progress and terminal events, then resolve. An aborted signal cancels the
+request or stream. `state` supplies the current machine snapshot; the component
+refreshes it every 250 ms. The `onLeave` prop handles the Back action after the
+probe-retraction choice. `onAlarm` handles a controller alarm during probing;
+it defaults to `onLeave` when no separate alarm handler is supplied.
 
-For help across a host-supplied header, set `helpContainer` to the item enclosing
-both header and page. Give that item a `contextHelp` property bound to the
-page's `contextHelp`, then use `HelpButton` and `HelpTip` from `ui/controls`.
-The help button shows X while help is active.
+Keep the component mounted during operations. The Guide hides the underlying
+page while keeping its requests and result state alive. CSS variables beginning
+with `--pp-` set the palette and column width. Controls, keypad and help styles
+are limited to the component's classes.
 
-The `controls/I18n` singleton selects the interface language. Set
-`systemLanguage` to `en`, `zh_CN` or `sv` to supply a host default. A saved
-`language` setting takes precedence. Labels update when the language changes.
-
-`ProbeWindow` supplies the standalone window, HTTP client, fonts, update page
-and application exit handling.
+The Vite build embeds the operator Markdown and translation catalogs, and
+copies illustrations, animation sheets and fonts into `dist/media`.
+`defaultLanguage` supplies the host's language until a saved language is selected.
 
 ## Client
 
-The client exposes `state`, `error`, their change signals and `refresh()`.
-`state` has the same fields as the standalone `/api/v1/state` response.
+The `state` request returns the same fields as the standalone `/api/v1/state`
+response.
 
 `state.coordinates.probe` and `state.coordinates.spindle` each contain
 `machinePosition` and `workPosition` arrays in X/Y/Z/A order. Probe coordinates
 use the fixed probe calibration; spindle coordinates include the last known
 tool-length offset. A reference is `null` until its coordinates are available.
-
-`request(operation, arguments, callback)` calls back with
-`{ok: true, data: ...}` or `{ok: false, error: "..."}`. It returns an object with
-an `abort()` method. Callbacks may complete synchronously.
-
-`stream(operation, arguments, onEvent, onFinished)` delivers application
-operation events and returns the same kind of abort handle. `onFinished`
-receives an error string, or an empty string after normal completion.
 
 The page uses these operation names:
 
@@ -103,13 +93,11 @@ review request using the current machine position, then runs its `{id}`.
 with three X/Y/Z offsets; rotary zeros and rotation use `{id}`. History actions
 return the updated result, and `canApply` indicates a completed measurement.
 
-`client/HttpClient.qml` maps these calls to the standalone HTTP API. The update
+`HttpClient` maps these calls to the standalone HTTP API. The update
 page additionally uses `updates.check`, `updates.install` and `updates.status`.
 
 ## Assets
 
-Include the `ui` QML files, `controls`, `client` and `i18n` directories. Generate
-the translation catalog, `HelpPages.js` and help images with `buildHelp(outputDirectoryURL)` from
-`dev/build-help.mjs`. The output directory contains the staged QML files.
-Hosts supply their own fonts; the standalone build fetches its fonts with
-`dev/fetch-fonts.mjs`.
+The Vite build includes translation catalogs from `web/src/locales` and guide
+pages from `docs`. It copies `web/assets` and guide illustrations into
+`web/dist/media`. `dev/fetch-fonts.mjs` fetches the pinned fonts before building.

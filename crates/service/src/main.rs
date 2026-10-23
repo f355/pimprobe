@@ -29,7 +29,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args.iter().any(|a| a == "--help" || a == "-h") {
         println!(
-            "pimprobe-service [--config FILE] [--listen HOST:PORT] [--settings FILE]\n                 pimprobe-service --mock [--listen HOST:PORT] [--settings FILE] [--ready-token TOKEN]"
+            "pimprobe-service [--config FILE] [--listen HOST:PORT] [--settings FILE] [--web-root DIR]\n                 pimprobe-service --mock [--listen HOST:PORT] [--settings FILE] [--ready-token TOKEN] [--web-root DIR]"
         );
         return Ok(());
     }
@@ -63,7 +63,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     );
     let shutdown_app = app.clone();
-    axum::serve(listener, router(app))
+    let web = tower_http::services::ServeDir::new(options.web_root);
+    axum::serve(listener, router(app).fallback_service(web))
         .with_graceful_shutdown(async move {
             #[cfg(unix)]
             {

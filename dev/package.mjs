@@ -20,9 +20,7 @@ import { execFileSync } from 'node:child_process';
 import { chmodSync, copyFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { buildHelp } from './build-help.mjs';
-import { fetchFonts } from './fetch-fonts.mjs';
+import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const options = { service: join(root, 'target/linux/release/pimprobe-service'), plugins: join(root, 'plugins/build-arm64'), version: null, commit: null };
@@ -69,14 +67,7 @@ try {
     binary(options.service, 'app/bin/pimprobe-service');
     for (const name of ['libpimprobeproxyplugin.so', 'libpimprobelauncherplugin.so'])
         binary(join(options.plugins, name), 'app/lib/' + name);
-    cpSync(join(root, 'ui'), join(payload, 'app/ui'), {
-        recursive: true,
-        filter: source => !source.split('/').some(part => ['tests', '.DS_Store', 'help', 'HelpPages.js', 'fonts'].includes(part)),
-    });
-    buildHelp(pathToFileURL(join(payload, 'app/ui') + '/'));
-    const fonts = join(root, 'ui/fonts');
-    await fetchFonts(fonts);
-    cpSync(fonts, join(payload, 'app/ui/fonts'), { recursive: true });
+    cpSync(join(root, 'web/dist'), join(payload, 'app/web'), { recursive: true });
     copy(join(root, 'packaging/pimprobe-ui'), 'app/bin/pimprobe-ui');
     chmodSync(join(payload, 'app/bin/pimprobe-ui'), 0o755);
     copy(join(root, 'packaging/config.example.json'), 'app/config.json');

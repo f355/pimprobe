@@ -37,21 +37,28 @@ Also available in [简体中文](docs/zh_CN/README.md) and [Svenska](docs/sv/REA
 
 ## Development
 
-Requirements: stable Rust, Qt 6 with Qt Quick Controls and Qt Test, CMake,
-and Node.js. The development scripts locate Homebrew Qt and rustup on macOS.
+The React touchscreen interface lives in `web`. Install its dependencies with
+`npm ci --prefix web`, then run `./dev/preview.sh`. It builds the service,
+starts a simulated controller and opens an 800 × 480 preview in your browser
+at `http://127.0.0.1:8140/?preview`. Press Ctrl-C to stop it.
 
-Run `./dev/preview.sh` for an 800 x 480 preview with simulated stock.
-UI tests use an isolated mock service and temporary settings.
+Build it with `npm run build --prefix web`. The service serves that build when
+started with `--web-root web/dist`. Run browser tests with `npm test --prefix web`.
+See [embedding](docs/developer/embedding.md#react-component) to use the component
+with another application client.
+
+Requirements: stable Rust, Node.js, CMake and Qt 6 Core, Network, Widgets and
+Test for the CNC_Lab plugins. The installed interface runs in Chromium.
 
 Operator text lives in `docs/` and supplies the on-screen Guide.
-Screenshots sit inside `guide-only` comment blocks. Refresh screenshots with
-`./dev/test-ui.sh dev/screenshots`.
+Screenshots sit inside `guide-only` comment blocks. Browser tests save
+captures in `web/test-results`.
 
 ```sh
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
-node --test dev/test-assets.mjs dev/test-i18n.mjs
-./dev/test-ui.sh
+node --test dev/test-assets.mjs
+npm test --prefix web
 cmake -S plugins -B build/plugins -DCMAKE_PREFIX_PATH=/opt/homebrew
 cmake --build build/plugins
 ctest --test-dir build/plugins --output-on-failure
@@ -67,18 +74,18 @@ ctest --test-dir build/plugins --output-on-failure
   and exclusive access to the machine.
 - `crates/service`: standalone HTTP API, file storage and software updates.
 - `plugins`: C++ controller proxy and launcher.
-- `ui`: QML interface.
+- `web`: React interface, shared touch controls and interactive help.
 - `docs`: operator guide and contextual help sources.
 - `packaging`: installer, service unit and launch scripts.
 
 The controller proxy exposes `/run/pimprobe-controller.sock` through CNC_Lab's
-controller objects. The launcher adds a button that opens the QML UI.
+controller objects. The launcher adds a button that opens the browser UI.
 The service runs independently and reconnects when the proxy becomes available.
 The socket framing is documented in
 [`docs/developer/controller-bridge.md`](docs/developer/controller-bridge.md).
 
 See [embedding](docs/developer/embedding.md) for the Rust host interfaces and
-the reusable QML page, and [UI guidelines](docs/developer/ui.md) for layouts
+the reusable React component, and [UI guidelines](docs/developer/ui.md) for layouts
 and shared controls.
 
 Parameter ranges are defined in `crates/probe-core/src/parameters.rs` and
@@ -128,6 +135,8 @@ commit subjects beginning with `[bugfix]`, `[improvement]`, or `[feature]`.
 Package the built ARM64 artifacts:
 
 ```sh
+npm ci --prefix web
+npm run build --prefix web
 node dev/package.mjs
 ```
 
@@ -186,16 +195,10 @@ These tests require the built ARM64 artifacts:
 
 ```sh
 node --test dev/test-installer.mjs
-node dev/package.mjs --output dist/pimprobe-test.run
-docker run --rm --platform linux/arm64 \
-  -v "$PWD/dist/pimprobe-test.run:/package.run:ro" \
-  -v "$PWD/dev/test-install-container.sh:/test.sh:ro" \
-  -v "$PWD/packaging/config.example.json:/expected-config.json:ro" \
-  pimprobe-rust-builder sh /test.sh
 ```
 
-The fixture writes to machine installation paths with simulated system
-services. Run it only in a disposable container.
+Verify installation, launch, exit and uninstall on a NestPad or simulator
+running CNC_Lab.
 
 ## Safety
 

@@ -142,15 +142,15 @@ impl From<UpdateError> for ApiError {
 }
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        // Qt 6.9's QML XMLHttpRequest discards the status and body of non-2xx
-        // loopback responses. Keep application failures visible to the operator.
-        Json(json!({
-            "error": true,
-            "code": self.1,
-            "message": self.2,
-            "status": self.0.as_u16()
-        }))
-        .into_response()
+        (
+            self.0,
+            Json(json!({
+                "error": true,
+                "code": self.1,
+                "message": self.2
+            })),
+        )
+            .into_response()
     }
 }
 

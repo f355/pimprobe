@@ -41,6 +41,15 @@ export const HeaderHelpContext = createContext({
   toggle: () => {},
   guide: () => {},
 });
+export interface PageHeaderProps {
+  title: string;
+  detail?: string;
+  onBack: () => void;
+  backDisabled?: boolean;
+}
+export const HeaderRendererContext = createContext<
+  ((props: PageHeaderProps) => ReactNode) | null
+>(null);
 export function HelpButton() {
   const { t } = useTranslation();
   const help = useContext(HeaderHelpContext);
@@ -94,14 +103,26 @@ export function PageHeader({
   detail,
   onBack,
   backDisabled = false,
-}: {
-  title: string;
-  detail?: string;
-  onBack: () => void;
-  backDisabled?: boolean;
-}) {
+}: PageHeaderProps) {
   const { t } = useTranslation();
   const help = useContext(HeaderHelpContext);
+  const renderHeader = useContext(HeaderRendererContext);
+  if (renderHeader)
+    return (
+      <>
+        {renderHeader({ title, detail, onBack, backDisabled })}
+        <div className="pp-section-heading">
+          <h1>{title}</h1>
+          <span className="pp-muted">{detail}</span>
+          {help.active && (
+            <Button data-help-bypass="" onClick={help.guide}>
+              <BookOpen />
+              {t("Guide")}
+            </Button>
+          )}
+        </div>
+      </>
+    );
   return (
     <header className="pp-page-header">
       <Button

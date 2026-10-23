@@ -63,15 +63,13 @@ export function guideLink(
 
 export function guideImage(source: string): string | undefined {
   try {
-    const path = decodeURIComponent(source)
-      .replace(/^\/media\/docs\//, "")
-      .replace(/^\.\.\//, "");
+    const path = decodeURIComponent(source).replace(/^\.\.\//, "");
     if (
       !/^images\/[\w./-]+\.(?:svg|png|jpe?g|gif|webp)$/i.test(path) ||
       path.split("/").some((part) => part === ".." || part === ".")
     )
       return undefined;
-    return "/media/docs/" + path;
+    return path;
   } catch {
     return undefined;
   }

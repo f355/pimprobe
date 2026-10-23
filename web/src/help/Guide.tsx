@@ -40,6 +40,10 @@ const sources = import.meta.glob<string>(
   ["../../../docs/*.md", "../../../docs/zh_CN/*.md", "../../../docs/sv/*.md"],
   { query: "?raw", import: "default", eager: true },
 );
+const images = import.meta.glob<string>(
+  "../../../docs/images/**/*.{svg,png,jpg,jpeg,gif,webp}",
+  { query: "?url", import: "default", eager: true },
+);
 
 export interface HelpGuideProps {
   page?: string;
@@ -121,7 +125,8 @@ export function HelpGuide({ page, onBack, onTitle }: HelpGuideProps) {
             );
           },
           img: ({ src, alt, title }) => {
-            const image = typeof src === "string" ? guideImage(src) : undefined;
+            const path = typeof src === "string" ? guideImage(src) : undefined;
+            const image = path ? images["../../../docs/" + path] : undefined;
             return image ? (
               <img src={image} alt={alt || ""} title={title} />
             ) : (

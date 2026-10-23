@@ -16,6 +16,7 @@
 
 [package]
 name = "pimprobe-app"
+license = "GPL-3.0-or-later"
 version.workspace = true
 edition.workspace = true
 

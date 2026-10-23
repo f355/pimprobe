@@ -44,14 +44,6 @@ test("context help and localized guide work on touch and desktop screens", async
     page.on("console", (message) => {
       if (message.type() === "error") errors.push(message.text());
     });
-    await page.route("**/media/**", (route) => {
-      const path = new URL(route.request().url()).pathname.replace(
-        "/media/",
-        "",
-      );
-      const local = path.startsWith("fonts/") ? "web/assets/" + path : path;
-      return route.fulfill({ path: repository + local });
-    });
     const load = (language = "en") =>
       page.goto(origin + "src/help/fixture.html?language=" + language);
     const popup = page.locator(".pp-help-popup");

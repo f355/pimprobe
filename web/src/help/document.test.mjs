@@ -68,18 +68,8 @@ test("guide navigation resolves pages and section links without leaving the read
 });
 
 test("guide images resolve shared illustrations and reject external or escaping paths", () => {
-  assert.equal(
-    guideImage("../images/outside.svg"),
-    "/media/docs/images/outside.svg",
-  );
-  assert.equal(
-    guideImage("images/inside.svg"),
-    "/media/docs/images/inside.svg",
-  );
-  assert.equal(
-    guideImage("/media/docs/images/inside.svg"),
-    "/media/docs/images/inside.svg",
-  );
+  assert.equal(guideImage("../images/outside.svg"), "images/outside.svg");
+  assert.equal(guideImage("images/inside.svg"), "images/inside.svg");
   for (const path of [
     "https://example.com/image.svg",
     "data:image/svg+xml,anything",

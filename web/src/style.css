@@ -16,11 +16,11 @@
  */
 @font-face {
   font-family: Geist;
-  src: url("/media/fonts/Geist-Regular.otf");
+  src: url("../assets/fonts/Geist-Regular.otf");
 }
 @font-face {
   font-family: Geist;
-  src: url("/media/fonts/Geist-Bold.otf");
+  src: url("../assets/fonts/Geist-Bold.otf");
   font-weight: 700;
 }
 .pp-app {
@@ -69,6 +69,51 @@
 }
 .pp-view[hidden] {
   display: none;
+}
+.pp-host-footer {
+  flex: none;
+}
+.pp-section-heading {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 12px;
+  min-height: 32px;
+  padding: 0 16px;
+}
+.pp-section-heading h1 {
+  font-size: 20px;
+}
+.pp-section-heading > .pp-muted {
+  margin-left: auto;
+  font-size: 16px;
+}
+.pp-embedded .pp-content {
+  padding-block: 8px;
+  gap: 8px;
+}
+.pp-embedded .pp-review-illustration {
+  min-height: 64px;
+}
+.pp-embedded .pp-review-phase {
+  min-height: 32px;
+  font-size: 16px;
+}
+.pp-embedded .pp-result-heading,
+.pp-embedded .pp-result-labels,
+.pp-embedded .pp-result-axis {
+  margin-bottom: 4px;
+}
+.pp-embedded .pp-result-heading .pp-button,
+.pp-embedded .pp-result-columns .pp-number {
+  height: 48px;
+  min-height: 48px;
+}
+.pp-embedded .pp-result-axis {
+  min-height: 48px;
+}
+.pp-embedded .pp-result-axis strong {
+  font-size: 26px;
 }
 .pp-floating-guide {
   position: absolute;

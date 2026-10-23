@@ -14,9 +14,18 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type ReactNode,
+  type Ref,
+} from "react";
 import { ArrowLeft, BookOpen } from "lucide-react";
 import { HttpClient, type ProbeClient } from "./client";
+import { ProbeProvider, useProbe } from "./ProbeProvider";
 import type {
   Family,
   HistoryResult,
@@ -29,6 +38,8 @@ import {
   Button,
   ConfirmDialog,
   HeaderHelpContext,
+  HeaderRendererContext,
+  type PageHeaderProps,
   HelpButton,
   KeypadSlot,
   Notice,
@@ -57,109 +68,85 @@ import { WcsPicker } from "./WcsPicker";
 import { UtilityPage } from "./utilities/UtilityPage";
 import "./style.css";
 
-export interface ProbeAppProps {
+export interface ProbeAppProps extends ProbeWorkspaceProps {
   client?: ProbeClient;
+  connected?: boolean;
+}
+export interface ProbeNavigation {
+  leave: (after?: () => void) => void;
+}
+export interface ProbeWorkspaceProps {
+  navigationRef?: Ref<ProbeNavigation>;
   defaultLanguage?: string;
+  updates?: boolean;
   onLeave?: () => void;
   onAlarm?: () => void;
+  renderHeader?: (props: ProbeHeaderProps) => ReactNode;
+  renderFooter?: (props: ProbeFooterProps) => ReactNode;
+}
+export interface ProbeHeaderProps extends PageHeaderProps {
+  state: MachineState;
+  reference: "probe" | "spindle";
+  onReferenceChange: (reference: "probe" | "spindle") => void;
+  onChooseWcs: () => void;
+  wcsDisabled: boolean;
+  help: { active: boolean; toggle: () => void; guide: () => void };
+}
+export interface ProbeFooterProps {
+  disabled: boolean;
+  leave: (after?: () => void) => void;
 }
 export function ProbeApp({
   client: suppliedClient,
-  defaultLanguage = "",
-  onLeave,
-  onAlarm,
+  connected,
+  ...props
 }: ProbeAppProps) {
   const client = useMemo(
     () => suppliedClient || new HttpClient(),
     [suppliedClient],
   );
-  const [state, setState] = useState<MachineState>({ connected: false });
-  const [settings, setSettings] = useState<Settings>({});
-  const [schema, setSchema] = useState<Schema>({});
-  const [error, setError] = useState("");
-  const [settingsError, setSettingsError] = useState("");
-  const [loaded, setLoaded] = useState(false);
-  const refresh = useCallback(async () => {
-    try {
-      const state = await client.request<MachineState>("state");
-      setState(state);
-      setError("");
-    } catch (failure) {
-      setState({ connected: false });
-      setError((failure as Error).message);
-    }
-  }, [client]);
-  useEffect(() => {
-    const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout>;
-    async function poll() {
-      try {
-        const next = await client.request<MachineState>(
-          "state",
-          undefined,
-          controller.signal,
-        );
-        if (!controller.signal.aborted) {
-          setState(next);
-          setError("");
-        }
-      } catch (failure) {
-        if (!controller.signal.aborted) {
-          setState({ connected: false });
-          setError((failure as Error).message);
-        }
-      }
-      if (!controller.signal.aborted)
-        timer = setTimeout(() => void poll(), 250);
-    }
-    void poll();
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [client]);
-  const load = useCallback(async () => {
-    try {
-      const [values, ranges] = await Promise.all([
-        client.request<Settings>("settings.get"),
-        client.request<Schema>("settings.schema"),
-      ]);
-      setSettings(values);
-      setSchema(ranges);
-      setLoaded(true);
-      setSettingsError("");
-    } catch (failure) {
-      setSettingsError((failure as Error).message);
-    }
-  }, [client]);
-  useEffect(() => {
-    void load();
-  }, [load]);
-  const saveSettings = useCallback(
-    async (patch: Partial<Settings>) => {
-      const updated = await client.request<Settings>("settings.update", patch);
-      setSettings(updated);
-      setSettingsError("");
-    },
-    [client],
-  );
   return (
-    <div className="pp-app">
+    <ProbeProvider client={client} connected={connected}>
+      <ProbeWorkspace {...props} />
+    </ProbeProvider>
+  );
+}
+
+export function ProbeWorkspace({
+  defaultLanguage = "",
+  updates = true,
+  ...props
+}: ProbeWorkspaceProps) {
+  const {
+    client,
+    state,
+    settings,
+    schema,
+    loaded,
+    error,
+    settingsError,
+    reloadSettings,
+    saveSettings,
+    refresh,
+  } = useProbe();
+  return (
+    <div className={`pp-app${props.renderHeader ? " pp-embedded" : ""}`}>
       <I18nProvider language={String(settings.language || defaultLanguage)}>
         <NumericProvider>
           <ProbePage
+            {...props}
             client={client}
             state={state}
             settings={settings}
             schema={schema}
             loaded={loaded}
+            updates={updates}
             error={error}
             settingsError={settingsError}
-            onReload={load}
+            onReload={reloadSettings}
             saveSettings={saveSettings}
             onRefresh={refresh}
-            onLeave={onLeave}
-            onAlarm={onAlarm || onLeave}
+            onAlarm={props.onAlarm || props.onLeave}
           />
         </NumericProvider>
       </I18nProvider>
@@ -168,11 +155,13 @@ export function ProbeApp({
 }
 
 function ProbePage({
+  navigationRef,
   client,
   state,
   settings,
   schema,
   loaded,
+  updates,
   error,
   settingsError,
   onReload,
@@ -180,12 +169,16 @@ function ProbePage({
   onRefresh,
   onLeave,
   onAlarm,
+  renderHeader,
+  renderFooter,
 }: {
+  navigationRef?: Ref<ProbeNavigation>;
   client: ProbeClient;
   state: MachineState;
   settings: Settings;
   schema: Schema;
   loaded: boolean;
+  updates: boolean;
   error: string;
   settingsError: string;
   onReload: () => Promise<void>;
@@ -193,6 +186,8 @@ function ProbePage({
   onRefresh: () => void;
   onLeave?: () => void;
   onAlarm?: () => void;
+  renderHeader?: ProbeAppProps["renderHeader"];
+  renderFooter?: ProbeAppProps["renderFooter"];
 }) {
   const { t, language } = useTranslation();
   const editor = useNumeric();
@@ -206,6 +201,8 @@ function ProbePage({
   const [pending, setPending] = useState(false);
   const [actionError, setActionError] = useState("");
   const [leavePrompt, setLeavePrompt] = useState(false);
+  const leaveAction = useRef(onLeave);
+  const [chooseWcs, setChooseWcs] = useState(false);
   const [probeReference, setProbeReference] = useState(true);
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const status = state.status || {};
@@ -218,7 +215,7 @@ function ProbePage({
     if (!state.connected) editor.cancel();
   }, [state.connected]);
   useEffect(() => {
-    if (!loaded || settings.automaticUpdateChecks === false) return;
+    if (!updates || !loaded || settings.automaticUpdateChecks === false) return;
     const abort = new AbortController();
     client
       .request<{ available: unknown }>(
@@ -232,6 +229,7 @@ function ProbePage({
   }, [
     client,
     loaded,
+    updates,
     settings.automaticUpdateChecks,
     settings.developmentUpdates,
   ]);
@@ -241,11 +239,15 @@ function ProbePage({
     setPage(next);
     setActionError("");
   }
-  function leave() {
+  function leave(after = onLeave) {
+    if (locked || pending || state.actuatorPending) return;
+    editor.cancel();
+    leaveAction.current = after;
     if (status.probeActuatorKnown && status.probeActuator !== 0)
       setLeavePrompt(true);
-    else onLeave?.();
+    else after?.();
   }
+  useImperativeHandle(navigationRef, () => ({ leave }));
   async function actuator(extend: boolean) {
     if (pending || locked) return;
     setPending(true);
@@ -255,7 +257,7 @@ function ProbePage({
       await onRefresh();
       if (!extend && leavePrompt) {
         setLeavePrompt(false);
-        onLeave?.();
+        leaveAction.current?.();
       }
     } catch (failure) {
       setActionError((failure as Error).message);
@@ -300,11 +302,29 @@ function ProbePage({
       toggle: toggleHelp,
       guide: () => {
         editor.cancel();
+        setChooseWcs(false);
         setGuide(true);
       },
     }),
     [help, guide],
   );
+  const header = renderHeader
+    ? (props: PageHeaderProps) =>
+        renderHeader({
+          ...props,
+          state,
+          reference: probeReference ? "probe" : "spindle",
+          onReferenceChange: (reference) =>
+            setProbeReference(reference === "probe"),
+          onChooseWcs: () => {
+            editor.cancel();
+            setGuide(false);
+            setChooseWcs(true);
+          },
+          wcsDisabled: locked || pending,
+          help: headerHelp,
+        })
+    : null;
   const body =
     page === "routine" && config ? (
       <ProbeFlow
@@ -318,26 +338,6 @@ function ProbePage({
         onRefresh={onRefresh}
         onAlarm={onAlarm}
         onSetting={(key, value) => saveSettings({ [key]: value })}
-      />
-    ) : page === "wcs" ? (
-      <WcsPicker
-        current={status.wcs || 54}
-        pending={pending}
-        error={actionError}
-        onBack={() => navigate("home")}
-        onSelect={async (wcs) => {
-          setPending(true);
-          setActionError("");
-          try {
-            await client.request("wcs.select", { wcs });
-            onRefresh();
-            navigate("home");
-          } catch (failure) {
-            setActionError((failure as Error).message);
-          } finally {
-            setPending(false);
-          }
-        }}
       />
     ) : page !== "home" ? (
       <UtilityPage
@@ -360,72 +360,85 @@ function ProbePage({
       />
     ) : (
       <>
-        <header className="pp-home-header">
-          <Button
-            className="pp-icon pp-back"
-            aria-label={t("Back")}
-            helpTitle={t("Back")}
-            onClick={leave}
-            disabled={locked || pending || state.actuatorPending}
-          >
-            <ArrowLeft />
-          </Button>
-          <button
-            className="pp-dro pp-mono"
-            aria-label={t("Coordinate reference: %1", [
-              t(probeReference ? "Probe" : "Tool"),
-            ])}
-            onClick={() => setProbeReference(!probeReference)}
-            {...helpProps(
-              t("Coordinates"),
-              t(
-                "Tap anywhere here to switch between probe ball and tool tip coordinates. Large numbers use the selected WCS; small numbers use G53. With an empty spindle, Tool still uses the last measured tool length offset.",
-              ),
-            )}
-          >
-            {["X", "Y", "Z"].map((axis, i) => {
-              const position =
-                state.coordinates?.[probeReference ? "probe" : "spindle"];
-              return (
-                <span className="pp-coordinate" key={axis}>
-                  <b>{axis}</b>
-                  <strong>
-                    {state.connected
-                      ? position?.workPosition[i]?.toFixed(3) || "--.---"
-                      : "--.---"}
-                  </strong>
-                  <small>
-                    {state.connected
-                      ? position?.machinePosition[i]?.toFixed(3) || "--.---"
-                      : "--.---"}
-                  </small>
-                </span>
-              );
-            })}
-            <span className="pp-reference">
-              {["Probe", "Tool"].map((label, i) => (
-                <span
-                  className={probeReference === (i === 0) ? "pp-selected" : ""}
-                  key={label}
-                >
-                  {t(label)}
-                </span>
-              ))}
-            </span>
-          </button>
-          <Button
-            className="pp-icon pp-wcs-button"
-            helpTitle={t("Work coordinates")}
-            onClick={() => navigate("wcs")}
-            disabled={locked}
-            help={t(
-              "Select G54–G59. Each work coordinate system stores its own zero; the selected one is used for readouts and new measurements.",
-            )}
-          >
-            G{status.wcs || 54}
-          </Button>
-          <HelpButton />
-        </header>
+        {header ? (
+          header({
+            title: "",
+            onBack: () => leave(),
+            backDisabled: locked || pending || state.actuatorPending,
+          })
+        ) : (
+          <header className="pp-home-header">
+            <Button
+              className="pp-icon pp-back"
+              aria-label={t("Back")}
+              helpTitle={t("Back")}
+              onClick={() => leave()}
+              disabled={locked || pending || state.actuatorPending}
+            >
+              <ArrowLeft />
+            </Button>
+            <button
+              className="pp-dro pp-mono"
+              aria-label={t("Coordinate reference: %1", [
+                t(probeReference ? "Probe" : "Tool"),
+              ])}
+              onClick={() => setProbeReference(!probeReference)}
+              {...helpProps(
+                t("Coordinates"),
+                t(
+                  "Tap anywhere here to switch between probe ball and tool tip coordinates. Large numbers use the selected WCS; small numbers use G53. With an empty spindle, Tool still uses the last measured tool length offset.",
+                ),
+              )}
+            >
+              {["X", "Y", "Z"].map((axis, i) => {
+                const position =
+                  state.coordinates?.[probeReference ? "probe" : "spindle"];
+                return (
+                  <span className="pp-coordinate" key={axis}>
+                    <b>{axis}</b>
+                    <strong>
+                      {state.connected
+                        ? position?.workPosition[i]?.toFixed(3) || "--.---"
+                        : "--.---"}
+                    </strong>
+                    <small>
+                      {state.connected
+                        ? position?.machinePosition[i]?.toFixed(3) || "--.---"
+                        : "--.---"}
+                    </small>
+                  </span>
+                );
+              })}
+              <span className="pp-reference">
+                {["Probe", "Tool"].map((label, i) => (
+                  <span
+                    className={
+                      probeReference === (i === 0) ? "pp-selected" : ""
+                    }
+                    key={label}
+                  >
+                    {t(label)}
+                  </span>
+                ))}
+              </span>
+            </button>
+            <Button
+              className="pp-icon pp-wcs-button"
+              helpTitle={t("Work coordinates")}
+              onClick={() => {
+                editor.cancel();
+                setChooseWcs(true);
+              }}
+              disabled={locked}
+              help={t(
+                "Select G54–G59. Each work coordinate system stores its own zero; the selected one is used for readouts and new measurements.",
+              )}
+            >
+              G{status.wcs || 54}
+            </Button>
+            <HelpButton />
+          </header>
+        )}
         {(error || actionError || settingsError) && (
           <div className="pp-error-row">
             <Notice error>{t(actionError || settingsError || error)}</Notice>
@@ -513,13 +526,15 @@ function ProbePage({
                   >
                     {t("Utilities")}
                   </Button>
-                  <Button
-                    helpTitle={t("Check for updates")}
-                    onClick={() => navigate("updates")}
-                  >
-                    {t("Check for updates")}
-                    {updateAvailable && <span className="pp-notification" />}
-                  </Button>
+                  {updates && (
+                    <Button
+                      helpTitle={t("Check for updates")}
+                      onClick={() => navigate("updates")}
+                    >
+                      {t("Check for updates")}
+                      {updateAvailable && <span className="pp-notification" />}
+                    </Button>
+                  )}
                   <div
                     className="pp-language-selector"
                     role="group"
@@ -765,54 +780,89 @@ function ProbePage({
     );
   return (
     <HeaderHelpContext.Provider value={headerHelp}>
-      <HelpProvider active={help && !guide} onActiveChange={setHelp}>
-        <div className="pp-view" hidden={guide}>
-          {body}
-        </div>
-        {guide && (
-          <div className="pp-view pp-guide-view">
-            <HelpGuide onBack={() => setGuide(false)} />
+      <HeaderRendererContext.Provider value={header}>
+        <HelpProvider active={help && !guide} onActiveChange={setHelp}>
+          <div className="pp-view" hidden={guide || chooseWcs}>
+            {body}
           </div>
-        )}
-        {help && !guide && page === "home" && (
-          <Button
-            className="pp-floating-guide"
-            helpTitle={t("Guide")}
-            data-help-bypass=""
-            style={tab === "Settings" ? { left: 16, right: "auto" } : undefined}
-            onClick={() => setGuide(true)}
-          >
-            <BookOpen />
-            {t("Guide")}
-          </Button>
-        )}
-        {leavePrompt && (
-          <ConfirmDialog
-            title={t("Probe extended")}
-            message={
-              <>
-                {t("Retract the probe before leaving?")}
-                {actionError && <Notice error>{t(actionError)}</Notice>}
-              </>
-            }
-            onCancel={() => setLeavePrompt(false)}
-            onConfirm={() => void actuator(false)}
-            busy={pending}
-            confirmLabel={t("Retract and exit")}
-            actions={
-              <Button
-                onClick={() => {
-                  setLeavePrompt(false);
-                  onLeave?.();
+          {chooseWcs && (
+            <div className="pp-view">
+              <WcsPicker
+                current={status.wcs || 54}
+                pending={pending}
+                error={actionError}
+                onBack={() => setChooseWcs(false)}
+                onSelect={async (wcs) => {
+                  setPending(true);
+                  setActionError("");
+                  try {
+                    await client.request("wcs.select", { wcs });
+                    onRefresh();
+                    setChooseWcs(false);
+                  } catch (failure) {
+                    setActionError((failure as Error).message);
+                  } finally {
+                    setPending(false);
+                  }
                 }}
-                disabled={pending}
-              >
-                {t("Leave extended")}
-              </Button>
-            }
-          />
-        )}
-      </HelpProvider>
+              />
+            </div>
+          )}
+          {guide && (
+            <div className="pp-view pp-guide-view">
+              <HelpGuide onBack={() => setGuide(false)} />
+            </div>
+          )}
+          {help && !guide && !chooseWcs && page === "home" && (
+            <Button
+              className="pp-floating-guide"
+              helpTitle={t("Guide")}
+              data-help-bypass=""
+              style={
+                tab === "Settings" ? { left: 16, right: "auto" } : undefined
+              }
+              onClick={() => setGuide(true)}
+            >
+              <BookOpen />
+              {t("Guide")}
+            </Button>
+          )}
+          {leavePrompt && (
+            <ConfirmDialog
+              title={t("Probe extended")}
+              message={
+                <>
+                  {t("Retract the probe before leaving?")}
+                  {actionError && <Notice error>{t(actionError)}</Notice>}
+                </>
+              }
+              onCancel={() => setLeavePrompt(false)}
+              onConfirm={() => void actuator(false)}
+              busy={pending}
+              confirmLabel={t("Retract and exit")}
+              actions={
+                <Button
+                  onClick={() => {
+                    setLeavePrompt(false);
+                    leaveAction.current?.();
+                  }}
+                  disabled={pending}
+                >
+                  {t("Leave extended")}
+                </Button>
+              }
+            />
+          )}
+          {renderFooter && (
+            <div className="pp-host-footer">
+              {renderFooter({
+                disabled: locked || pending || !!state.actuatorPending,
+                leave,
+              })}
+            </div>
+          )}
+        </HelpProvider>
+      </HeaderRendererContext.Provider>
     </HeaderHelpContext.Provider>
   );
 }

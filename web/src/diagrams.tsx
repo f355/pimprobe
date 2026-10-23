@@ -16,6 +16,11 @@
 
 import { useEffect, useRef } from "react";
 import manifest from "../assets/animations/manifest.json";
+const sheets = import.meta.glob<string>("../assets/animations/*.png", {
+  query: "?url",
+  import: "default",
+  eager: true,
+});
 import "./diagrams.css";
 
 export interface RoutineDiagramProps {
@@ -808,7 +813,7 @@ export function MotionIllustration({ clip, onPhase }: MotionIllustrationProps) {
       draw(0);
       updatePlayback();
     };
-    image.src = `/media/animations/${clip}.png`;
+    image.src = sheets[`../assets/animations/${clip}.png`];
     return () => {
       disposed = true;
       cancelAnimationFrame(request);

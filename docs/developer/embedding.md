@@ -25,12 +25,33 @@ can include the measured result in the error event.
 
 ## React Component
 
-`web/src/ProbeApp.tsx` exports `ProbeApp`. Give its containing element a width
+`web/src/index.ts` exports `ProbeApp`. Give its containing element a width
 and height; the touchscreen layout uses 800 × 480. Import `web/src/style.css`
 when the build system does not follow CSS imports automatically.
 
-The optional `client` prop supplies the application operations. Without it,
-the component uses the HTTP API at `/api/v1`. A supplied `ProbeClient` implements:
+For a standalone page, `ProbeApp` creates the connection and workspace together.
+Its optional `client` prop supplies the application operations. Without it,
+the component uses the HTTP API at `/api/v1`.
+
+For an application with several pages, keep `ProbeProvider` above navigation
+and render `ProbeWorkspace` inside the probing page:
+
+```tsx
+<ProbeProvider client={client} connected={connected}>
+  <ApplicationPages>
+    <ProbeWorkspace updates={false} onLeave={closeProbe} />
+  </ApplicationPages>
+</ProbeProvider>
+```
+
+The provider loads settings and validation ranges when the connection opens,
+and refreshes machine state every 250 ms. Changing pages does not reload these
+values. Set `connected={false}` when the host connection closes; reconnecting
+reloads settings. `useProbe()` gives host components access to the same state,
+settings and refresh/save actions. Keep the workspace mounted but hidden between
+visits to retain its selected tab and measurement result.
+
+A supplied `ProbeClient` implements:
 
 ```ts
 request<T>(operation: string, arguments?: object, signal?: AbortSignal): Promise<T>;
@@ -40,8 +61,8 @@ stream<T>(operation: string, arguments: object,
 
 Requests return the operation's result or throw an error. Streams deliver
 progress and terminal events, then resolve. An aborted signal cancels the
-request or stream. `state` supplies the current machine snapshot; the component
-refreshes it every 250 ms. The `onLeave` prop handles the Back action after the
+request or stream. `state` supplies the current machine snapshot.
+The `onLeave` prop handles the Back action after the
 probe-retraction choice. `onAlarm` handles a controller alarm during probing;
 it defaults to `onLeave` when no separate alarm handler is supplied.
 
@@ -50,9 +71,19 @@ page while keeping its requests and result state alive. CSS variables beginning
 with `--pp-` set the palette and column width. Controls, keypad and help styles
 are limited to the component's classes.
 
-The Vite build embeds the operator Markdown and translation catalogs, and
-copies illustrations, animation sheets and fonts into `dist/media`.
 `defaultLanguage` supplies the host's language until a saved language is selected.
+Set `updates={false}` when the host manages software updates.
+
+`renderHeader` replaces the page headers with host controls. It receives the
+current probe state, coordinate reference, Back action, WCS selection and help
+actions. Subpages keep a compact title above their content. `renderFooter`
+adds host navigation below the page. Its `disabled` flag covers active probing
+and actuator commands. Call `leave(destination)` when switching out of probing;
+it offers probe retraction before calling the destination action.
+
+For navigation outside the footer, give `ProbeWorkspace` a `navigationRef` of
+type `Ref<ProbeNavigation>`. Its `leave(destination)` method uses the same
+probe-retraction choice and blocks leaving during an operation.
 
 ## Client
 
@@ -98,6 +129,6 @@ page additionally uses `updates.check`, `updates.install` and `updates.status`.
 
 ## Assets
 
-The Vite build includes translation catalogs from `web/src/locales` and guide
-pages from `docs`. It copies `web/assets` and guide illustrations into
-`web/dist/media`. `dev/fetch-fonts.mjs` fetches the pinned fonts before building.
+The component imports its translation catalogs, Markdown guide pages,
+illustrations, animation sheets and fonts. Vite includes them in the host's
+build. Run `node dev/fetch-fonts.mjs` before building to fetch the pinned fonts.

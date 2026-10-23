@@ -14,7 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-export { ProbeApp, type ProbeAppProps } from "./ProbeApp";
+export {
+  ProbeApp,
+  ProbeWorkspace,
+  type ProbeAppProps,
+  type ProbeWorkspaceProps,
+  type ProbeNavigation,
+  type ProbeHeaderProps,
+  type ProbeFooterProps,
+} from "./ProbeApp";
+export { ProbeProvider, useProbe } from "./ProbeProvider";
 export { HttpClient, ServiceError, type ProbeClient } from "./client";
 export type {
   MachineState,

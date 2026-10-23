@@ -238,7 +238,7 @@ fn persisted(event: OperationEvent, saved: std::io::Result<()>) -> OperationEven
     }
 }
 
-fn routine_label(config: &RoutineConfig) -> String {
+pub fn routine_label(config: &RoutineConfig) -> String {
     if config.family == "angle" {
         return match config.feature.as_str() {
             "x-plus" => "X+ face angle",

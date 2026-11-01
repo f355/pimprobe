@@ -17,10 +17,9 @@
 use crate::*;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(default, rename_all = "camelCase")]
 pub struct RoutineConfig {
     pub family: String,
-    #[serde(default)]
     pub feature: String,
     pub x: i32,
     pub y: i32,
@@ -190,6 +189,24 @@ pub struct RoutinePlan {
     pub steps: Vec<RoutineStep>,
 }
 pub fn review(state: State, config: RoutineConfig) -> Result<RoutinePlan, Error> {
+    let angle = if config.family == "angle" {
+        0.
+    } else {
+        state.wcs_rotation.unwrap_or(0.)
+    };
+    if angle.abs() > 1e-9 && state.wcs_origin.is_none() {
+        return Err(Error::Preflight(
+            "Work zero is unavailable for rotated probing".into(),
+        ));
+    }
+    let mut plan = review_axes(
+        crate::frame::Frame::new(&state, angle).state(state.clone()),
+        config,
+    )?;
+    plan.start = state;
+    Ok(plan)
+}
+fn review_axes(state: State, config: RoutineConfig) -> Result<RoutinePlan, Error> {
     preflight(&state)?;
     config.validate()?;
     if !state.modes.valid() {

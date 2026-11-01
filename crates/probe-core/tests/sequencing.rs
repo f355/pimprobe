@@ -51,8 +51,8 @@ impl Controller for Scripted {
     fn state(&self) -> State {
         self.state.lock().unwrap().clone()
     }
-    fn subscribe(&self) -> broadcast::Receiver<Event> {
-        self.events.subscribe()
+    fn subscribe(&self) -> pimprobe_core::EventReceiver {
+        self.events.subscribe().into()
     }
     async fn send(&self, command: &str) -> Result<(), Error> {
         self.commands.lock().unwrap().push(command.into());
@@ -81,6 +81,17 @@ impl Controller for Scripted {
                     ..Event::default()
                 })
                 .unwrap();
+            return Ok(());
+        }
+        if command == "$$" {
+            for setting in [(35, -49.98), (201, 0.), (202, 0.)] {
+                self.events
+                    .send(Event {
+                        setting: Some(setting),
+                        ..Event::default()
+                    })
+                    .unwrap();
+            }
             return Ok(());
         }
         if matches!(command, "G21 G94 G91" | "G21 G94 G90") {

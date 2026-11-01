@@ -421,8 +421,7 @@ async fn repeatability_streams_each_reading_and_axis_statistics() {
             } else {
                 assert_eq!(event["statistics"][i]["count"], *count);
                 assert!(
-                    (event["statistics"][i]["mean"].as_f64().unwrap()
-                        - pimprobe_core::REPEATABILITY_REFERENCE_G53[i])
+                    (event["statistics"][i]["mean"].as_f64().unwrap() - [-232.5, -204.3, -62.9][i])
                         .abs()
                         < 0.001
                 );

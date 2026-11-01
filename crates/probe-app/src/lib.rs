@@ -495,6 +495,7 @@ impl ProbeApp {
         .await?;
         options.validate()?;
         settings.validate()?;
+        pimprobe_core::query_coordinates(app.device.as_ref()).await?;
         pimprobe_core::check_repeatability(app.device.as_ref(), &options, settings)?;
         app.device.configure_repeatability(settings.diameter)?;
         let run_id = uuid::Uuid::new_v4().to_string();

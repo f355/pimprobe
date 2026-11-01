@@ -48,7 +48,7 @@ impl Coordinates {
             let z = -probe_z_offset(
                 *snapshot.settings.get(&35)?,
                 *snapshot.settings.get(&202)?,
-                snapshot.tool_length_offset,
+                *snapshot.settings.get(&201)?,
             );
             let (sin, cos) = snapshot
                 .wcs_rotations
@@ -80,6 +80,54 @@ mod tests {
     use crate::device::DeviceStatus;
 
     #[test]
+    fn probe_work_zero_matches_measured_tools_with_or_without_active_tlo() {
+        // Probe touches the workpiece at -110; a tool touches it at -120 and
+        // the ETS at -60. Solve $35=-50 from those three physical contacts.
+        for reference in [0., -40., -100.] {
+            let saved_length = -60. - reference;
+            let work_zero = -120. - saved_length;
+            for active in [saved_length, 0.] {
+                let snapshot = DeviceSnapshot {
+                    status: Some(DeviceStatus {
+                        wcs: 54,
+                        machine_position: [0., 0., -110., 0.],
+                        work_position: [0., 0., -110. - work_zero - active, 0.],
+                        ..Default::default()
+                    }),
+                    settings: [
+                        (33, 0.),
+                        (34, 0.),
+                        (35, -50.),
+                        (201, saved_length),
+                        (202, -60.),
+                    ]
+                    .into(),
+                    tool_length_offset: active,
+                    ..Default::default()
+                };
+                let probe = Coordinates::from_snapshot(&snapshot).probe.unwrap();
+                assert!(
+                    probe.work_position[2].abs() < 1e-9,
+                    "reference={reference}, active={active}: {probe:?}"
+                );
+                assert!((probe.machine_position[2] - work_zero).abs() < 1e-9);
+                let mut result = pimprobe_core::RoutineResult {
+                    machine_point: [None, None, Some(work_zero)],
+                    axes: vec!["Z".into()],
+                    ..Default::default()
+                };
+                result.update_work_coordinates(&pimprobe_core::State {
+                    position: [0., 0., -110., 0.],
+                    work_position: [0., 0., -110. - work_zero - active, 0.],
+                    tool_length_offset: active,
+                    ..Default::default()
+                });
+                assert!(result.point[2].unwrap().abs() < 1e-9);
+            }
+        }
+    }
+
+    #[test]
     fn probe_coordinates_use_the_ets_reference_when_tool_compensation_is_cancelled() {
         let snapshot = DeviceSnapshot {
             status: Some(DeviceStatus {
@@ -88,7 +136,7 @@ mod tests {
                 work_position: [0., 0., 10., 0.],
                 ..Default::default()
             }),
-            settings: [(33, 0.), (34, 0.), (35, -50.), (202, -60.)].into(),
+            settings: [(33, 0.), (34, 0.), (35, -50.), (201, 0.), (202, -60.)].into(),
             tool_length_offset: 0.,
             ..Default::default()
         };
@@ -106,7 +154,7 @@ mod tests {
                 work_position: [10., 20., 30., 40.],
                 ..Default::default()
             }),
-            settings: [(33, -50.), (34, -8.), (35, -25.), (202, 12.)].into(),
+            settings: [(33, -50.), (34, -8.), (35, -25.), (201, 12.), (202, 12.)].into(),
             wcs_rotations: [(54, 90.)].into(),
             tool_length_offset: 12.,
             ..Default::default()
@@ -122,7 +170,7 @@ mod tests {
         }
         let changed_tool = DeviceSnapshot {
             tool_length_offset: 35.,
-            settings: [(33, -50.), (34, -8.), (35, -25.), (202, 35.)].into(),
+            settings: [(33, -50.), (34, -8.), (35, -25.), (201, 35.), (202, 35.)].into(),
             ..snapshot
         };
         assert_eq!(
@@ -143,7 +191,7 @@ mod tests {
                 work_position: [0., 0., -37., 0.],
                 ..Default::default()
             }),
-            settings: [(33, 0.), (34, 0.), (35, -25.), (202, 12.)].into(),
+            settings: [(33, 0.), (34, 0.), (35, -25.), (201, 12.), (202, 12.)].into(),
             tool_length_offset: 12.,
             ..Default::default()
         };

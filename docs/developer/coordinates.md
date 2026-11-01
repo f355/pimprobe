@@ -1,69 +1,63 @@
 # Coordinates
 
-## X/Y Rotation
+## Carriage, tool and probe
 
-Probing and result-page moves follow the machine axes. On firmware with work
-coordinate rotation, these operations clear the selected WCS rotation for the
-movement and restore it afterward. Results use the captured WCS rotation when
-converting machine coordinates to work coordinates:
+The controller's `MPos` is carriage position. Tool and probe readings refer to
+different points and must not share the active tool's length correction.
+
+Tool Z uses the currently active tool-length offset:
 
 ```text
-work X change = cos(angle) × machine X change + sin(angle) × machine Y change
-work Y change = −sin(angle) × machine X change + cos(angle) × machine Y change
+tool Z = carriage Z − active TLO
 ```
 
-The same conversion applies when changing WCS on a result or reopening a
-measurement from history.
+Probe X/Y use the saved `$33`/`$34` corrections. Probe Z uses the saved
+calibration and tool reference described below. Changing or canceling active
+tool compensation must not change the probe reading at a fixed carriage position.
 
-## Z Coordinates
+## Saved probe Z reference
 
-The controller reports carriage position in `MPos` and tool position in `WPos`.
-For Z, their relationship is:
+`$201` is the saved tool-length offset, and `$202` is the ETS contact saved
+with it. Their difference defines the firmware's tool-length reference:
+
+```text
+reference Z = $202 − $201
+probe Z correction = $35 − reference Z
+probe Z = carriage Z − probe Z correction
+```
+
+Ordinary tool measurement changes `$201` and `$202` by the same amount, leaving
+the reference unchanged. It remains usable after the tool is unloaded or active
+compensation is canceled. Neither `$201` nor `$202` alone is the probe correction.
+
+Use the saved pair together. Do not replace `$202` with the latest probe-contact
+report. Probe measurements, readouts and moves to a probe-coordinate target
+must use the same correction.
+
+## Work coordinates and work zero
+
+The controller's work Z includes its active tool compensation:
 
 ```text
 WPos Z = MPos Z − work origin Z − G92 Z − active TLO
+probe work Z = WPos Z + active TLO − probe Z correction
 ```
 
-`$#` reports the active tool-length offset as `[TLO:…]`. `$201` is the
-stored tool length. Use the reported active offset for coordinate calculations.
-The last number in `[PROBE:…]` is `$202`, the stored ETS contact.
+Adding active TLO back removes the tool correction already present in `WPos`;
+it does not make the probe depend on that tool.
 
-Probing reads `$#` before capturing its starting coordinates and again before
-setting work zero. Each read waits for the selected work origin, G92, TLO and
-the final stored probe report. A missing response stops the operation.
-
-## Probe Calibration
-
-`$35` relates the probe's Z contact to the stored ETS contact. To convert a raw
-probe contact into a work origin, use:
+A measured surface already includes probe calibration. Do not apply it again
+when setting work zero. `G10 L20` takes the desired current work coordinate,
+not the new origin. For a desired surface zero, including any operator offset:
 
 ```text
-surface Z = raw contact Z + $202 − active TLO − $35
+G10 L20 Z value = current carriage Z − desired surface zero Z − active TLO
 ```
 
-The controller adapter supplies the core with a Z offset of
-`$35 − $202 + active TLO`. The core subtracts that offset from carriage Z for
-both measurements and movement calculations. The probe DRO uses the same
-conversion.
+## X/Y rotation
 
-Tool measurement changes `$201` and `$202` by the same amount, keeping their
-difference constant. The conversion needs both the active TLO and `$202`,
-including when the active TLO is zero.
+Edges, corners and centers follow the selected work-coordinate axes, including
+their X/Y rotation. Face-angle and rotary measurements follow the machine axes.
 
-## Setting Work Zero
-
-`G10 L20` takes the desired current work coordinate, not a machine coordinate.
-To put Z zero at a measured machine coordinate, the command needs:
-
-```text
-G10 Z value = current MPos Z − measured surface Z − active TLO
-```
-
-For example, with carriage Z −20, surface Z +24 and TLO −60, the command is
-`G10 L20 P1 Z16`. G54's origin becomes +24, but `G54 Z0` targets carriage
-Z −36 because the controller adds the −60 TLO. A positive work origin can
-therefore be valid.
-
-For a raw probe contact of −26, `$35` of −50 and `$202` of −60, cancelling
-the TLO changes the measured surface to −36. The command is still
-`G10 L20 P1 Z16`, and `G54 Z0` still targets carriage Z −36.
+Keep recorded contact and result coordinates in the unrotated machine frame.
+Changing WCS changes how those points are expressed, not where they were measured.

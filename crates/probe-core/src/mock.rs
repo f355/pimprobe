@@ -69,6 +69,49 @@ pub enum MockGeometry {
     },
 }
 impl MockGeometry {
+    fn intersect_motion(&self, start: Position, delta: [f64; 3]) -> Option<f64> {
+        if let Self::Center {
+            center,
+            half,
+            round: true,
+            top,
+            ..
+        } = self
+        {
+            if start[2] < *top && delta[2].abs() < 1e-12 {
+                let p = [start[0] - center[0], start[1] - center[1]];
+                let a = delta[0].powi(2) + delta[1].powi(2);
+                if a < 1e-12 {
+                    return None;
+                }
+                let b = 2. * (p[0] * delta[0] + p[1] * delta[1]);
+                let c = p[0].powi(2) + p[1].powi(2) - half[0].powi(2);
+                let discriminant = b * b - 4. * a * c;
+                if discriminant < 0. {
+                    return None;
+                }
+                return [
+                    (-b - discriminant.sqrt()) / (2. * a),
+                    (-b + discriminant.sqrt()) / (2. * a),
+                ]
+                .into_iter()
+                .filter(|t| *t > 0.0001 && *t <= 1.)
+                .min_by(f64::total_cmp);
+            }
+        }
+        [Axis::X, Axis::Y, Axis::Z]
+            .into_iter()
+            .filter_map(|axis| {
+                let i = axis.index();
+                if delta[i].abs() < 1e-12 {
+                    return None;
+                }
+                self.intersect(axis, start, delta[i])
+                    .map(|coordinate| (coordinate - start[i]) / delta[i])
+            })
+            .filter(|t| *t > 0.0001 && *t <= 1.)
+            .min_by(f64::total_cmp)
+    }
     pub fn intersect(&self, axis: Axis, position: Position, delta: f64) -> Option<f64> {
         let i = axis.index();
         match self {
@@ -271,6 +314,7 @@ impl MockController {
             wcs: 54,
             work_position: [35.0, 20.0, -8.0, 0.0],
             probe_offset: [-55.872, -5.362, -49.98, 0.0],
+            probe_z_calibration: Some(-49.98),
             tool: 3,
             firmware_version: "1.0.35+c0.mock".into(),
             plane: 17,
@@ -445,8 +489,8 @@ impl Controller for MockController {
     fn state(&self) -> State {
         self.state()
     }
-    fn subscribe(&self) -> broadcast::Receiver<Event> {
-        self.events.subscribe()
+    fn subscribe(&self) -> crate::EventReceiver {
+        self.events.subscribe().into()
     }
     async fn send(&self, command: &str) -> Result<(), Error> {
         if !self.command_delay.is_zero() {
@@ -490,6 +534,21 @@ impl Controller for MockController {
                 }),
                 ..Event::default()
             });
+            return Ok(());
+        }
+        if command == "$$" {
+            let calibration = inner.state.probe_z_calibration.unwrap();
+            let reference = calibration - inner.state.probe_offset[2];
+            for setting in [
+                (35, calibration),
+                (201, inner.state.tool_length_offset),
+                (202, reference + inner.state.tool_length_offset),
+            ] {
+                let _ = self.events.send(Event {
+                    setting: Some(setting),
+                    ..Event::default()
+                });
+            }
             return Ok(());
         }
         if matches!(command, "G17" | "G18" | "G19") {
@@ -663,15 +722,9 @@ impl Controller for MockController {
         inner.state.ready = false;
         self.publish(&inner.state);
         if probe {
-            for &(axis, delta) in &axes {
-                let i = axis.index();
-                if let Some(plane) = inner.geometry.intersect(axis, start, delta) {
-                    let t = (plane - start[i]) / delta;
-                    if t > 0.0001 && t <= fraction {
-                        fraction = t;
-                        hit = true;
-                    }
-                }
+            if let Some(t) = inner.geometry.intersect_motion(start, machine_delta) {
+                fraction = t;
+                hit = true;
             }
         }
         for (axis, delta) in axes {

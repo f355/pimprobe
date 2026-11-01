@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::frame::FrameController;
 use crate::script::{trim_command, Line, Values};
 use crate::*;
 use std::{
@@ -61,8 +62,15 @@ impl RoutineResult {
                 machine[i] = *value;
             }
         }
-        let work = state.work_position_at(machine);
-        self.point = std::array::from_fn(|i| self.machine_point[i].map(|_| work[i]));
+        let mut work = state.work_position_at(machine);
+        // The measured point already includes the probe correction. Remove the
+        // active tool's compensation from the carriage-to-work conversion.
+        work[2] += state.tool_length_offset;
+        self.point = std::array::from_fn(|i| {
+            self.machine_point[i]
+                .filter(|_| self.axes.iter().any(|axis| axis == ["X", "Y", "Z"][i]))
+                .map(|_| work[i])
+        });
     }
 }
 
@@ -146,7 +154,7 @@ impl<C: Controller + ?Sized> Controller for Cancellable<'_, C> {
     fn state(&self) -> State {
         self.inner.state()
     }
-    fn subscribe(&self) -> tokio::sync::broadcast::Receiver<Event> {
+    fn subscribe(&self) -> crate::EventReceiver {
         self.inner.subscribe()
     }
     async fn send(&self, command: &str) -> Result<(), Error> {
@@ -162,7 +170,7 @@ impl<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync> Controller for Obser
     fn state(&self) -> State {
         self.inner.state()
     }
-    fn subscribe(&self) -> tokio::sync::broadcast::Receiver<Event> {
+    fn subscribe(&self) -> crate::EventReceiver {
         self.inner.subscribe()
     }
     async fn send(&self, command: &str) -> Result<(), Error> {
@@ -264,21 +272,16 @@ pub async fn run<C: Controller + ?Sized>(
     cancel: CancellationToken,
     observe: impl Fn(Progress) + Send + Sync,
 ) -> Result<RoutineResult, Error> {
-    let controller = Cancellable {
-        inner: c,
-        cancel: &cancel,
-    };
     p.check_state(&c.state(), p.start.position)?;
-    let mut result = in_machine_axes(c, &observe, async {
-        tokio::select! {
-            biased;
-            _ = cancel.cancelled() => Err(Error::Cancelled),
-            result = run_inner(&controller, p, t, &observe) => result,
-        }
-    })
-    .await?;
-    result.update_work_coordinates(&p.start);
-    Ok(result)
+    let frame = p.frame();
+    let plan = p.execution_plan();
+    let mut result=in_machine_axes(c,&observe,async {
+        let axes=FrameController {inner:c,frame};
+        let controller=Cancellable {inner:&axes,cancel:&cancel};
+        tokio::select! {biased; _=cancel.cancelled()=>Err(Error::Cancelled), result=run_inner(&controller,&plan,t,&observe)=>result}
+    }).await?;
+    result.update_work_coordinates(&plan.start);
+    Ok(frame.result(result, &p.start, true))
 }
 
 pub(crate) async fn in_machine_axes<C: Controller + ?Sized, T>(
@@ -657,64 +660,55 @@ pub async fn zero_recorded_result<C: Controller + ?Sized>(
         ));
     }
     let state = query_coordinates(c).await?;
-    let mut target: [Option<f64>; 3] =
-        std::array::from_fn(|i| result.machine_point[i].map(|value| value + offsets[i]));
-    for (i, axis) in ["X", "Y", "Z"].into_iter().enumerate() {
-        if !result.axes.iter().any(|measured| measured == axis) {
-            target[i] = None;
-        } else if !target[i].is_some_and(f64::is_finite) {
-            return Err(Error::Compensation(format!(
-                "No {axis} measurement is available."
-            )));
-        }
-    }
-    let origin = state
-        .wcs_origin
-        .ok_or_else(|| Error::Preflight("Could not read the work zero from the machine.".into()))?;
-    let (sin, cos) = state.wcs_rotation.unwrap_or(0.).to_radians().sin_cos();
-    let mut axes = Vec::new();
-    match (target[0], target[1]) {
-        (Some(x), Some(y)) => {
-            axes.push((
-                0,
-                x - cos * state.coordinate_offset[0] + sin * state.coordinate_offset[1],
-            ));
-            axes.push((
-                1,
-                y - sin * state.coordinate_offset[0] - cos * state.coordinate_offset[1],
-            ));
-        }
-        (Some(x), None) | (None, Some(x)) => {
-            if cos.abs() < 1e-6 {
-                return Err(Error::Preflight(
-                    "Select a work coordinate system without rotation to zero a single X/Y axis."
-                        .into(),
-                ));
-            }
-            if target[0].is_some() {
-                axes.push((
-                    0,
-                    x + sin / cos * (state.position[1] - origin[1])
-                        - state.coordinate_offset[0] / cos,
-                ));
-            } else {
-                axes.push((
-                    1,
-                    x - sin / cos * (state.position[0] - origin[0])
-                        - state.coordinate_offset[1] / cos,
-                ));
-            }
-        }
-        _ => {}
-    }
-    if let Some(z) = target[2] {
-        axes.push((2, z - state.coordinate_offset[2]));
-    }
-    if axes.is_empty() {
+    let selected: [bool; 3] =
+        std::array::from_fn(|i| result.axes.iter().any(|axis| axis == ["X", "Y", "Z"][i]));
+    if !selected.contains(&true) {
         return Err(Error::Preflight(
             "This result has no measured coordinates.".into(),
         ));
     }
+    let origin = state
+        .wcs_origin
+        .ok_or_else(|| Error::Preflight("Could not read the work zero from the machine.".into()))?;
+    let mut point = state.position;
+    for i in 0..3 {
+        if selected[i] && !result.machine_point[i].is_some_and(f64::is_finite) {
+            return Err(Error::Compensation(format!(
+                "No {} measurement is available.",
+                ["X", "Y", "Z"][i]
+            )));
+        }
+        if let Some(value) = result.machine_point[i] {
+            point[i] = value;
+        }
+    }
+    let (sin, cos) = state.wcs_rotation.unwrap_or(0.).to_radians().sin_cos();
+    let delta = [
+        point[0] - origin[0],
+        point[1] - origin[1],
+        point[2] - origin[2],
+    ];
+    let local = [
+        cos * delta[0] + sin * delta[1],
+        -sin * delta[0] + cos * delta[1],
+        delta[2],
+    ];
+    let shift: [f64; 3] = std::array::from_fn(|i| {
+        if selected[i] {
+            local[i] - state.coordinate_offset[i] + offsets[i]
+        } else {
+            0.
+        }
+    });
+    let target = [
+        origin[0] + cos * shift[0] - sin * shift[1],
+        origin[1] + sin * shift[0] + cos * shift[1],
+        origin[2] + shift[2],
+    ];
+    let axes: Vec<_> = (0..3)
+        .filter(|i| selected[*i] || *i < 2 && sin.abs() > 1e-9 && (selected[0] || selected[1]))
+        .map(|i| (i, target[i]))
+        .collect();
     let modes = query_modes(c).await?;
     let metric = Modes { units: 21, ..modes };
     if metric != modes {
@@ -738,20 +732,15 @@ pub async fn return_to_start<C: Controller + ?Sized>(
     cancel: CancellationToken,
     observe: impl Fn(Progress) + Send + Sync,
 ) -> Result<RoutineResult, Error> {
-    let controller = Cancellable {
-        inner: c,
-        cancel: &cancel,
-    };
-    in_machine_axes(c, &observe, async {
-        tokio::select! {
-            biased;
-            _ = cancel.cancelled() => Err(Error::Cancelled),
-            result = return_inner(&controller, p, result, t, &observe) => result,
-        }
-    })
-    .await
+    let frame = p.frame();
+    let plan = p.execution_plan();
+    let result = frame.result(result.clone(), &p.start, false);
+    let result=in_machine_axes(c,&observe,async {
+        let axes=FrameController {inner:c,frame}; let controller=Cancellable {inner:&axes,cancel:&cancel};
+        tokio::select! {biased; _=cancel.cancelled()=>Err(Error::Cancelled), result=return_inner(&controller,&plan,&result,t,&observe)=>result}
+    }).await?;
+    Ok(frame.result(result, &p.start, true))
 }
-
 pub async fn go_to_measured<C: Controller + ?Sized>(
     c: &C,
     p: &RoutinePlan,
@@ -761,18 +750,14 @@ pub async fn go_to_measured<C: Controller + ?Sized>(
     cancel: CancellationToken,
     observe: impl Fn(Progress) + Send + Sync,
 ) -> Result<RoutineResult, Error> {
-    let controller = Cancellable {
-        inner: c,
-        cancel: &cancel,
-    };
-    in_machine_axes(c, &observe, async {
-        tokio::select! {
-            biased;
-            _ = cancel.cancelled() => Err(Error::Cancelled),
-            result = measured_inner(&controller, p, result, clearance, t, &observe) => result,
-        }
-    })
-    .await
+    let frame = p.frame();
+    let plan = p.execution_plan();
+    let result = frame.result(result.clone(), &p.start, false);
+    let result=in_machine_axes(c,&observe,async {
+        let axes=FrameController {inner:c,frame}; let controller=Cancellable {inner:&axes,cancel:&cancel};
+        tokio::select! {biased; _=cancel.cancelled()=>Err(Error::Cancelled), result=measured_inner(&controller,&plan,&result,clearance,t,&observe)=>result}
+    }).await?;
+    Ok(frame.result(result, &p.start, true))
 }
 
 async fn measured_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
@@ -783,7 +768,11 @@ async fn measured_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
     t: TimingPolicy,
     observe: &F,
 ) -> Result<RoutineResult, Error> {
-    if p.config.family != "inside" || p.config.z || !result.settled || result.positioned {
+    if !(p.config.family == "inside" || p.config.center_internal())
+        || p.config.z
+        || !result.settled
+        || result.positioned
+    {
         return Err(Error::Preflight(
             "No inside measurement is available to move to. Probe the feature first.".into(),
         ));

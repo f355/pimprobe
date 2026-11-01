@@ -17,10 +17,9 @@
 use pimprobe_app::device::{ControllerError, DeviceSnapshot, DeviceStatus};
 use pimprobe_controller::SocketController;
 use pimprobe_core::{
-    Controller, Error, Event, MockController, MockGeometry, RepeatabilityController, RoutineConfig,
-    State, async_trait,
+    Controller, Error, MockController, MockGeometry, RepeatabilityController, RoutineConfig, State,
+    async_trait,
 };
-use tokio::sync::broadcast;
 
 pub enum Device {
     Machine(SocketController),
@@ -86,10 +85,11 @@ impl Device {
             let state = mock.state();
             let mut corner = state.position;
             for (i, coordinate) in corner.iter_mut().enumerate().take(2) {
-                *coordinate = pimprobe_core::REPEATABILITY_REFERENCE_G53[i] - state.probe_offset[i]
+                *coordinate = pimprobe_core::REPEATABILITY_CORNER_XY[i] - state.probe_offset[i]
                     + diameter / 2.0;
             }
-            let floor = pimprobe_core::REPEATABILITY_REFERENCE_G53[2] + state.probe_offset[2];
+            let floor =
+                state.probe_z_calibration.unwrap() - pimprobe_core::REPEATABILITY_BED_BELOW_ETS;
             mock.set_geometry(MockGeometry::Corner {
                 origin: corner,
                 directions: [-1, -1],
@@ -179,7 +179,8 @@ impl Device {
                     settings: [
                         (33, state.probe_offset[0]),
                         (34, state.probe_offset[1]),
-                        (35, state.probe_offset[2]),
+                        (35, state.probe_z_calibration.unwrap()),
+                        (201, state.tool_length_offset),
                         (202, state.tool_length_offset),
                         (110, 12000.),
                         (111, 9000.),
@@ -273,9 +274,9 @@ impl Controller for Device {
             Self::Mock(c) => c.state(),
         }
     }
-    fn subscribe(&self) -> broadcast::Receiver<Event> {
+    fn subscribe(&self) -> pimprobe_core::EventReceiver {
         match self {
-            Self::Machine(c) => c.subscribe(),
+            Self::Machine(c) => c.subscribe().into(),
             Self::Mock(c) => c.subscribe(),
         }
     }

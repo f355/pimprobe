@@ -165,7 +165,7 @@ impl SocketController {
                 status.probe_actuator_known && status.probe_actuator == 1 && !s.actuator_pending;
             state.probe_trigger_known = status.probe_trigger_known;
             state.probe_triggered = status.probe_triggered;
-            state.probe_offset_known = [33, 34, 35, 202]
+            state.probe_offset_known = [33, 34, 35, 201, 202]
                 .iter()
                 .all(|k| s.settings.get(k).is_some_and(|v| v.is_finite()));
             state.position = status.m_pos;
@@ -180,10 +180,11 @@ impl SocketController {
                 pimprobe_core::probe_z_offset(
                     *s.settings.get(&35).unwrap_or(&0.0),
                     *s.settings.get(&202).unwrap_or(&0.0),
-                    s.tool_length_offset,
+                    *s.settings.get(&201).unwrap_or(&0.0),
                 ),
                 0.0,
             ];
+            state.probe_z_calibration = s.settings.get(&35).copied();
         }
         state
     }
@@ -358,8 +359,8 @@ impl Controller for SocketController {
     fn state(&self) -> State {
         SocketController::state(self)
     }
-    fn subscribe(&self) -> broadcast::Receiver<Event> {
-        SocketController::subscribe(self)
+    fn subscribe(&self) -> pimprobe_core::EventReceiver {
+        SocketController::subscribe(self).into()
     }
     async fn send(&self, command: &str) -> Result<(), Error> {
         SocketController::send(self, command).await
@@ -409,7 +410,7 @@ async fn reconnect(inner: Arc<Inner>, path: PathBuf, mut socket: Option<UnixStre
 }
 async fn session(inner: &Inner, socket: UnixStream) -> Result<(), Error> {
     let (mut reader, mut writer) = socket.into_split();
-    for query in [b"$P\n", b"$#\n"] {
+    for query in [b"$$\n", b"$#\n"] {
         timeout(IO_TIMEOUT, frame::write_frame(&mut writer, b'Q', query))
             .await
             .map_err(failure)?
@@ -508,11 +509,7 @@ fn apply(inner: &Inner, record: Record) {
             stored.snapshot.settings.insert(key, value);
             event.setting = Some((key, value));
         }
-        Record::Probe(probe, ets_contact) => {
-            if let Some(reference) = ets_contact {
-                stored.snapshot.settings.insert(202, reference);
-                event.setting = Some((202, reference));
-            }
+        Record::Probe(probe, _) => {
             stored.snapshot.last_probe = Some(probe.clone());
             event.probe = Some(probe);
         }
@@ -591,7 +588,7 @@ mod tests {
         let (mut socket, _) = listener.accept().await.unwrap();
         assert_eq!(
             frame::read_frame(&mut socket).await.unwrap(),
-            (b'Q', b"$P\n".to_vec())
+            (b'Q', b"$$\n".to_vec())
         );
         assert_eq!(
             frame::read_frame(&mut socket).await.unwrap(),
@@ -599,24 +596,29 @@ mod tests {
         );
         data(
             &mut socket,
-            "$33=1\r\n$34=2\n$35=3\n[TLO:0]\n[Zpos:0]\n<Ready|MPos:-5,-5,-5,0|WPos:0,0,0,0|T:2|PM:0|Pn:|M:5|G:54>\n",
+            "$33=1\r\n$34=2\n$35=3\n$201=0\n$202=0\n[TLO:0]\n[Zpos:0]\n<Ready|MPos:-5,-5,-5,0|WPos:0,0,0,0|T:2|PM:0|Pn:|M:5|G:54>\n",
         )
         .await;
         wait_for(&c, |s| s.status_fresh).await;
         (path, listener, c, socket)
     }
     #[tokio::test]
-    async fn coordinate_query_reads_active_tool_compensation_not_the_saved_length() {
+    async fn stored_probe_reference_is_independent_of_active_tool_compensation() {
         let (_path, _listener, controller, mut socket) = ready().await;
-        data(&mut socket, "$201=-60\n").await;
+        data(&mut socket, "$201=-45\n$202=-60\n").await;
         wait_for(&controller, |snapshot| {
-            snapshot.settings.get(&201) == Some(&-60.0)
+            snapshot.settings.get(&202) == Some(&-60.0)
         })
         .await;
         let query = tokio::spawn({
             let controller = controller.clone();
             async move { pimprobe_core::query_coordinates(&controller).await }
         });
+        assert_eq!(
+            frame::read_frame(&mut socket).await.unwrap(),
+            (b'Q', b"$$\n".to_vec())
+        );
+        data(&mut socket, "$35=3\n$201=-45\n$202=-60\nok\n").await;
         assert_eq!(
             frame::read_frame(&mut socket).await.unwrap(),
             (b'Q', b"$#\n".to_vec())
@@ -632,7 +634,10 @@ mod tests {
         assert_eq!(state.probe_offset[2], 18.0);
         data(&mut socket, "[TLO:0]\n").await;
         wait_for(&controller, |snapshot| snapshot.tool_length_offset == 0.).await;
-        assert_eq!(controller.state().probe_offset[2], 63.0);
+        assert_eq!(controller.state().probe_offset[2], 18.0);
+        data(&mut socket, "[Zpos:-22]\n[PROBE:0,0,0,0:0,-22]\n").await;
+        wait_for(&controller, |s| s.last_probe.is_some()).await;
+        assert_eq!(controller.state().probe_offset[2], 18.0);
         controller.shutdown().await;
     }
     #[tokio::test]
@@ -769,7 +774,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             frame::read_frame(&mut socket).await.unwrap(),
-            (b'Q', b"$P\n".to_vec())
+            (b'Q', b"$$\n".to_vec())
         );
         assert_eq!(
             frame::read_frame(&mut socket).await.unwrap(),

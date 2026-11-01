@@ -4,6 +4,9 @@ Open **Settings → Utilities → Probe repeatability**. Fit the tall L bracket 
 
 Without a home-area move, the first X/Y approach happens at the current Z. Start high enough to clear the bed fixtures.
 
+The routine uses the standard C500 bed-to-ETS height and the saved probe Z calibration.
+Keep the ETS and bracket in their normal mounting positions.
+
 ## Options
 
 - **Axes:** choose which bracket walls and/or bed surface to measure.

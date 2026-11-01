@@ -237,7 +237,7 @@ pub async fn query_rotary_state<C: Controller + ?Sized>(c: &C) -> Result<State, 
     .map_err(|_| Error::Timeout)?
 }
 
-/// Read the active work origin, G92 offset and tool-length compensation.
+/// Read probe calibration, the stored tool reference and active work coordinates.
 pub async fn query_coordinates<C: Controller + ?Sized>(c: &C) -> Result<State, Error> {
     let mut rx = c.subscribe();
     let wcs = c.state().wcs;
@@ -248,10 +248,17 @@ pub async fn query_coordinates<C: Controller + ?Sized>(c: &C) -> Result<State, E
         false,
         false,
     ];
+    let mut calibration = [false; 3];
     tokio::time::timeout(Duration::from_secs(3), async {
+        c.send("$$").await?;
         c.send("$#").await?;
-        while !received.into_iter().all(|value| value) {
+        while !received.into_iter().all(|value| value) || !calibration.into_iter().all(|v| v) {
             let event = receive(&mut rx).await?;
+            if let Some((key, _)) = event.setting {
+                if let Some(i) = [35, 201, 202].iter().position(|k| *k == key) {
+                    calibration[i] = true;
+                }
+            }
             received[0] |= event
                 .wcs_origin
                 .is_some_and(|(selected, _)| selected == wcs);

@@ -45,7 +45,11 @@ async fn saved_machine_point_sets_rotated_work_zero_with_g92_and_tool_compensati
     let after = machine.state();
     let origin = after.wcs_origin.unwrap();
     let (sin, cos) = 30_f64.to_radians().sin_cos();
-    let (x, y, z) = (-99. - origin[0], -82. - origin[1], -37. - origin[2]);
+    let (x, y, z) = (
+        -100. + cos + 2. * sin - origin[0],
+        -80. + sin - 2. * cos - origin[1],
+        -37. - origin[2],
+    );
     assert!((cos * x + sin * y - after.coordinate_offset[0]).abs() < 0.002);
     assert!((-sin * x + cos * y - after.coordinate_offset[1]).abs() < 0.002);
     assert!((z - after.coordinate_offset[2]).abs() < 0.002);
@@ -55,6 +59,37 @@ async fn saved_machine_point_sets_rotated_work_zero_with_g92_and_tool_compensati
 #[serde(rename_all = "camelCase")]
 struct Fixture {
     result: RoutineResult,
+}
+
+#[tokio::test]
+async fn setting_one_rotated_axis_zero_preserves_the_other_axis() {
+    for angle in [30., 90., -90.] {
+        let mut initial = MockController::new().state();
+        initial.wcs_rotation = Some(angle);
+        initial.wcs_origin = None;
+        initial.coordinate_offset = [1., -2., 0.5, 0.];
+        let controller = MockController::with_state(initial);
+        let start = controller.state();
+        let point = [
+            start.position[0] - 2.,
+            start.position[1] + 3.,
+            start.position[2],
+            0.,
+        ];
+        let result = RoutineResult {
+            machine_point: [Some(point[0]), Some(point[1]), None],
+            axes: vec!["X".into()],
+            wcs: 54,
+            ..Default::default()
+        };
+        zero_recorded_result(&controller, &result, [2., 0., 0.])
+            .await
+            .unwrap();
+        let state = controller.state();
+        assert!((state.work_position_at(point)[0] + 2.).abs() < 0.0015);
+        assert!((state.work_position[1] - start.work_position[1]).abs() < 0.0015);
+        assert_eq!(state.position, start.position);
+    }
 }
 fn config(name: &str) -> RoutineConfig {
     let parts: Vec<_> = name.split('_').collect();
@@ -98,7 +133,7 @@ fn near(a: f64, b: f64) {
 }
 
 #[tokio::test]
-async fn routines_and_result_moves_use_machine_axes_with_a_rotated_wcs() {
+async fn routines_and_result_moves_follow_the_selected_work_axes() {
     for feature in ["outside_1_1", "inside_1_-1", "center_hole"] {
         let mut state = mock().state();
         state.wcs_rotation = Some(30.);
@@ -119,6 +154,20 @@ async fn routines_and_result_moves_use_machine_axes_with_a_rotated_wcs() {
         .unwrap_or_else(|e| panic!("{feature}: {e}"));
         assert_eq!(controller.state().wcs_rotation, start.wcs_rotation);
         assert_eq!(controller.state().modes, start.modes);
+        let command = controller
+            .commands()
+            .into_iter()
+            .find(|line| line.starts_with("G38.3") && line.contains('X'))
+            .unwrap();
+        let word = |axis: char| {
+            command
+                .split_whitespace()
+                .find_map(|word| word.strip_prefix(axis))
+                .unwrap()
+                .parse::<f64>()
+                .unwrap()
+        };
+        assert!((word('Y') / word('X') - 30_f64.to_radians().tan()).abs() < 0.001);
         let point = result.machine_point;
         let dx = point[0].unwrap() - start.position[0];
         let dy = point[1].unwrap() - start.position[1];
@@ -144,9 +193,10 @@ async fn routines_and_result_moves_use_machine_axes_with_a_rotated_wcs() {
             .await
             .unwrap();
             for (i, measured) in point.into_iter().enumerate().take(2) {
-                near(
-                    controller.state().position[i] + start.probe_offset[i],
-                    measured.unwrap(),
+                assert!(
+                    (controller.state().position[i] + start.probe_offset[i] - measured.unwrap())
+                        .abs()
+                        < 0.0015
                 );
             }
         }
@@ -161,8 +211,8 @@ async fn routines_and_result_moves_use_machine_axes_with_a_rotated_wcs() {
         .await
         .unwrap();
         let origin = controller.state().wcs_origin.unwrap();
-        near(origin[0], point[0].unwrap());
-        near(origin[1], point[1].unwrap());
+        assert!((origin[0] - point[0].unwrap()).abs() <= 0.00051);
+        assert!((origin[1] - point[1].unwrap()).abs() <= 0.00051);
         return_to_start(
             &controller,
             &plan,
@@ -377,39 +427,47 @@ async fn external_search_without_contact_stops_at_the_starting_axis_coordinate()
 
 #[tokio::test]
 async fn inside_result_can_lift_then_move_to_the_measured_point() {
-    let controller = mock();
-    let cfg = config("inside_1_-1");
-    controller.configure(&cfg).unwrap();
-    let plan = review(controller.state(), cfg).unwrap();
-    let result = run(
-        &controller,
-        &plan,
-        TimingPolicy::default(),
-        CancellationToken::new(),
-        |_| {},
-    )
-    .await
-    .unwrap();
-    let updated = go_to_measured(
-        &controller,
-        &plan,
-        &result,
-        25.0,
-        TimingPolicy::default(),
-        CancellationToken::new(),
-        |_| {},
-    )
-    .await
-    .unwrap();
-    let end = controller.state().position;
-    near(end[2], plan.start.position[2] + 25.0);
-    for (i, position) in end.iter().enumerate().take(2) {
-        near(
-            position + plan.start.probe_offset[i],
-            result.machine_point[i].unwrap(),
-        );
+    for name in [
+        "inside_1_-1",
+        "center_hole",
+        "center_pocket",
+        "center_x-valley",
+        "center_y-valley",
+    ] {
+        let controller = mock();
+        let cfg = config(name);
+        controller.configure(&cfg).unwrap();
+        let plan = review(controller.state(), cfg).unwrap();
+        let result = run(
+            &controller,
+            &plan,
+            TimingPolicy::default(),
+            CancellationToken::new(),
+            |_| {},
+        )
+        .await
+        .unwrap();
+        let updated = go_to_measured(
+            &controller,
+            &plan,
+            &result,
+            25.0,
+            TimingPolicy::default(),
+            CancellationToken::new(),
+            |_| {},
+        )
+        .await
+        .unwrap();
+        let end = controller.state().position;
+        near(end[2], plan.start.position[2] + 25.0);
+        for (i, position) in end.iter().enumerate().take(2) {
+            if let Some(surface) = result.machine_point[i] {
+                // Relative positioning commands are rounded to 0.001 mm.
+                assert!((position + plan.start.probe_offset[i] - surface).abs() <= 0.00051);
+            }
+        }
+        assert!(updated.positioned);
     }
-    assert!(updated.positioned);
 }
 
 #[tokio::test]

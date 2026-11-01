@@ -15,7 +15,9 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 mod angle;
+mod frame;
 pub use angle::*;
+pub use frame::EventReceiver;
 mod mock;
 mod motion;
 mod parameters;
@@ -35,14 +37,14 @@ pub use motion::*;
 pub use plan::*;
 pub use runtime::*;
 use serde::{Deserialize, Serialize};
-use tokio::sync::broadcast;
 
 pub type Position = [f64; 4];
 
 /// Convert probe Z calibration and the ETS contact into the offset subtracted
-/// from carriage Z to get the probe's coordinate with tool compensation applied.
-pub fn probe_z_offset(calibration: f64, ets_contact: f64, tool_length_offset: f64) -> f64 {
-    calibration - ets_contact + tool_length_offset
+/// from carriage Z to get the probe's coordinate in the saved tool reference.
+/// The stored length is $201, not the active G43/G49 compensation.
+pub fn probe_z_offset(calibration: f64, ets_contact: f64, stored_tool_length: f64) -> f64 {
+    calibration - ets_contact + stored_tool_length
 }
 
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
@@ -124,6 +126,9 @@ pub struct State {
     /// X/Y corrections are added to carriage position; the Z correction is
     /// subtracted and includes the ETS reference and active tool compensation.
     pub probe_offset: Position,
+    /// Saved $35, independent of the selected reference tool and active TLO.
+    #[serde(default)]
+    pub probe_z_calibration: Option<f64>,
     pub tool: i32,
     #[serde(default)]
     pub firmware_version: String,
@@ -204,10 +209,12 @@ pub struct Event {
 /// Subscribe before sending; publish probe results and settled status in either
 /// order. Short moves may have no moving status. Losing events is a fatal
 /// synchronization error.
+/// Movement reports are read concurrently with `send`, which may wait for
+/// command acceptance or physical completion.
 #[async_trait]
 pub trait Controller: Send + Sync {
     fn state(&self) -> State;
-    fn subscribe(&self) -> broadcast::Receiver<Event>;
+    fn subscribe(&self) -> EventReceiver;
     async fn send(&self, command: &str) -> Result<(), Error>;
 }
 

@@ -176,6 +176,9 @@ impl RoutinePlan {
             .collect()
     }
     pub(crate) fn script(&self) -> Vec<Line> {
+        self.execution_plan().script_axes()
+    }
+    fn script_axes(&self) -> Vec<Line> {
         let mut lines = vec![
             Line {
                 step: -1,

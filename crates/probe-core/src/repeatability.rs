@@ -172,7 +172,7 @@ pub fn check_repeatability<C: RepeatabilityController + ?Sized>(
             "Home the machine before starting the check.".into(),
         ));
     }
-    let target = measurement_start(&state);
+    let target = measurement_start(&state)?;
     for axis in [Axis::X, Axis::Y, Axis::Z] {
         let i = axis.index();
         if options.axes[i] {
@@ -190,17 +190,28 @@ pub fn check_repeatability<C: RepeatabilityController + ?Sized>(
     Ok(())
 }
 
-/// Approximate C500 L-bracket X/Y walls and bed surface in machine coordinates.
-pub const REPEATABILITY_REFERENCE_G53: [f64; 3] = [-232.5, -204.3, -62.9];
+/// Approximate C500 L-bracket walls in carriage machine coordinates.
+pub const REPEATABILITY_CORNER_XY: [f64; 2] = [-232.5, -204.3];
+/// Vertical separation of the ETS contact surface and bed, in millimetres.
+pub const REPEATABILITY_BED_BELOW_ETS: f64 = 62.9;
 
-fn measurement_start(s: &State) -> Position {
-    // Invert the contact-to-surface correction to place the probe tip near the fixture.
+fn measurement_start(s: &State) -> Result<Position, Error> {
+    let calibration = s
+        .probe_z_calibration
+        .filter(|z| z.is_finite())
+        .ok_or_else(|| {
+            Error::Preflight(
+                "Could not read probe Z calibration ($35). Reconnect and try again.".into(),
+            )
+        })?;
     let mut target = s.position;
     for (i, coordinate) in target.iter_mut().enumerate().take(2) {
-        *coordinate = REPEATABILITY_REFERENCE_G53[i] + 15.0 - s.probe_offset[i];
+        *coordinate = REPEATABILITY_CORNER_XY[i] + 15.0 - s.probe_offset[i];
     }
-    target[2] = REPEATABILITY_REFERENCE_G53[2] + 5.0 + s.probe_offset[2];
-    target
+    // $35 is the carriage contact on the ETS. The same probe contacts the bed
+    // this fixed distance lower, regardless of the reference tool or G43/G49.
+    target[2] = calibration - REPEATABILITY_BED_BELOW_ETS + 5.0;
+    Ok(target)
 }
 
 fn contact_settings(axis: Axis, settings: RepeatabilitySettings) -> ContactConfig {
@@ -288,19 +299,29 @@ async fn jog_home<C: Controller + ?Sized>(c: &C, stop: &CancellationToken) -> Re
 async fn home<C: Controller + ?Sized>(c: &C) -> Result<(), Error> {
     let mut events = c.subscribe();
     tokio::time::timeout(Duration::from_secs(600), async {
-        c.send("$H").await?;
+        let sending = c.send("$H");
+        tokio::pin!(sending);
+        let mut acknowledged = false;
         let mut homing = false;
+        let mut at_home = false;
         loop {
-            if let Some(status) = receive(&mut events).await?.status {
-                homing |= status.mode == "Homing";
-                if homing
-                    && status.ready
-                    && status.homed
-                    && status.position[..3]
-                        .iter()
-                        .all(|p| p.is_finite() && p.abs() <= 0.05)
-                {
-                    return Ok(());
+            if acknowledged && homing && at_home {
+                return Ok(());
+            }
+            tokio::select! {
+                result = &mut sending, if !acknowledged => {
+                    result?;
+                    acknowledged = true;
+                }
+                event = receive(&mut events) => {
+                    if let Some(status) = event?.status {
+                        homing |= status.mode == "Homing";
+                        at_home = status.ready
+                            && status.homed
+                            && status.position[..3]
+                                .iter()
+                                .all(|p| p.is_finite() && p.abs() <= 0.05);
+                    }
                 }
             }
         }
@@ -345,6 +366,7 @@ pub async fn run_repeatability<C: RepeatabilityController + ?Sized>(
     observe: impl Fn(RepeatabilityEvent) + Send + Sync,
 ) -> Result<(), Error> {
     check_repeatability(c, options, settings)?;
+    check_stop(&stop)?;
     let controller = Cancellable {
         inner: c,
         cancel: &cancel,
@@ -369,7 +391,7 @@ async fn repeat_inner<C: RepeatabilityController + ?Sized>(
     observe: &(impl Fn(RepeatabilityEvent) + Send + Sync),
 ) -> Result<(), Error> {
     let start = machine.state();
-    let target = measurement_start(&start);
+    let target = measurement_start(&start)?;
     let progress = |p| observe(RepeatabilityEvent::Progress(p));
     let scripted = AtomicBool::new(false);
     let c = Observed {
@@ -521,7 +543,64 @@ async fn repeat_inner<C: RepeatabilityController + ?Sized>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use tokio::sync::broadcast;
+
+    struct HomingController {
+        events: broadcast::Sender<Event>,
+        acknowledged: AtomicBool,
+    }
+
+    #[async_trait]
+    impl Controller for HomingController {
+        fn state(&self) -> State {
+            MockController::new().state()
+        }
+
+        fn subscribe(&self) -> crate::EventReceiver {
+            self.events.subscribe().into()
+        }
+
+        async fn send(&self, command: &str) -> Result<(), Error> {
+            assert_eq!(command, "$H");
+            for _ in 0..300 {
+                let _ = self.events.send(Event {
+                    status: Some(MotionStatus {
+                        mode: "Homing".into(),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                });
+                tokio::task::yield_now().await;
+            }
+            let _ = self.events.send(Event {
+                status: Some(MotionStatus {
+                    mode: "Ready".into(),
+                    ready: true,
+                    homed: true,
+                    position: [0.; 4],
+                    ..Default::default()
+                }),
+                ..Default::default()
+            });
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            self.acknowledged.store(true, Ordering::Relaxed);
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn homing_consumes_reports_while_waiting_for_the_command_reply() {
+        let c = HomingController {
+            events: broadcast::channel(8).0,
+            acknowledged: AtomicBool::new(false),
+        };
+        tokio::time::timeout(Duration::from_secs(1), home(&c))
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(c.acknowledged.load(Ordering::Relaxed));
+    }
 
     struct ReadyOnlyJog {
         state: State,
@@ -534,8 +613,8 @@ mod tests {
             self.state.clone()
         }
 
-        fn subscribe(&self) -> broadcast::Receiver<Event> {
-            self.events.subscribe()
+        fn subscribe(&self) -> crate::EventReceiver {
+            self.events.subscribe().into()
         }
 
         async fn send(&self, command: &str) -> Result<(), Error> {

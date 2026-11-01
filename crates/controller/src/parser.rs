@@ -152,10 +152,9 @@ pub fn parse_line(line: &str) -> Result<Option<Record>, String> {
         )?)));
     }
     if let Some(s) = line.strip_prefix("[Zpos:") {
-        return Ok(Some(Record::Setting(
-            202,
-            finite(s.strip_suffix(']').ok_or("missing closing bracket")?)?,
-        )));
+        // This is a live contact report, not a matching $201/$202 settings pair.
+        finite(s.strip_suffix(']').ok_or("missing closing bracket")?)?;
+        return Ok(None);
     }
     if let Some(s) = line.strip_prefix("[G") {
         if let Some((wcs, values)) = s.strip_suffix(']').and_then(|s| s.split_once(':')) {
@@ -412,10 +411,6 @@ mod tests {
         assert!(
             matches!(parse_line("[TLO:7.25]").unwrap(), Some(Record::ToolLength(length)) if length == 7.25)
         );
-        assert!(matches!(
-            parse_line("[Zpos:-60]").unwrap(),
-            Some(Record::Setting(202, -60.))
-        ));
         assert!(
             matches!(parse_line("[main-version:1.0.35+c0.abcdef01-b,main-hwd:1]").unwrap(),
             Some(Record::Version(version)) if version == "1.0.35+c0.abcdef01-b")

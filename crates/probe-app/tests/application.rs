@@ -23,14 +23,13 @@ use pimprobe_app::{
     settings::{ProbeSettings, Settings, SettingsStore},
 };
 use pimprobe_core::{
-    Controller, Error, Event, MockController, RepeatabilityController, RoutineConfig, State,
-    async_trait,
+    Controller, Error, MockController, RepeatabilityController, RoutineConfig, State, async_trait,
 };
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, Ordering},
 };
-use tokio::sync::{Notify, broadcast};
+use tokio::sync::Notify;
 
 #[derive(Default)]
 struct MemoryStore {
@@ -161,7 +160,7 @@ impl Controller for Device {
         }
         state
     }
-    fn subscribe(&self) -> broadcast::Receiver<Event> {
+    fn subscribe(&self) -> pimprobe_core::EventReceiver {
         self.mock.subscribe()
     }
     async fn send(&self, command: &str) -> Result<(), Error> {

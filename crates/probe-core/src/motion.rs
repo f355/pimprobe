@@ -248,7 +248,7 @@ pub fn preview_contact(
         path_max: hi,
     })
 }
-pub(crate) async fn receive(rx: &mut broadcast::Receiver<Event>) -> Result<Event, Error> {
+pub(crate) async fn receive(rx: &mut crate::EventReceiver) -> Result<Event, Error> {
     let e = rx.recv().await.map_err(|e| match e {
         broadcast::error::RecvError::Closed => Error::Disconnected,
         broadcast::error::RecvError::Lagged(_) => Error::EventLagged,
@@ -309,7 +309,7 @@ pub(crate) async fn execute<C: Controller + ?Sized>(
     let mut inconsistent_ready = false;
     let mut probe_ready = false;
     tokio::time::timeout(deadline, async {
-        c.send(&s.command).await?;
+        tokio::try_join!(c.send(&s.command), async {
         let probe = matches!(
             s.kind,
             StageKind::CoarseProbe | StageKind::FineProbe | StageKind::GuardedMove
@@ -362,6 +362,9 @@ pub(crate) async fn execute<C: Controller + ?Sized>(
                 continue;
             };
             if s.kind == StageKind::GuardedMove {
+                if hit.is_none() && !failed {
+                    continue;
+                }
                 segment(s, start, position)?;
                 if hit.is_some() {
                     return Err(Error::UnexpectedContact {
@@ -406,6 +409,7 @@ pub(crate) async fn execute<C: Controller + ?Sized>(
             }
             return Ok((Some(hit), position));
         }
+        }).map(|(_, result)| result)
     })
     .await
     .map_err(|_| {
@@ -577,5 +581,100 @@ pub(crate) async fn run_position_stage<C: Controller + ?Sized>(
             }
         }
         Err(e) => Err(e),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct CompletingSender {
+        machine: MockController,
+        events: broadcast::Sender<Event>,
+    }
+
+    #[async_trait]
+    impl Controller for CompletingSender {
+        fn state(&self) -> State {
+            self.machine.state()
+        }
+        fn subscribe(&self) -> EventReceiver {
+            self.events.subscribe().into()
+        }
+        async fn send(&self, command: &str) -> Result<(), Error> {
+            let mut status = MotionStatus {
+                position: self.state().position,
+                wcs: self.state().wcs,
+                mode: "Moving".into(),
+                ..Default::default()
+            };
+            let mut rounded = status.clone();
+            rounded.ready = true;
+            rounded.position[0] += 0.001;
+            self.events
+                .send(Event {
+                    status: Some(rounded),
+                    ..Default::default()
+                })
+                .unwrap();
+            for _ in 0..32 {
+                self.events
+                    .send(Event {
+                        status: Some(status.clone()),
+                        ..Default::default()
+                    })
+                    .unwrap();
+                tokio::task::yield_now().await;
+            }
+            self.machine.send(command).await?;
+            status.position = self.state().position;
+            status.ready = true;
+            status.mode = "Ready".into();
+            self.events
+                .send(Event {
+                    probe: command.starts_with("G38.").then_some(Contact {
+                        position: status.position,
+                        success: false,
+                    }),
+                    status: Some(status),
+                    ..Default::default()
+                })
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn movement_reports_are_read_while_the_sender_waits_for_completion() {
+        let mut state = MockController::new().state();
+        state.modes = Modes::PROBING;
+        let machine = CompletingSender {
+            machine: MockController::with_state(state),
+            events: broadcast::channel(8).0,
+        };
+        let start = machine.state().position;
+        let stage = Stage::new(StageKind::PositionMove, Axis::Z, 1., 1000.);
+        let (_, position) = execute(&machine, &stage, TimingPolicy::default(), false)
+            .await
+            .unwrap();
+        assert_eq!(position[2], start[2] + 1.);
+    }
+
+    #[tokio::test]
+    async fn guarded_moves_wait_for_their_contact_result_before_checking_the_endpoint() {
+        let mut state = MockController::new().state();
+        state.modes = Modes::PROBING;
+        state.probe_extended = true;
+        let machine = CompletingSender {
+            machine: MockController::with_state(state),
+            events: broadcast::channel(8).0,
+        };
+        machine.machine.set_geometry(MockGeometry::Empty);
+        let start = machine.state().position;
+        let stage = Stage::new(StageKind::GuardedMove, Axis::X, 1., 1000.);
+        let (_, position) = execute(&machine, &stage, TimingPolicy::default(), false)
+            .await
+            .unwrap();
+        assert_eq!(position[0], start[0] + 1.);
     }
 }

@@ -44,6 +44,19 @@ impl RoutineConfig {
 }
 
 impl AngleMeasurement {
+    pub fn work_rotation(&self) -> Result<f64, Error> {
+        if self.plane != "X/Y" || !self.rotation_supported {
+            return Err(Error::Compensation(
+                "Only an X/Y face angle can set work rotation".into(),
+            ));
+        }
+        if !self.degrees.is_finite() || !(-90.0..=90.0).contains(&self.degrees) {
+            return Err(Error::Compensation(
+                "The measured X/Y angle is invalid".into(),
+            ));
+        }
+        Ok(self.degrees)
+    }
     pub fn from_touches(
         config: &RoutineConfig,
         touches: [Position; 2],
@@ -84,7 +97,7 @@ pub async fn rotate_angle_result<C: Controller + ?Sized>(
         .as_ref()
         .filter(|angle| angle.plane == "X/Y")
         .ok_or_else(|| Error::Preflight("This measurement has no X/Y angle.".into()))?;
-    crate::rotary::write_rotary_rotation(c, result.wcs, angle.degrees).await?;
+    crate::rotary::write_rotary_rotation(c, result.wcs, angle.work_rotation()?).await?;
     let mut updated = result.clone();
     updated.angle.as_mut().unwrap().rotation_applied = true;
     Ok(updated)

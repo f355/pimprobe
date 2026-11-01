@@ -35,6 +35,8 @@ The probe touches each surface twice: a coarse search, backoff, then a slower fi
 - Large readouts use the selected work coordinate system; small readouts use machine coordinates, G53.
 - Tap the coordinate readout to switch between **Probe** and **Tool**. With an empty spindle, Tool still uses the last measured tool length offset.
 - **G54–G59** selects a work coordinate system. Each stores its own zero.
+
+Edges, corners and centers follow the selected work-coordinate axes, including its X/Y rotation. Face-angle and rotary measurements follow the machine axes.
 - Tap **Retracted / Extended** beside the tabs to extend or retract the probe independently of measurements. The highlighted label shows its current state.
 - **?** highlights the controls. Tap one for an explanation, or **Guide** for these pages. **×** leaves help.
 

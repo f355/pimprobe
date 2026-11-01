@@ -52,8 +52,8 @@ impl Controller for ParsedController {
     fn state(&self) -> State {
         self.inner.state()
     }
-    fn subscribe(&self) -> tokio::sync::broadcast::Receiver<Event> {
-        self.events.subscribe()
+    fn subscribe(&self) -> pimprobe_core::EventReceiver {
+        self.events.subscribe().into()
     }
     async fn send(&self, command: &str) -> Result<(), Error> {
         if self.ignore_writes && command.starts_with("G10 ") {
@@ -106,8 +106,8 @@ async fn coordinate_readback_waits_for_its_trailing_probe_report() {
         fn state(&self) -> State {
             self.inner.state()
         }
-        fn subscribe(&self) -> tokio::sync::broadcast::Receiver<Event> {
-            self.events.subscribe()
+        fn subscribe(&self) -> pimprobe_core::EventReceiver {
+            self.events.subscribe().into()
         }
         async fn send(&self, command: &str) -> Result<(), Error> {
             self.inner.send(command).await?;

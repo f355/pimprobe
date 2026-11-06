@@ -181,7 +181,11 @@ impl Device {
                         (34, state.probe_offset[1]),
                         (35, state.probe_z_calibration.unwrap()),
                         (201, state.tool_length_offset),
-                        (202, state.tool_length_offset),
+                        (
+                            202,
+                            state.tool_length_offset + state.probe_z_calibration.unwrap()
+                                - state.probe_offset[2],
+                        ),
                         (110, 12000.),
                         (111, 9000.),
                         (112, 6000.),

@@ -292,7 +292,6 @@ function ProbePage({
     );
   }
   const toggleHelp = () => {
-    editor.cancel();
     if (guide) setGuide(false);
     setHelp(!help);
   };
@@ -301,7 +300,6 @@ function ProbePage({
       active: help,
       toggle: toggleHelp,
       guide: () => {
-        editor.cancel();
         setChooseWcs(false);
         setGuide(true);
       },
@@ -336,6 +334,7 @@ function ProbePage({
         onBack={() => navigate(history ? "history" : "home")}
         onBusyChange={setBusy}
         onRefresh={onRefresh}
+        onReload={onReload}
         onAlarm={onAlarm}
         onSetting={(key, value) => saveSettings({ [key]: value })}
       />

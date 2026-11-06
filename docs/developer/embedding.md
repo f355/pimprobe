@@ -112,6 +112,7 @@ The page uses these operation names:
 | `history.get`, `history.export`, `history.clear` | Measurement records and logs |
 | `history.open` | Reopen a saved ordinary or rotary result |
 | `history.wcs`, `history.zero`, `history.rotation` | Apply a reopened measurement |
+| `history.calibration.restore` | Restore the calibration saved before a history entry |
 
 Result WCS requests take `{id, wcs}` and return the updated measurement.
 Review requests take a routine or rotary configuration and return

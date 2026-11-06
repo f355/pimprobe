@@ -41,6 +41,10 @@ impl LogStore {
                 .append(true)
                 .open(root.join(name))?;
         }
+        File::open(&root)?.sync_all()?;
+        if let Some(parent) = root.parent().filter(|p| !p.as_os_str().is_empty()) {
+            File::open(parent)?.sync_all()?;
+        }
         Ok(Self {
             root,
             lock: Mutex::new(()),

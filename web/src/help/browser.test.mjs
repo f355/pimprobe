@@ -184,8 +184,12 @@ test("context help and localized guide work on touch and desktop screens", async
         );
       await page.locator(".pp-help-button").click();
       await page.locator(".pp-guide-button").click();
-      assert.equal(await page.locator(".pp-help-page-link").count(), 11);
-      await page.locator(".pp-help-page-link").nth(1).click();
+      await page
+        .getByRole("button", {
+          name: { en: "Outside", zh_CN: "外侧", sv: "Utvändigt" }[language],
+          exact: true,
+        })
+        .click();
       await page.locator(".pp-help-section summary").first().click();
       await page.locator(".pp-help-markdown img").waitFor();
       assert.ok(
@@ -206,9 +210,22 @@ test("context help and localized guide work on touch and desktop screens", async
         ),
       });
       await page.locator(".pp-back").click();
-      await page.locator(".pp-help-page-link").first().click();
+      await page
+        .getByRole("button", {
+          name: {
+            en: "Probing guide",
+            zh_CN: "测量指南",
+            sv: "Guide för probning",
+          }[language],
+          exact: true,
+        })
+        .click();
+      const previousTitle = await page.locator(".pp-help-guide h1").innerText();
       await page.locator(".pp-help-introduction a").first().click();
-      assert.equal(await page.locator(".pp-help-section").count(), 2);
+      assert.notEqual(
+        await page.locator(".pp-help-guide h1").innerText(),
+        previousTitle,
+      );
       for (const size of [
         { width: 360, height: 640 },
         { width: 1280, height: 800 },

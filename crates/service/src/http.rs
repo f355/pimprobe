@@ -88,6 +88,7 @@ pub fn router(app: Arc<App>) -> Router {
         .route("/api/v1/routine/review", post(review))
         .route("/api/v1/routine/run", post(run))
         .route("/api/v1/routine/zero", post(zero))
+        .route("/api/v1/routine/calibration", post(calibration))
         .route("/api/v1/routine/wcs", post(result_wcs))
         .route("/api/v1/routine/rotation", post(result_rotation))
         .route("/api/v1/routine/return", post(return_start))
@@ -104,6 +105,10 @@ pub fn router(app: Arc<App>) -> Router {
         .route("/api/v1/logs/history/wcs", post(history_wcs))
         .route("/api/v1/logs/history/zero", post(history_zero))
         .route("/api/v1/logs/history/rotation", post(history_rotation))
+        .route(
+            "/api/v1/logs/history/calibration",
+            post(restore_calibration),
+        )
         .route("/api/v1/logs/export", post(export_logs))
         .route("/api/v1/logs/clear", post(clear_logs))
         .route("/api/v1/updates/check", get(check_update))
@@ -228,6 +233,13 @@ async fn history_rotation(
             .apply_history_result(token.id, HistoryAction::Rotation)
             .await?,
     ))
+}
+
+async fn restore_calibration(
+    State(app): State<Arc<App>>,
+    ApiJson(token): ApiJson<Token>,
+) -> Result<Json<pimprobe_app::ActionResult<pimprobe_app::SavedProbeCalibration>>, ApiError> {
+    Ok(Json(app.probe.restore_probe_calibration(token).await?))
 }
 
 async fn result_rotation(
@@ -368,6 +380,12 @@ async fn zero(
     ApiJson(token): ApiJson<ZeroRequest>,
 ) -> Result<Json<pimprobe_core::RoutineResult>, ApiError> {
     Ok(Json(app.probe.zero(token).await?))
+}
+async fn calibration(
+    State(app): State<Arc<App>>,
+    ApiJson(request): ApiJson<pimprobe_app::CalibrationRequest>,
+) -> Result<Json<pimprobe_core::Calibration>, ApiError> {
+    Ok(Json(app.probe.calibrate(request).await?))
 }
 async fn result_wcs(
     State(app): State<Arc<App>>,

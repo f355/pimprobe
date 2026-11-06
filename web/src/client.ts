@@ -39,6 +39,7 @@ const routes: Record<string, [string, string]> = {
   "history.wcs": ["POST", "/logs/history/wcs"],
   "history.zero": ["POST", "/logs/history/zero"],
   "history.rotation": ["POST", "/logs/history/rotation"],
+  "history.calibration.restore": ["POST", "/logs/history/calibration"],
   "history.export": ["POST", "/logs/export"],
   "history.clear": ["POST", "/logs/clear"],
   "updates.check": ["GET", "/updates/check"],
@@ -52,7 +53,7 @@ for (const group of ["routine", "rotary"]) {
     "zero",
     "wcs",
     "rotation",
-    ...(group === "routine" ? ["return", "measured"] : []),
+    ...(group === "routine" ? ["return", "measured", "calibration"] : []),
   ]) {
     routes[`${group}.${action}`] = ["POST", `/${group}/${action}`];
   }

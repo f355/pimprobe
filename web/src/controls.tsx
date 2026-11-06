@@ -173,17 +173,21 @@ export function Switch({
   onChange,
   disabled,
   help,
+  className = "",
+  children,
 }: {
   label: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
   disabled?: boolean;
   help?: string;
+  className?: string;
+  children?: ReactNode;
 }) {
   return (
     <button
       type="button"
-      className="pp-switch-row"
+      className={`pp-switch-row ${className}`}
       role="switch"
       aria-label={label}
       aria-checked={checked}
@@ -191,7 +195,8 @@ export function Switch({
       onClick={() => onChange(!checked)}
       {...helpProps(label, help || "")}
     >
-      <span>{label}</span>
+      <span className="pp-switch-label">{label}</span>
+      {children}
       <span className="pp-switch">
         <span />
       </span>
@@ -259,12 +264,15 @@ export function ConfirmDialog({
 
 type Edit = {
   input: HTMLInputElement;
-  value: number;
+  value: number | null;
   min: number;
   max: number;
   integer: boolean;
   onChange: (value: number) => void | Promise<void>;
 };
+function numericText(value: number | null): string {
+  return value === null ? "" : String(Number(value.toFixed(4)));
+}
 const NumericContext = createContext<{
   edit: Edit | null;
   error: string;
@@ -283,7 +291,7 @@ export function NumericProvider({ children }: { children: ReactNode }) {
     if (saving.current) return;
     const input = editRef.current?.input;
     if (input && editRef.current) {
-      input.value = String(editRef.current.value);
+      input.value = numericText(editRef.current.value);
       input.setSelectionRange(0, 0);
       input.blur();
     }
@@ -353,22 +361,24 @@ export function NumberField({
   integer = false,
   disabled = false,
   help,
+  placeholder,
 }: {
   label: string;
-  value: number;
+  value: number | null;
   onChange: (value: number) => void | Promise<void>;
   min?: number;
   max?: number;
   integer?: boolean;
   disabled?: boolean;
   help?: string;
+  placeholder?: string;
   unit?: string;
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const numeric = useNumeric();
   useEffect(() => {
     if (ref.current && numeric.edit?.input !== ref.current)
-      ref.current.value = String(value);
+      ref.current.value = numericText(value);
   }, [value, numeric.edit]);
   return (
     <input
@@ -377,7 +387,8 @@ export function NumberField({
       type="text"
       inputMode="none"
       aria-label={label}
-      defaultValue={value}
+      defaultValue={numericText(value)}
+      placeholder={placeholder}
       autoComplete="off"
       spellCheck={false}
       disabled={disabled || numeric.pending}
@@ -406,8 +417,9 @@ export function NumberField({
             integer,
           });
       }}
-      onBlur={() => {
-        if (!numeric.pending) numeric.cancel();
+      onBlur={(event) => {
+        if (!numeric.pending && !event.currentTarget.closest(".pp-help-active"))
+          numeric.cancel();
       }}
       onKeyDown={(e) => {
         if (e.key === "Enter") {

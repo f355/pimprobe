@@ -44,6 +44,7 @@ import { helpProps } from "./help/context";
 import { descriptions, optionHelp } from "./help/text";
 import { WcsPicker } from "./WcsPicker";
 import { historyDetail } from "./utilities/history-detail";
+import { CalibrationPage } from "./CalibrationPage";
 
 function title(config: RunConfig) {
   if (!("family" in config))
@@ -65,6 +66,7 @@ export function ProbeFlow({
   onBack,
   onBusyChange,
   onRefresh,
+  onReload,
   onSetting,
   onAlarm,
 }: {
@@ -75,6 +77,7 @@ export function ProbeFlow({
   onBack: () => void;
   onBusyChange: (busy: boolean) => void;
   onRefresh: () => void;
+  onReload: () => Promise<void>;
   onSetting: (key: string, value: number) => Promise<void>;
   onAlarm?: () => void;
 }) {
@@ -106,6 +109,7 @@ export function ProbeFlow({
   const offsetsRef = useRef(offsets);
   const safeZRef = useRef(safeZ);
   const [chooseWcs, setChooseWcs] = useState(false);
+  const [calibrating, setCalibrating] = useState(false);
   const [confirmAction, setConfirmAction] = useState("");
   const [confirmation, setConfirmation] = useState("");
   useEffect(() => {
@@ -274,6 +278,35 @@ export function ProbeFlow({
           ? "Y/Z"
           : "A/Y"
       : "";
+  if (calibrating && routineResult)
+    return (
+      <CalibrationPage
+        client={client}
+        id={token}
+        result={routineResult}
+        onBack={() => setCalibrating(false)}
+        onBusyChange={onBusyChange}
+        onInvalidated={(message) => {
+          setToken("");
+          setError(message);
+          setCalibrating(false);
+          onRefresh();
+        }}
+        onSaved={async (calibration) => {
+          setResult(calibration.result);
+          if ("family" in config && calibration.diameter !== null) {
+            const next = { ...config, diameter: calibration.diameter };
+            setConfig(next);
+            configRef.current = next;
+          }
+          setError(calibration.warning || "");
+          setConfirmation(t("Calibration saved"));
+          await onReload();
+          setCalibrating(false);
+          onRefresh();
+        }}
+      />
+    );
   if (chooseWcs)
     return (
       <WcsPicker
@@ -341,6 +374,14 @@ export function ProbeFlow({
               disabled={busy || !token}
               onWcs={openWcs}
               confirmation={confirmation}
+              onCalibrate={
+                !history && token
+                  ? () => {
+                      editor.cancel();
+                      setCalibrating(true);
+                    }
+                  : undefined
+              }
             />
           ) : phase === "result" && !showLog && rotaryResult ? (
             <RotaryResults
@@ -554,6 +595,7 @@ function RoutineResults({
   disabled,
   onWcs,
   confirmation,
+  onCalibrate,
 }: {
   config: RoutineConfig;
   result: RoutineResult;
@@ -566,6 +608,7 @@ function RoutineResults({
   disabled: boolean;
   onWcs: () => void;
   confirmation: string;
+  onCalibrate?: () => void;
 }) {
   const { t } = useTranslation();
   const axes = [0, 1, 2].filter((i) => result.machinePoint[i] != null);
@@ -709,6 +752,18 @@ function RoutineResults({
                 </div>
               ))}
             </>
+          )}
+          {onCalibrate && (config.family === "center" || axes.includes(2)) && (
+            <Button
+              className="pp-calibrate-button"
+              disabled={disabled}
+              onClick={onCalibrate}
+              help={t(
+                "Calibrate ball diameter from a known feature size, or probe offsets against an independently set work zero. No movement is needed.",
+              )}
+            >
+              {t("Calibrate probe...")}
+            </Button>
           )}
         </div>
       </KeypadSlot>

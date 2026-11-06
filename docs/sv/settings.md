@@ -8,16 +8,14 @@ Inställningarna sparas när du godkänner ett värde och finns kvar efter omsta
 
 ## Kuldiameter
 
-**Probkulans diameter** är den effektiva diametern som korrigerar sidmätningar. Den fysiska kulan är 2 mm, men probmekanismen rör sig och skaftet böjs innan kontakten registreras. Kalibreringen tar hänsyn till den rörelsen. Maskinens förskjutning mellan prob och spindel kalibreras separat.
+Kulan rör vid ytan innan probens elektriska kontakter slår om. Under den
+extra rörelsen böjs mätspetsen och mekanismen inuti proben rör sig.
+**Probkulans diameter** tar hänsyn till detta genom en effektiv diameter
+som är mindre än den fysiska. PIMProbe använder den för att beräkna
+väggarnas lägen och måtten mellan dem från de registrerade kontakterna.
 
-## Mät den effektiva diametern
-
-1. Fäst en passbit eller mätpinne med känt mått. Använd din vanliga finmatning.
-2. Under **Centrum**, mät passbitens kända mått med **X-ribba** eller **Y-ribba**, eller mät en stående pinne med **Tapp**. För en pinne, mät igen från det uppmätta centrumet innan du läser av diametern.
-3. Läs **Råmått** på resultatsidan. **Effektiv diameter = |råmått − känt mått|**. En 10 mm passbit med råmåttet 11.94 mm ger till exempel **1.94 mm**.
-4. Ange värdet i **Probkulans diameter** och mät igen för att kontrollera det.
-
-För en pinne, använd medelvärdet av råmåtten i X och Y.
+Följ [Kalibrera proben](calibration.md) för att beräkna och spara värdet från
+ett känt mått. Standardvärdet 1.83 mm är en utgångspunkt, inte en kalibrering.
 
 ## Tillbakagång
 

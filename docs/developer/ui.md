@@ -15,6 +15,11 @@ groups. Help taps explain
 the selected control; they do not run its action. The Guide reads the operator
 Markdown and translation catalogs directly.
 
+F1 opens an explanation for the focused control. An optional
+`onMoreInformation` callback adds a guide button for controls with a
+`data-help-guide` attribute. The callback receives the selected control; the
+containing application decides how to open its guide.
+
 Run `npm test --prefix web` after browser changes. Inspect its 800 × 480
 captures in `web/test-results`, including translated labels, keypads, reviews,
 results and help. `./dev/preview.sh` runs the UI against the mock

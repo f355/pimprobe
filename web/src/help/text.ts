@@ -33,7 +33,7 @@ export const descriptions: Record<string, string> = {
   centerDepth:
     "Distance to lower for boss, block and ridge side touches, or the maximum downward Z search.",
   diameter:
-    "Effective ball diameter, including probe mechanism takeup and shaft flex at contact. The physical ball is 2 mm; use a known block or pin to calibrate this value as described in the Guide.",
+    "Effective ball diameter is smaller than the physical ball. It accounts for movement between first touch and the probe's electrical signal. Measure a known width on Center, then use Calibrate probe... on the result.",
   retract:
     "Distance to back away after each touch. The fine search returns to the coarse contact and continues up to 0.5 mm beyond it.",
   positioningFeed:

@@ -31,6 +31,16 @@ impl<P, R> Default for Reviews<P, R> {
 }
 
 impl<P, R> Reviews<P, R> {
+    pub fn completed(&self, id: &str, session: u64) -> Option<(P, R)>
+    where
+        P: Clone,
+        R: Clone,
+    {
+        self.completed
+            .as_ref()
+            .filter(|(token, epoch, _, _)| token == id && *epoch == session)
+            .map(|(_, _, plan, result)| (plan.clone(), result.clone()))
+    }
     pub fn put(&mut self, plan: P, session: u64) -> String {
         let id = uuid::Uuid::new_v4().to_string();
         self.pending = Some((id.clone(), session, plan));

@@ -1,5 +1,9 @@
 # Probing guide
 
+Start with [Calibrate the probe](calibration.md): prepare a reference, measure
+it, and save the ball diameter and offsets. Calibration is not the same as
+setting a workpiece's zero.
+
 Choose a measurement:
 
 - [Outside](outside.md): stock edge, outside corner or top surface.

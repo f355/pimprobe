@@ -18,6 +18,8 @@ import { useEffect, useRef, useState } from "react";
 import { Button, Notice, PageHeader } from "../controls";
 import { helpProps } from "../help/context";
 import { useTranslation } from "../i18n";
+import { useProbe } from "../ProbeProvider";
+import { CalibrationRecord } from "./CalibrationRecord";
 import type { HistoryEntry, HistoryResult } from "../types";
 import { errorMessage, useUtilityBusy } from "./common";
 import { canOpenHistory, historyDate, historyDetail } from "./history-detail";
@@ -30,6 +32,8 @@ export function History({
   onBusyChange,
 }: UtilityPageProps) {
   const { t } = useTranslation();
+  const { reloadSettings, refresh } = useProbe();
+  const [message, setMessage] = useState("");
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -100,12 +104,13 @@ export function History({
     <section className="pp-utility-page">
       <PageHeader
         title={t("Probe history")}
-        detail={entries.length ? t("%1 attempts", [entries.length]) : ""}
+        detail={entries.length ? t("%1 records", [entries.length]) : ""}
         onBack={onBack}
         backDisabled={opening}
       />
       <div className="pp-utility-content">
         {error && <Notice error>{t(error)}</Notice>}
+        {message && <Notice>{t(message)}</Notice>}
         {loading ? (
           <div className="pp-utility-empty" role="status">
             {t("Loading...")}
@@ -152,27 +157,46 @@ export function History({
               ))}
             </div>
             <div className="pp-utility-history-details">
-              <pre
-                ref={details}
-                className="pp-utility-history-text"
-                tabIndex={0}
-                {...helpProps(
-                  t("Details"),
-                  t("Show the saved measurement's options and command log."),
-                )}
-              >
-                {selected && historyDetail(selected, t)}
-              </pre>
-              <Button
-                primary
-                disabled={opening || !canOpenHistory(selected)}
-                onClick={() => void openResult()}
-                help={t(
-                  "Open the saved measurement to set work zero again. The stock and machine reference must still match the measurement.",
-                )}
-              >
-                {t("Open result")}
-              </Button>
+              {selected?.category === "calibration" ? (
+                <CalibrationRecord
+                  key={selected.id}
+                  entry={selected}
+                  client={client}
+                  onBusyChange={setOpening}
+                  onRestored={async (message) => {
+                    await reloadSettings();
+                    await refresh();
+                    setMessage(message);
+                    setReload((value) => value + 1);
+                  }}
+                />
+              ) : (
+                <>
+                  <pre
+                    ref={details}
+                    className="pp-utility-history-text"
+                    tabIndex={0}
+                    {...helpProps(
+                      t("Details"),
+                      t(
+                        "Show the saved measurement's options and command log.",
+                      ),
+                    )}
+                  >
+                    {selected && historyDetail(selected, t)}
+                  </pre>
+                  <Button
+                    primary
+                    disabled={opening || !canOpenHistory(selected)}
+                    onClick={() => void openResult()}
+                    help={t(
+                      "Open the saved measurement to set work zero again. The stock and machine reference must still match the measurement.",
+                    )}
+                  >
+                    {t("Open result")}
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         )}

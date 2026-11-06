@@ -737,11 +737,120 @@
 .pp-result-left {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   min-height: 0;
+  height: 100%;
+  overflow-y: auto;
 }
 .pp-result-left h2 {
+  font-size: 22px;
+}
+.pp-result-left .pp-large-reading {
   font-size: 24px;
+  min-height: 40px;
+}
+.pp-result-left .pp-dimension {
+  min-height: 40px;
+}
+.pp-result-left .pp-dimension > span:not(:first-child) {
+  font-size: 22px;
+}
+.pp-calibrate-button {
+  align-self: flex-start;
+  margin-top: auto;
+  flex-shrink: 0;
+}
+.pp-calibration {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.pp-calibration-tabs,
+.pp-calibration-directions {
+  display: flex;
+  gap: 8px;
+}
+.pp-calibration-tabs > .pp-button,
+.pp-calibration-directions > .pp-button {
+  flex: 1;
+  min-height: 48px;
+}
+.pp-calibration-values {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.pp-calibration-row {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  text-align: right;
+  min-height: 56px;
+  border-bottom: 1px solid var(--pp-divider);
+  font-size: 22px;
+}
+.pp-calibration-row > :first-child {
+  text-align: left;
+}
+.pp-calibration-row.pp-muted {
+  min-height: 32px;
+  font-size: 18px;
+}
+.pp-calibration-row strong {
+  font-weight: 700;
+}
+.pp-calibration-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.pp-calibration-dimension {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 156px;
+  align-items: center;
+  gap: 12px;
+}
+.pp-calibration-dimension small {
+  display: block;
+  color: var(--pp-muted);
+  font-size: 18px;
+}
+.pp-calibration-dimension .pp-number {
+  min-width: 0;
+  width: 100%;
+  min-height: 64px;
+}
+.pp-calibration-estimates {
+  display: grid;
+  gap: 12px;
+}
+.pp-calibration-estimates > div,
+.pp-calibration-measured {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.pp-calibration-estimates strong {
+  font-size: 18px;
+  font-weight: normal;
+  color: var(--pp-muted);
+}
+.pp-calibration-reference h2 {
+  margin-bottom: 20px;
+}
+.pp-calibration-measured {
+  margin-bottom: 20px;
+}
+.pp-calibration-record {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+}
+.pp-calibration-record > .pp-button {
+  margin-top: auto;
+  flex-shrink: 0;
 }
 .pp-result-heading {
   display: flex;

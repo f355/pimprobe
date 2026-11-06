@@ -86,9 +86,33 @@ export interface RoutineResult {
   rawSpans: Point;
   wcs: number;
   zeroed: boolean;
+  referenceUsed?: boolean;
+  measurementRotation?: number;
   returned?: boolean;
   positioned?: boolean;
   angle?: AngleMeasurement;
+}
+export interface CalibrationOptions {
+  ball: boolean;
+  dimensions: [number | null, number | null];
+  offsets: [boolean, boolean, boolean];
+}
+export interface Calibration {
+  currentDiameter: number;
+  currentOffsets: number[];
+  ballAxes: boolean[];
+  ballEstimates: (number | null)[];
+  offsetAxes: boolean[];
+  proposedDiameter: number | null;
+  proposedOffsets: Point;
+  diameter: number | null;
+  offsets: Point;
+  result: RoutineResult;
+  warning?: string;
+}
+export interface SavedProbeCalibration {
+  diameter: number;
+  offsets: [number, number, number];
 }
 export interface RotaryResult {
   stations: { center: number[] }[];

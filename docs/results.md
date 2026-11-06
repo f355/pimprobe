@@ -24,6 +24,16 @@ You can adjust offsets and set zero again, or select another WCS and set it from
 
 These destinations position the **probe ball**, not the spindle. Z-only routines have already returned to their start.
 
+## Calibrate the probe
+
+**Calibrate probe...** is available for centre and Z measurements. Choose
+ball diameter, X/Y offsets or Z offset; the page shows only the values that
+measurement can determine. Follow [Calibrate the probe](calibration.md) to
+prepare the reference and save the result.
+
+The machine stays still, and work zero remains unchanged. The previous
+calibration is saved in [Probe history](history.md) before any values change.
+
 ## Saved measurements
 
 Open **Settings → Utilities → Probe history**, select a measurement, then **Open result**. You can set work zero from it later, provided the stock and machine reference are still the same.

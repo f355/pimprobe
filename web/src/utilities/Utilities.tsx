@@ -134,7 +134,9 @@ export function Utilities({
       {confirmClear && (
         <ConfirmDialog
           title={t("Clear probing logs?")}
-          message={t("Probe history and diagnostic traces will be removed.")}
+          message={t(
+            "Probe history, saved calibrations and diagnostic logs will be removed.",
+          )}
           confirmLabel={t("Clear logs")}
           danger
           busy={pending}

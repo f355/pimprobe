@@ -15,6 +15,8 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 mod angle;
+mod calibration;
+pub use calibration::*;
 mod frame;
 pub use angle::*;
 pub use frame::EventReceiver;
@@ -124,7 +126,7 @@ pub struct State {
     pub wcs: i32,
     pub work_position: Position,
     /// X/Y corrections are added to carriage position; the Z correction is
-    /// subtracted and includes the ETS reference and active tool compensation.
+    /// subtracted and includes the saved ETS reference, not active G43/G49.
     pub probe_offset: Position,
     /// Saved $35, independent of the selected reference tool and active TLO.
     #[serde(default)]

@@ -501,6 +501,23 @@ impl Controller for MockController {
             return Err(Error::Disconnected);
         }
         inner.commands.push(command.into());
+        if let Some((key, value)) = command.strip_prefix('$').and_then(|s| s.split_once('=')) {
+            if let (Ok(key @ 33..=35), Ok(value)) = (key.parse::<usize>(), value.parse::<f64>()) {
+                if key == 35 {
+                    let delta = value - inner.state.probe_z_calibration.unwrap();
+                    inner.state.probe_z_calibration = Some(value);
+                    inner.state.probe_offset[2] += delta;
+                } else {
+                    inner.state.probe_offset[key - 33] = value;
+                }
+                let _ = self.events.send(Event {
+                    setting: Some((key as i32, value)),
+                    acknowledged: true,
+                    ..Event::default()
+                });
+                return Ok(());
+            }
+        }
         if command == "$G" {
             let _ = self.events.send(Event {
                 modes: Some(inner.state.modes),
@@ -540,6 +557,8 @@ impl Controller for MockController {
             let calibration = inner.state.probe_z_calibration.unwrap();
             let reference = calibration - inner.state.probe_offset[2];
             for setting in [
+                (33, inner.state.probe_offset[0]),
+                (34, inner.state.probe_offset[1]),
                 (35, calibration),
                 (201, inner.state.tool_length_offset),
                 (202, reference + inner.state.tool_length_offset),

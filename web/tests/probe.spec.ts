@@ -156,6 +156,39 @@ async function app(page: Page, language = "en") {
     } else if (path === "routine/zero") {
       result = { ...result, zeroed: true };
       response = result;
+    } else if (path === "routine/calibration") {
+      const options = body.options;
+      const ballAxes = result.rawSpans.slice(0, 2).map((v) => v !== null);
+      const estimates = options.dimensions.map((v: number | null, i: number) =>
+        v === null ? null : v - result.rawSpans[i]!,
+      );
+      const values = estimates.filter((v: number | null) => v !== null);
+      const proposedDiameter = values.length
+        ? values.reduce((a: number, b: number) => a + b, 0) / values.length
+        : null;
+      const diameter = options.ball ? proposedDiameter : null;
+      if (body.save && diameter !== null) settings.probeDiameter = diameter;
+      response = {
+        currentDiameter: settings.probeDiameter,
+        currentOffsets: [-57.5, -7, -50],
+        ballAxes,
+        ballEstimates: estimates,
+        offsetAxes: result.machinePoint.map(
+          (v, i) =>
+            v !== null &&
+            !result.zeroed &&
+            (i === 2 || config.family === "center"),
+        ),
+        proposedDiameter,
+        proposedOffsets: result.machinePoint.map((v, i) =>
+          v !== null && !result.zeroed ? [1.5, -2.5, -51][i] : null,
+        ),
+        diameter,
+        offsets: options.offsets.map((v: boolean, i: number) =>
+          v ? [1.5, -2.5, -51][i] : null,
+        ),
+        result,
+      };
     } else if (path === "routine/wcs") {
       result = { ...result, wcs: body.wcs };
       response = result;
@@ -179,10 +212,273 @@ async function app(page: Page, language = "en") {
     miss: () => (miss = true),
   };
 }
+test("calibration separates diameter from offsets and shows the mean of both dimensions", async ({
+  page,
+}, info) => {
+  const machine = await app(page);
+  await page.getByRole("tab", { name: "Center", exact: true }).click();
+  await page.locator(".pp-routine-button").first().click();
+  await page.getByRole("button", { name: "Proceed", exact: true }).click();
+  const calibrate = page.getByRole("button", {
+    name: "Calibrate probe...",
+    exact: true,
+  });
+  await expect(calibrate).toBeInViewport({ ratio: 1 });
+  const calibrateBox = (await calibrate.boundingBox())!;
+  const logBox = (await page
+    .getByRole("button", { name: "Log", exact: true })
+    .boundingBox())!;
+  expect(calibrateBox.y + calibrateBox.height).toBeLessThanOrEqual(
+    logBox.y - 8,
+  );
+  await capture(page, info.outputPath("calibration-result.png"));
+  await page
+    .getByRole("button", { name: "Calibrate probe...", exact: true })
+    .click();
+  await expect(
+    page.getByRole("tab", { name: "Ball diameter", exact: true }),
+  ).toBeEnabled();
+  await expect(
+    page.getByRole("button", { name: "Save ball diameter", exact: true }),
+  ).toBeDisabled();
+  await page.getByRole("tab", { name: "X/Y offsets", exact: true }).click();
+  await expect(page.getByLabel("Calibration values")).toContainText("1.5000");
+  await expect(
+    page.getByRole("button", { name: "Save X/Y offsets", exact: true }),
+  ).toBeEnabled();
+  await expect(page.getByRole("textbox")).toHaveCount(0);
+  await capture(page, info.outputPath("calibration-offsets.png"));
+  await page.getByRole("tab", { name: "Ball diameter", exact: true }).click();
+  await capture(page, info.outputPath("calibration.png"));
+  for (const [axis, value] of [
+    ["X", "20.2"],
+    ["Y", "30.4"],
+  ]) {
+    const field = page.getByRole("textbox", {
+      name: `Known ${axis} size`,
+      exact: true,
+    });
+    await field.click();
+    await field.fill(value);
+    await capture(page, info.outputPath(`calibration-edit-${axis}.png`));
+    await field.press("Enter");
+  }
+  await expect(page.getByLabel("Calibration values")).toContainText("2.3000");
+  await expect(
+    page.getByText("New diameter = mean of X and Y", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "X", exact: true }).click();
+  await expect(page.getByLabel("Calibration values")).toContainText("2.2000");
+  await page.getByRole("button", { name: "X+Y", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Save ball diameter", exact: true }),
+  ).toBeEnabled();
+  await expect(page.getByLabel("Calibration values")).toContainText("2.3000");
+  await capture(page, info.outputPath("calibration-proposal.png"));
+  // Hosts may reserve more height for navigation than the standalone header.
+  await page.setViewportSize({ width: 800, height: 432 });
+  const values = (await page.getByLabel("Calibration values").boundingBox())!;
+  const save = page.getByRole("button", {
+    name: "Save ball diameter",
+    exact: true,
+  });
+  expect(values.y + values.height).toBeLessThanOrEqual(
+    (await save.boundingBox())!.y - 8,
+  );
+  await capture(page, info.outputPath("calibration-short-host.png"));
+  await page.setViewportSize({ width: 800, height: 480 });
+  await page
+    .getByRole("button", { name: "Save ball diameter", exact: true })
+    .click();
+  await expect(page.getByRole("status")).toContainText("Calibration saved");
+  const saves = machine.calls.filter(
+    (r) => r.path === "routine/calibration" && r.body.save,
+  );
+  expect(saves).toHaveLength(1);
+  expect(saves[0].body).toEqual({
+    id: "review-1",
+    save: true,
+    options: {
+      ball: true,
+      dimensions: [20.2, 30.4],
+      offsets: [false, false, false],
+    },
+  });
+  expect(machine.calls.filter((r) => r.path === "routine/zero")).toHaveLength(
+    0,
+  );
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("tab", { name: "Settings", exact: true }).click();
+  await expect(
+    page.getByRole("textbox", { name: "Probe ball diameter", exact: true }),
+  ).toHaveValue("2.3");
+});
+
+test("signed calibration values remain separated at the touchscreen size", async ({
+  page,
+}, info) => {
+  await app(page);
+  await page.route("**/api/v1/routine/calibration", (route) =>
+    route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        currentDiameter: 2,
+        currentOffsets: [-999.9999, 999.9999, -1000],
+        ballAxes: [false, false],
+        ballEstimates: [null, null],
+        offsetAxes: [false, false, true],
+        proposedDiameter: null,
+        proposedOffsets: [null, null, -108.1234],
+        diameter: null,
+        offsets: [null, null, -108.1234],
+        result: {},
+      }),
+    }),
+  );
+  await page.getByRole("button", { name: "Z surface", exact: true }).click();
+  await page.getByRole("button", { name: "Proceed", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Calibrate probe...", exact: true })
+    .click();
+  const row = page
+    .getByRole("table", { name: "Calibration comparison", exact: true })
+    .getByRole("row")
+    .last();
+  await expect(row).toContainText("-108.1234");
+  const spans = await row
+    .locator(":scope > span, :scope > strong")
+    .evaluateAll((elements) =>
+      elements
+        .map((e) => {
+          const r = e.getBoundingClientRect();
+          return {
+            left: r.left,
+            right: r.right,
+            content: e.scrollWidth,
+            width: e.clientWidth,
+          };
+        })
+        .sort((a, b) => a.left - b.left),
+    );
+  for (let i = 0; i < spans.length; i++) {
+    expect(spans[i].content).toBeLessThanOrEqual(spans[i].width + 1);
+    if (i) expect(spans[i].left - spans[i - 1].right).toBeGreaterThanOrEqual(7);
+  }
+  await capture(page, info.outputPath("calibration-z.png"));
+});
+
+test("ball calibration remains available after zeroing and explains the combined estimate", async ({
+  page,
+}, info) => {
+  await app(page);
+  await page.getByRole("tab", { name: "Center", exact: true }).click();
+  await page.locator(".pp-routine-button").first().click();
+  await page.getByRole("button", { name: "Proceed", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Set Work Zero", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Calibrate probe...", exact: true })
+    .click();
+  await expect(
+    page.getByRole("textbox", { name: "Known X size", exact: true }),
+  ).toBeEnabled();
+  await page.locator(".pp-help-button").click();
+  await page
+    .getByText("New diameter = mean of X and Y", { exact: true })
+    .click();
+  await expect(
+    page.getByRole("dialog", { name: "Mean of X and Y", exact: true }),
+  ).toContainText("arithmetic mean");
+  await capture(page, info.outputPath("calibration-help.png"));
+});
+
+test("calibration history restores previous values only after confirmation", async ({
+  page,
+}, info) => {
+  await app(page);
+  const before = { diameter: 1.829, offsets: [-55.872, 0.239, -49.98] };
+  const after = { diameter: 1.9, offsets: [-55.8, 0.3, -50] };
+  const entry = {
+    id: "calibration-1",
+    timestampMs: 1794384000000,
+    category: "calibration",
+    label: "Probe calibration",
+    status: "success",
+    config: { before, after },
+  };
+  let restores = 0;
+  await page.route("**/api/v1/logs/history", (route) =>
+    route.fulfill({ json: [entry] }),
+  );
+  await page.route("**/api/v1/logs/history/calibration", (route) => {
+    expect(route.request().postDataJSON()).toEqual({ id: entry.id });
+    restores++;
+    return route.fulfill({ json: before });
+  });
+  await page.getByRole("tab", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "Utilities", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Probe history", exact: true })
+    .click();
+  const restore = page.getByRole("button", {
+    name: "Restore previous calibration",
+    exact: true,
+  });
+  await expect(restore).toBeInViewport({ ratio: 1 });
+  await expect(page.locator(".pp-calibration-record")).toContainText("1.8290");
+  await capture(page, info.outputPath("calibration-history.png"));
+  await restore.click();
+  const dialog = page.getByRole("dialog", {
+    name: "Restore probe calibration?",
+    exact: true,
+  });
+  await expect(dialog).toBeVisible();
+  await capture(page, info.outputPath("calibration-restore.png"));
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  expect(restores).toBe(0);
+  await restore.click();
+  await dialog.getByRole("button", { name: "Restore", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("Calibration restored");
+  expect(restores).toBe(1);
+});
+
+for (const [language, catalog] of [
+  ["sv", swedish],
+  ["zh_CN", chinese],
+] as const) {
+  test(`calibration controls fit the touchscreen in ${language}`, async ({
+    page,
+  }, info) => {
+    const t = (key: string) => (catalog as Record<string, string>)[key] || key;
+    await app(page, language);
+    await page.getByRole("tab", { name: t("Center"), exact: true }).click();
+    await page.locator(".pp-routine-button").first().click();
+    await page.getByRole("button", { name: t("Proceed"), exact: true }).click();
+    await page
+      .getByRole("button", { name: t("Calibrate probe..."), exact: true })
+      .click();
+    await expect(
+      page.getByRole("textbox", {
+        name: t("Known %1 size").replace("%1", "X"),
+        exact: true,
+      }),
+    ).toBeEnabled();
+    await capture(page, info.outputPath("calibration-ball.png"));
+    await page
+      .getByRole("tab", { name: t("X/Y offsets"), exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", { name: t("Save X/Y offsets"), exact: true }),
+    ).toBeInViewport({ ratio: 1 });
+    await capture(page, info.outputPath("calibration-offsets.png"));
+  });
+}
+
 async function capture(page: Page, path: string) {
   await expect(page.locator(".pp-app")).toBeInViewport({ ratio: 1 });
   expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(
-    480,
+    page.viewportSize()!.height,
   );
   await page.screenshot({ path });
 }
@@ -788,6 +1084,42 @@ test("numeric editing replaces selection, then inserts at the chosen caret and s
       ?.body,
   ).toEqual({ outsideXSearchDistance: 250 });
 });
+test("F1 explains the focused field without changing its value", async ({
+  page,
+}) => {
+  const m = await app(page);
+  const field = page.getByRole("textbox", {
+    name: "X search distance",
+    exact: true,
+  });
+  await field.focus();
+  await field.fill("23");
+  const writes = m.calls.filter((c) => c.path === "settings").length;
+  await field.press("F1");
+  await expect(
+    page.getByRole("dialog", { name: "X search distance", exact: true }),
+  ).toBeVisible();
+  await expect(field).toHaveValue("23");
+  expect(m.calls.filter((c) => c.path === "settings")).toHaveLength(writes);
+  await page.getByRole("button", { name: "2", exact: true }).click();
+  await page.getByRole("button", { name: "Enter", exact: true }).click();
+  await expect(field).toHaveValue("23");
+  expect(m.calls.filter((c) => c.path === "settings")).toHaveLength(writes);
+  await page
+    .getByRole("button", { name: "Close explanation", exact: true })
+    .click();
+  await expect(field).toBeFocused();
+  await expect(field).toHaveValue("23");
+  await page.getByRole("button", { name: "Exit help", exact: true }).click();
+  await expect(field).toHaveValue("23");
+  await page.getByRole("button", { name: "Enter", exact: true }).click();
+  expect(
+    m.calls.find(
+      (c) => c.path === "settings" && c.body.outsideXSearchDistance === 23,
+    )?.body,
+  ).toEqual({ outsideXSearchDistance: 23 });
+});
+
 test("help explains controls without moving or editing, and the Guide returns to help", async ({
   page,
 }, info) => {

@@ -40,6 +40,12 @@ pub struct RoutineResult {
     pub raw_spans: [Option<f64>; 3],
     pub wcs: i32,
     pub zeroed: bool,
+    /// This measurement has been used to set a work zero, so it cannot also
+    /// establish probe offsets against that zero.
+    #[serde(default, rename = "referenceUsed")]
+    pub reference_used: bool,
+    #[serde(default, rename = "measurementRotation")]
+    pub measurement_rotation: Option<f64>,
     #[serde(default)]
     pub returned: bool,
     #[serde(default)]
@@ -281,6 +287,7 @@ pub async fn run<C: Controller + ?Sized>(
         tokio::select! {biased; _=cancel.cancelled()=>Err(Error::Cancelled), result=run_inner(&controller,&plan,t,&observe)=>result}
     }).await?;
     result.update_work_coordinates(&plan.start);
+    result.measurement_rotation = Some(frame.angle);
     Ok(frame.result(result, &p.start, true))
 }
 
@@ -499,6 +506,7 @@ async fn run_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
             stream.command(p.steps.len() as isize, &refs, observe)?;
             write_zero(&c, p, &result, [0.0; 3], t).await?;
             result.zeroed = true;
+            result.reference_used = true;
         }
         Ok(())
     }
@@ -721,6 +729,7 @@ pub async fn zero_recorded_result<C: Controller + ?Sized>(
     write?;
     let mut updated = result.clone();
     updated.zeroed = true;
+    updated.reference_used = true;
     Ok(updated)
 }
 
@@ -1004,5 +1013,6 @@ async fn zero_inner<C: Controller + ?Sized>(
     result_zero?;
     let mut updated = result.clone();
     updated.zeroed = true;
+    updated.reference_used = true;
     Ok(updated)
 }

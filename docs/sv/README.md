@@ -1,5 +1,8 @@
 # Guide för probning
 
+Börja med [Kalibrera proben](calibration.md). Förbered en referens, mät den
+och spara kuldiameter och förskjutningar innan du sätter arbetsnollpunkter.
+
 Välj en mätning:
 
 - [Utvändigt](outside.md): ämnets kant, ett utvändigt hörn eller ovansidan.

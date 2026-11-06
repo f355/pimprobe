@@ -50,6 +50,7 @@ export interface HelpProviderProps {
   children: ReactNode;
   active: boolean;
   onActiveChange: (active: boolean) => void;
+  onMoreInformation?: (target: HTMLElement) => void;
 }
 
 type Gesture = {
@@ -88,11 +89,13 @@ export function HelpProvider({
   children,
   active,
   onActiveChange,
+  onMoreInformation,
 }: HelpProviderProps) {
   const { t } = useTranslation();
   const root = useRef<HTMLDivElement>(null);
   const popup = useRef<HTMLDivElement>(null);
   const gesture = useRef<Gesture | null>(null);
+  const requestedTarget = useRef<HTMLElement | null>(null);
   const [targets, setTargets] = useState<HelpTarget[]>([]);
   const [selected, setSelected] = useState<HTMLElement | null>(null);
   const [modal, setModal] = useState<HTMLDialogElement | null>(null);
@@ -110,7 +113,8 @@ export function HelpProvider({
     : undefined;
 
   useLayoutEffect(() => {
-    setSelected(null);
+    setSelected(requestedTarget.current);
+    requestedTarget.current = null;
     gesture.current = null;
     if (!active || !root.current) return;
     const scope = root.current;
@@ -217,6 +221,18 @@ export function HelpProvider({
       !!event.target.closest("[data-pp-help-panel]")
     );
   }
+  function closeExplanation() {
+    const element = chosen?.element;
+    setSelected(null);
+    const target = element?.matches(
+      "button, input, select, textarea, [tabindex]",
+    )
+      ? element
+      : element?.querySelector<HTMLElement>(
+          "input, select, textarea, button, [tabindex]",
+        );
+    target?.focus({ preventScroll: true });
+  }
   function at(event: {
     target: EventTarget;
     clientX?: number;
@@ -290,26 +306,60 @@ export function HelpProvider({
       setSelected(current.element);
   }
   function blockAction(event: MouseEvent<HTMLDivElement>) {
-    if (!active || isPanel(event) || !at(event)) return;
+    if (!active || isPanel(event)) return;
+    if (
+      event.target instanceof Element &&
+      event.target.closest("[data-help-bypass]")
+    )
+      return;
+    const target = at(event);
+    const control =
+      event.target instanceof Element &&
+      event.target.closest(
+        "button, input, select, textarea, a, summary, [role='button']",
+      );
+    if (!target && !control) return;
     event.preventDefault();
     event.stopPropagation();
-    if (event.type === "click" && event.detail === 0)
-      setSelected(at(event)!.element);
+    if (target && event.type === "click" && event.detail === 0)
+      setSelected(target.element);
   }
   function keyboard(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "F1") {
+      const element =
+        event.target instanceof Element
+          ? event.target.closest<HTMLElement>(targetSelector)
+          : null;
+      if (
+        !element ||
+        isPanel(event) ||
+        element.closest(".pp-help-root") !== root.current
+      )
+        return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.type === "keydown") {
+        if (active) setSelected(element);
+        else {
+          requestedTarget.current = element;
+          onActiveChange(true);
+        }
+      }
+      return;
+    }
     if (!active) return;
     if (isPanel(event)) {
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();
-        setSelected(null);
+        closeExplanation();
       }
       return;
     }
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
-      if (selected) setSelected(null);
+      if (selected) closeExplanation();
       else onActiveChange(false);
     } else if (event.key !== "Tab" && at(event)) {
       event.preventDefault();
@@ -363,7 +413,7 @@ export function HelpProvider({
               className="pp-help-icon"
               aria-label={t("Close explanation")}
               title={t("Close explanation")}
-              onClick={() => setSelected(null)}
+              onClick={closeExplanation}
             >
               <X aria-hidden="true" size={28} />
             </button>
@@ -371,6 +421,15 @@ export function HelpProvider({
           <div className="pp-help-popup-text" id={textId}>
             {t(chosen.element.dataset.help || "")}
           </div>
+          {onMoreInformation && chosen.element.dataset.helpGuide && (
+            <button
+              type="button"
+              className="pp-help-more"
+              onClick={() => onMoreInformation(chosen.element)}
+            >
+              {t("More information")}
+            </button>
+          )}
         </div>
       )}
     </div>

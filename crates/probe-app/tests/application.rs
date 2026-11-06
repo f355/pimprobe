@@ -33,7 +33,10 @@ use tokio::sync::Notify;
 
 #[derive(Default)]
 struct MemoryStore {
+    fail_start: AtomicBool,
     fail_finish: AtomicBool,
+    fail_actions: AtomicBool,
+    fail_settings: AtomicBool,
     settings: Mutex<ProbeSettings>,
     history: Mutex<Vec<HistoryRecord>>,
     diagnostics: Mutex<Vec<DiagnosticEvent>>,
@@ -43,17 +46,30 @@ impl SettingsStore for MemoryStore {
         Ok(self.settings.lock().unwrap().clone())
     }
     fn save(&self, values: &ProbeSettings) -> std::io::Result<()> {
+        if self.fail_settings.load(Ordering::SeqCst) {
+            return Err(std::io::Error::other("disk full"));
+        }
         *self.settings.lock().unwrap() = values.clone();
         Ok(())
     }
 }
 impl HistoryStore for MemoryStore {
     fn append(&self, record: &HistoryRecord) -> std::io::Result<()> {
-        if self.fail_finish.load(Ordering::SeqCst)
+        if (self.fail_start.load(Ordering::SeqCst)
             && matches!(
                 record.event,
-                pimprobe_app::history::HistoryEvent::Finish { .. }
-            )
+                pimprobe_app::history::HistoryEvent::Start { .. }
+            ))
+            || (self.fail_finish.load(Ordering::SeqCst)
+                && matches!(
+                    record.event,
+                    pimprobe_app::history::HistoryEvent::Finish { .. }
+                ))
+            || (self.fail_actions.load(Ordering::SeqCst)
+                && matches!(
+                    record.event,
+                    pimprobe_app::history::HistoryEvent::Action { .. }
+                ))
         {
             return Err(std::io::Error::other("disk full"));
         }
@@ -239,6 +255,243 @@ fn config() -> RoutineConfig {
         y: 0,
         ..RoutineConfig::default()
     }
+}
+
+#[tokio::test]
+async fn calibration_saves_selected_values_without_moving_or_changing_work_zero() {
+    use pimprobe_app::CalibrationRequest;
+    use pimprobe_core::CalibrationOptions;
+    let (app, device, store) = app();
+    let review = app
+        .review(RoutineConfig {
+            family: "center".into(),
+            feature: "hole".into(),
+            x: 1,
+            y: 1,
+            z: false,
+            x_search_distance: 20.,
+            y_search_distance: 20.,
+            ..config()
+        })
+        .await
+        .unwrap();
+    let mut run = app
+        .start_motion(
+            Token {
+                id: review.id.clone(),
+            },
+            Motion::Run,
+        )
+        .await
+        .unwrap();
+    let mut measured = None;
+    while let Some(event) = run.recv().await {
+        if let OperationEvent::Result {
+            result: MeasurementResult::Routine(result),
+        } = event
+        {
+            measured = Some(result);
+        }
+    }
+    drop(run);
+    let result = measured.unwrap();
+    let before = device.state();
+    let settings_before = app.settings().await;
+    let count = device.mock.commands().len();
+    let request = CalibrationRequest {
+        id: review.id.clone(),
+        save: false,
+        options: CalibrationOptions {
+            ball: true,
+            dimensions: [Some(result.raw_spans[0].unwrap() + 2.2), None],
+            offsets: [true, false, false],
+        },
+    };
+    let preview = app.calibrate(request.clone()).await.unwrap();
+    assert!((preview.diameter.unwrap() - 2.2).abs() < 1e-9);
+    assert_eq!(device.mock.commands().len(), count);
+    assert_eq!(app.settings().await, settings_before);
+    store.fail_start.store(true, Ordering::SeqCst);
+    let failure = app
+        .calibrate(CalibrationRequest {
+            save: true,
+            ..request.clone()
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(failure.code, "log");
+    assert_eq!(device.mock.commands().len(), count);
+    assert_eq!(app.settings().await, settings_before);
+    store.fail_start.store(false, Ordering::SeqCst);
+    let saved = app
+        .calibrate(CalibrationRequest {
+            save: true,
+            ..request.clone()
+        })
+        .await
+        .unwrap();
+    assert!(saved.result.point[0].unwrap().abs() < 1e-9);
+    let after = device.state();
+    assert_eq!(after.position, before.position);
+    assert_eq!(after.wcs_origin, before.wcs_origin);
+    assert_eq!(after.probe_offset[1..], before.probe_offset[1..]);
+    assert_eq!(after.probe_z_calibration, before.probe_z_calibration);
+    assert!((app.settings().await["probeDiameter"].as_f64().unwrap() - 2.2).abs() < 1e-9);
+    assert_eq!(
+        store.settings.lock().unwrap().snapshot(),
+        app.settings().await
+    );
+    assert!(
+        device.mock.commands()[count..]
+            .iter()
+            .all(|line| line.starts_with("$33=") || line == "$$")
+    );
+    let again = app.calibrate(request).await.unwrap();
+    assert_eq!(again.offsets, saved.offsets);
+    assert_eq!(
+        app.history()
+            .await
+            .unwrap()
+            .into_iter()
+            .find(|entry| entry.id == review.id)
+            .unwrap()
+            .result,
+        Some(serde_json::json!(saved.result))
+    );
+
+    app.zero(ZeroRequest {
+        id: review.id.clone(),
+        offsets: [0.; 3],
+    })
+    .await
+    .unwrap();
+    app.select_result_wcs(ResultWcsRequest {
+        id: review.id.clone(),
+        wcs: 55,
+    })
+    .await
+    .unwrap();
+    app.select_result_wcs(ResultWcsRequest {
+        id: review.id.clone(),
+        wcs: 54,
+    })
+    .await
+    .unwrap();
+    let ball_only = app
+        .calibrate(CalibrationRequest {
+            id: review.id,
+            save: false,
+            options: CalibrationOptions::default(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(ball_only.offset_axes, [false; 3]);
+    assert_eq!(ball_only.ball_axes, [true; 2]);
+    let backup = app
+        .history()
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|entry| entry.category == "calibration")
+        .unwrap();
+    let before_restore = device.state();
+    let restored = app
+        .restore_probe_calibration(Token { id: backup.id })
+        .await
+        .unwrap();
+    assert_eq!(
+        restored.result.diameter,
+        settings_before["probeDiameter"].as_f64().unwrap()
+    );
+    assert_eq!(app.settings().await, settings_before);
+    let restored_state = device.state();
+    assert_eq!(restored_state.probe_offset, before.probe_offset);
+    assert_eq!(
+        restored_state.probe_z_calibration,
+        before.probe_z_calibration
+    );
+    assert_eq!(restored_state.position, before_restore.position);
+    assert_eq!(restored_state.wcs_origin, before_restore.wcs_origin);
+    let undo = app
+        .history()
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|entry| entry.label == "Restore probe calibration")
+        .unwrap();
+    app.restore_probe_calibration(Token { id: undo.id })
+        .await
+        .unwrap();
+    assert!(
+        (app.settings().await["probeDiameter"]
+            .as_f64()
+            .unwrap()
+            - 2.2)
+            .abs()
+            < 1e-9
+    );
+}
+
+#[tokio::test]
+async fn incomplete_calibration_cannot_set_work_zero_from_stale_compensation() {
+    let (app, device, store) = app();
+    store.fail_settings.store(true, Ordering::SeqCst);
+    // Force failure after the selected controller offset has been accepted.
+    let review = app
+        .review(RoutineConfig {
+            family: "center".into(),
+            feature: "hole".into(),
+            x: 1,
+            y: 1,
+            z: false,
+            x_search_distance: 20.,
+            y_search_distance: 20.,
+            ..config()
+        })
+        .await
+        .unwrap();
+    let mut run = app
+        .start_motion(
+            Token {
+                id: review.id.clone(),
+            },
+            Motion::Run,
+        )
+        .await
+        .unwrap();
+    let mut span = 0.;
+    while let Some(event) = run.recv().await {
+        if let OperationEvent::Result {
+            result: MeasurementResult::Routine(result),
+        } = event
+        {
+            span = result.raw_spans[0].unwrap();
+        }
+    }
+    drop(run);
+    let origin = device.state().wcs_origin;
+    let error = app
+        .calibrate(pimprobe_app::CalibrationRequest {
+            id: review.id.clone(),
+            save: true,
+            options: pimprobe_core::CalibrationOptions {
+                ball: true,
+                dimensions: [Some(span + 2.1), None],
+                offsets: [true, false, false],
+            },
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, "calibration_incomplete");
+    assert!(
+        app.zero(ZeroRequest {
+            id: review.id,
+            offsets: [0.; 3]
+        })
+        .await
+        .is_err()
+    );
+    assert_eq!(device.state().wcs_origin, origin);
 }
 
 #[tokio::test]

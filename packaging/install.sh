@@ -17,18 +17,24 @@
 
 set -eu
 payload=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-destination=/userdata/pimprobe
+root=/userdata/cnc
+destination=$root/apps/pimprobe
+legacy=/userdata/pimprobe
+previous_destination=$destination
+if [ ! -d "$destination" ] && [ -d "$legacy" ]; then previous_destination=$legacy; fi
 vendor=/root/app
 unit=/etc/systemd/system/pimprobe-service.service
 plugin_hook=/etc/systemd/system/nestpad.service.d/pimprobe.conf
-restart=no
-yes=false
+restart=yes
+yes=true
 uninstall=false
 for arg in "$@"; do
     case "$arg" in
         --uninstall) uninstall=true ;;
         --yes|-y) yes=true ;;
+        --confirm) yes=false ;;
         --restart|-r) restart=yes ;;
+        --no-restart) restart=no ;;
         *) echo "Unknown option: $arg" >&2; exit 1 ;;
     esac
 done
@@ -39,6 +45,7 @@ for command in systemctl flock readlink wget; do
     command -v "$command" >/dev/null 2>&1 || fail "Required command missing: $command"
 done
 [ -x "$vendor/CNC_Lab" ] || fail 'Supported NestPad application not found in /root/app.'
+systemctl is-active --quiet nestpad.service || fail 'Open the stock UI before installing or removing PIMProbe.'
 if [ "$uninstall" = false ]; then
     sh "$payload/app/bin/pimprobe-ui" --check
     for file in "$payload/app/bin/pimprobe-service" "$payload/app/lib/"*.so; do
@@ -50,16 +57,20 @@ fi
 for name in libpimprobeproxyplugin.so libpimprobelauncherplugin.so; do
     link=$vendor/$name
     if [ -e "$link" ] || [ -L "$link" ]; then
-        [ -L "$link" ] && [ "$(readlink "$link")" = "$destination/lib/$name" ] || fail "Refusing to replace an unexpected plugin: $link"
+        [ -L "$link" ] || fail "Refusing to replace an unexpected plugin: $link"
+        case "$(readlink "$link")" in
+            "$destination/lib/$name"|"$legacy/lib/$name") ;;
+            *) fail "Refusing to replace an unexpected plugin: $link" ;;
+        esac
     fi
 done
 echo 'The machine must be idle with the spindle stopped.'
 if [ "$uninstall" = true ]; then
-    echo 'Uninstall permanently deletes PIMProbe settings and probing logs.'
+    echo 'Saved probing settings and logs will be kept.'
 fi
 if [ "$yes" = false ]; then
     if [ "$uninstall" = true ]; then
-        printf 'Remove PIMProbe and all its data? [y/N] '
+        printf 'Remove PIMProbe? [y/N] '
     else
         printf 'Install PIMProbe now? [y/N] '
     fi
@@ -84,7 +95,7 @@ stop_pimprobe_ui() {
     pid=$(cat /run/pimprobe-ui.pid)
     if [ -r "/proc/$pid/cmdline" ]; then
         case "$(tr '\0' ' ' <"/proc/$pid/cmdline")" in
-            *'/userdata/pimprobe/bin/pimprobe-ui'*)
+            *'/userdata/pimprobe/bin/pimprobe-ui'*|*'/userdata/cnc/apps/pimprobe/bin/pimprobe-ui'*)
                 kill "$pid"
                 for attempt in 1 2 3 4 5; do
                     if ! kill -0 "$pid" 2>/dev/null; then break; fi
@@ -120,7 +131,7 @@ rollback_installation() {
     fi
     if [ -d "$rollback/installation" ]; then
         rm -rf "$destination"
-        mv "$rollback/installation" "$destination"
+        mv "$rollback/installation" "$previous_destination"
     elif [ "$destination_installed" = true ]; then
         rm -rf "$destination"
     fi
@@ -154,16 +165,11 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 if [ "$uninstall" = false ]; then
-    stage=$(mktemp -d /userdata/pimprobe-stage.XXXXXX)
+    mkdir -p "$root/apps" "$root/backups"
+    stage=$(mktemp -d "$root/apps/pimprobe-stage.XXXXXX")
     cp -a "$payload/app/." "$stage/"
     chown -R root:root "$stage"
-    if [ -d "$destination" ]; then
-        # Carry saved configuration into the staged installation.
-        for file in config.json settings.json; do
-            if [ -f "$destination/$file" ]; then cp -p "$destination/$file" "$stage/$file"; fi
-        done
-    fi
-    rollback=$(mktemp -d /userdata/pimprobe-rollback.XXXXXX)
+    rollback=$(mktemp -d "$root/backups/pimprobe-install.XXXXXX")
     if [ -e "$unit" ]; then cp -a "$unit" "$rollback/"; fi
     if [ -d "$unit.d" ]; then cp -a "$unit.d" "$rollback/"; fi
     for name in libpimprobeproxyplugin.so libpimprobelauncherplugin.so; do
@@ -172,15 +178,20 @@ if [ "$uninstall" = false ]; then
     if [ -f "$plugin_hook" ]; then cp -p "$plugin_hook" "$rollback/nestpad-pimprobe.conf"; fi
 fi
 if [ -L /etc/systemd/system/multi-user.target.wants/pimprobe-service.service ]; then unit_was_enabled=true; fi
-if [ "$restart" = yes ]; then
-    systemctl is-active --quiet nestpad.service || fail 'NestPad application service is not running.'
-fi
 if systemctl is-active --quiet pimprobe-service; then
     service_was_active=true
     systemctl stop pimprobe-service
     service_stopped=true
 fi
 if [ "$restart" = no ] || [ "$uninstall" = true ]; then stop_pimprobe_ui; fi
+sh "$payload/migrate-data.sh" /userdata /root
+if [ ! -e "$root/config/pimprobe-service.json" ]; then
+    temporary=$(mktemp "$root/config/pimprobe-service.json.XXXXXX")
+    cp "$payload/app/config.json" "$temporary"
+    sync
+    mv "$temporary" "$root/config/pimprobe-service.json"
+    sync
+fi
 if [ "$uninstall" = true ]; then
     if [ -e "$unit" ] || [ -L /etc/systemd/system/multi-user.target.wants/pimprobe-service.service ]; then
         systemctl disable pimprobe-service
@@ -188,16 +199,19 @@ if [ "$uninstall" = true ]; then
     rm -f "$vendor/libpimprobeproxyplugin.so" "$vendor/libpimprobelauncherplugin.so"
     rm -f "$plugin_hook"
     rm -rf "$unit" "$unit.d" /etc/systemd/system/multi-user.target.wants/pimprobe-service.service
-    rm -rf "$destination" /userdata/pimprobe-data /root/.config/pimprobe /root/.local/share/pimprobe /root/.cache/pimprobe
-    rm -rf /userdata/backups/pimprobe-* /userdata/pimprobe-stage.* /userdata/pimprobe-update.*
+    rm -rf "$destination"
+    if [ -d "$legacy" ]; then
+        backup=$(mktemp -d "$root/backups/pimprobe-legacy.XXXXXX")
+        mv "$legacy" "$backup/app"
+    fi
     rm -f /run/pimprobe-controller.sock /run/pimprobe-ui.pid /run/pimprobe-ui.lock \
         /run/pimprobe-update-*.status
     rm -rf /run/pimprobe-browser
     systemctl daemon-reload
-    echo 'PIMProbe and its data removed. Installer files and shared system journals were left intact.'
+    echo 'PIMProbe removed. Saved probing settings and logs were kept.'
 else
     installation_started=true
-    if [ -e "$destination" ]; then mv "$destination" "$rollback/installation"; fi
+    if [ -e "$previous_destination" ]; then mv "$previous_destination" "$rollback/installation"; fi
     mv "$stage" "$destination"
     stage=''
     destination_installed=true
@@ -211,7 +225,16 @@ else
     cp "$payload/pimprobe-service.service" "$unit"
     systemctl daemon-reload
     systemctl enable pimprobe-service
-    rm -rf /userdata/backups/pimprobe-install.*
+    if [ "$previous_destination" = "$legacy" ]; then
+        backup=$(mktemp -d "$root/backups/pimprobe-legacy.XXXXXX")
+        if [ -d "$rollback/installation" ]; then
+            cp -a "$rollback/installation" "$backup/app"
+        fi
+        if [ -d /userdata/pimprobe-data ]; then
+            mv /userdata/pimprobe-data "$backup/logs"
+        fi
+        sync
+    fi
     echo "Installed $(cat "$destination/VERSION")."
 fi
 if [ "$restart" = no ]; then

@@ -40,7 +40,7 @@ jobs:
           cargo clippy --locked --workspace --all-targets -- -D warnings
           cargo test --locked --workspace
       - name: Check assets
-        run: node --test dev/test-assets.mjs
+        run: node --test dev/test-assets.mjs dev/test-data-migration.mjs
       - name: Build and test browser interface
         run: |
           npm ci --prefix web

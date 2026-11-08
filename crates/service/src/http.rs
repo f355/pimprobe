@@ -179,8 +179,8 @@ where
 async fn state(State(app): State<Arc<App>>) -> Json<pimprobe_app::AppState> {
     Json(app.probe.state())
 }
-async fn settings(State(app): State<Arc<App>>) -> Json<Map<String, Value>> {
-    Json(app.probe.settings().await)
+async fn settings(State(app): State<Arc<App>>) -> Result<Json<Map<String, Value>>, ApiError> {
+    Ok(Json(app.probe.settings().await?))
 }
 async fn settings_schema(
     State(app): State<Arc<App>>,

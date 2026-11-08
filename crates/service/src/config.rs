@@ -50,7 +50,7 @@ impl Options {
         let mut settings = None;
         let mut mock = false;
         let mut ready_token = "manual".to_owned();
-        let mut web_root = PathBuf::from("/userdata/pimprobe/web");
+        let mut web_root = PathBuf::from("/userdata/cnc/apps/pimprobe/web");
         while let Some(arg) = args.next() {
             if arg == "--mock" {
                 mock = true;
@@ -85,6 +85,9 @@ impl Options {
             return Err("HTTP must listen on a loopback address".into());
         }
         let settings = settings.unwrap_or_else(|| {
+            if !mock {
+                return PathBuf::from("/userdata/cnc/config/probing.json");
+            }
             let base = std::env::var_os("XDG_CONFIG_HOME")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| {

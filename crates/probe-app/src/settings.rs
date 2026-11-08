@@ -20,6 +20,9 @@ use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+mod file;
+pub use file::JsonSettingsStore;
+
 #[derive(Clone, Copy)]
 struct FeedLimits {
     linear: f64,
@@ -140,7 +143,7 @@ impl super::ProbeApp {
 pub enum SettingsError {
     #[error("Invalid value for setting {0}.")]
     Invalid(String),
-    #[error("Could not save settings: {0}")]
+    #[error("Could not read or save settings: {0}")]
     Store(#[from] std::io::Error),
 }
 
@@ -156,7 +159,7 @@ fn rules() -> Vec<Rule> {
         ("centerXSearchDistance", 20., Parameter::SearchDistance),
         ("centerYSearchDistance", 20., Parameter::SearchDistance),
         ("centerDepth", 5., Parameter::Travel),
-        ("probeDiameter", 2., Parameter::Diameter),
+        ("probeDiameter", 1.83, Parameter::Diameter),
         ("retractDistance", 0.5, Parameter::Retract),
         ("safeZOffset", 40., Parameter::Travel),
         ("positioningFeed", 1000., Parameter::PositioningFeed),
@@ -310,11 +313,12 @@ impl Settings {
     pub fn snapshot(&self) -> Map<String, Value> {
         self.values.snapshot()
     }
-    pub fn values(&self) -> &ProbeSettings {
-        &self.values
+    pub fn reload(&mut self) -> Result<(), SettingsError> {
+        self.values = self.store.load()?;
+        Ok(())
     }
     pub fn update(&mut self, patch: Map<String, Value>) -> Result<(), SettingsError> {
-        let values = self.values.patched(patch)?;
+        let values = self.store.load()?.patched(patch)?;
         self.store.save(&values)?;
         self.values = values;
         Ok(())

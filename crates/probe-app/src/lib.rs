@@ -370,8 +370,12 @@ impl ProbeApp {
             recovery_failed: self.recovery_failed.load(Ordering::SeqCst),
         }
     }
-    pub async fn settings(&self) -> Map<String, Value> {
-        self.settings.lock().await.snapshot()
+    pub async fn settings(&self) -> Result<Map<String, Value>, AppError> {
+        let mut settings = self.settings.lock().await;
+        settings
+            .reload()
+            .map_err(|e| AppError::storage("settings", e))?;
+        Ok(settings.snapshot())
     }
     pub async fn update_settings(
         &self,
@@ -487,8 +491,8 @@ impl ProbeApp {
     ) -> Result<Operation, AppError> {
         let app = self.clone();
         let guard = app.acquire()?;
-        let values = app.settings.lock().await.snapshot();
-        let settings = app.settings.lock().await.values().repeatability();
+        let values = app.settings().await?;
+        let settings = settings::ProbeSettings::from_saved(values.clone()).repeatability();
         app.validate_feeds(&[
             ("positioningFeed", settings.positioning_feed),
             ("coarseFeed", settings.coarse_feed),

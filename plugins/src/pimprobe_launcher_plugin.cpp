@@ -73,7 +73,7 @@ void PimProbeLauncherPlugin::tryInstallLauncher() {
                                  == QStringLiteral("\u4e2d\u6587");
             const QString language = chinese ? QStringLiteral("zh_CN") : QStringLiteral("en");
             if (!QProcess::startDetached(
-                    QStringLiteral("/userdata/pimprobe/bin/pimprobe-ui"),
+                    QStringLiteral("/userdata/cnc/apps/pimprobe/bin/pimprobe-ui"),
                     {QStringLiteral("--language=") + language})) {
                 qWarning() << "PimProbe launcher could not start UI";
             }

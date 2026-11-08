@@ -17,12 +17,12 @@
 [Unit]
 Description=Probing service
 After=local-fs.target sysv-compat.service
-RequiresMountsFor=/userdata/pimprobe
+RequiresMountsFor=/userdata/cnc/apps/pimprobe
 
 [Service]
 Type=simple
-ExecStart=/userdata/pimprobe/bin/pimprobe-service --config /userdata/pimprobe/config.json --settings /userdata/pimprobe/settings.json
-WorkingDirectory=/userdata/pimprobe
+ExecStart=/userdata/cnc/apps/pimprobe/bin/pimprobe-service --config /userdata/cnc/config/pimprobe-service.json --settings /userdata/cnc/config/probing.json
+WorkingDirectory=/userdata/cnc/apps/pimprobe
 Restart=on-failure
 RestartSec=2
 UMask=0077

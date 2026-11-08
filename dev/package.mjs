@@ -74,6 +74,7 @@ try {
     copy(join(root, 'packaging/pimprobe-service.service'), 'pimprobe-service.service');
     copy(join(root, 'packaging/nestpad-pimprobe.conf'), 'nestpad-pimprobe.conf');
     copy(join(root, 'packaging/install.sh'), 'install.sh');
+    copy(join(root, 'packaging/migrate-data.sh'), 'migrate-data.sh');
     for (const name of ['LICENSE.md', 'README.md']) {
         copy(join(root, name), name);
         copy(join(root, name), 'app/' + name);

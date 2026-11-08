@@ -296,8 +296,8 @@ async fn calibration_saves_selected_values_without_moving_or_changing_work_zero(
     drop(run);
     let result = measured.unwrap();
     let before = device.state();
-    let settings_before = app.settings().await;
     let count = device.mock.commands().len();
+    let settings_before = app.settings().await.unwrap();
     let request = CalibrationRequest {
         id: review.id.clone(),
         save: false,
@@ -310,7 +310,7 @@ async fn calibration_saves_selected_values_without_moving_or_changing_work_zero(
     let preview = app.calibrate(request.clone()).await.unwrap();
     assert!((preview.diameter.unwrap() - 2.2).abs() < 1e-9);
     assert_eq!(device.mock.commands().len(), count);
-    assert_eq!(app.settings().await, settings_before);
+    assert_eq!(app.settings().await.unwrap(), settings_before);
     store.fail_start.store(true, Ordering::SeqCst);
     let failure = app
         .calibrate(CalibrationRequest {
@@ -321,7 +321,7 @@ async fn calibration_saves_selected_values_without_moving_or_changing_work_zero(
         .unwrap_err();
     assert_eq!(failure.code, "log");
     assert_eq!(device.mock.commands().len(), count);
-    assert_eq!(app.settings().await, settings_before);
+    assert_eq!(app.settings().await.unwrap(), settings_before);
     store.fail_start.store(false, Ordering::SeqCst);
     let saved = app
         .calibrate(CalibrationRequest {
@@ -336,11 +336,16 @@ async fn calibration_saves_selected_values_without_moving_or_changing_work_zero(
     assert_eq!(after.wcs_origin, before.wcs_origin);
     assert_eq!(after.probe_offset[1..], before.probe_offset[1..]);
     assert_eq!(after.probe_z_calibration, before.probe_z_calibration);
-    assert!((app.settings().await["probeDiameter"].as_f64().unwrap() - 2.2).abs() < 1e-9);
-    assert_eq!(
-        store.settings.lock().unwrap().snapshot(),
-        app.settings().await
+    assert!(
+        (app.settings().await.unwrap()["probeDiameter"]
+            .as_f64()
+            .unwrap()
+            - 2.2)
+            .abs()
+            < 1e-9
     );
+    let stored = store.settings.lock().unwrap().snapshot();
+    assert_eq!(stored, app.settings().await.unwrap());
     assert!(
         device.mock.commands()[count..]
             .iter()
@@ -403,7 +408,7 @@ async fn calibration_saves_selected_values_without_moving_or_changing_work_zero(
         restored.result.diameter,
         settings_before["probeDiameter"].as_f64().unwrap()
     );
-    assert_eq!(app.settings().await, settings_before);
+    assert_eq!(app.settings().await.unwrap(), settings_before);
     let restored_state = device.state();
     assert_eq!(restored_state.probe_offset, before.probe_offset);
     assert_eq!(
@@ -423,7 +428,7 @@ async fn calibration_saves_selected_values_without_moving_or_changing_work_zero(
         .await
         .unwrap();
     assert!(
-        (app.settings().await["probeDiameter"]
+        (app.settings().await.unwrap()["probeDiameter"]
             .as_f64()
             .unwrap()
             - 2.2)

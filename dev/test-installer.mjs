@@ -16,7 +16,7 @@
 
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, rmSync, existsSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -47,12 +47,10 @@ test('self-extracting package preserves its payload and rejects corruption', () 
             ['LICENSE.md', 'app/LICENSE.md'],
             ['README.md', 'app/README.md'],
             ['packaging/nestpad-pimprobe.conf', 'nestpad-pimprobe.conf'],
-            ['web/assets/fonts/Geist-Regular.otf', 'app/web/media/fonts/Geist-Regular.otf'],
-            ['web/assets/fonts/Geist-Medium.otf', 'app/web/media/fonts/Geist-Medium.otf'],
-            ['web/assets/fonts/Geist-Bold.otf', 'app/web/media/fonts/Geist-Bold.otf'],
-            ['web/assets/fonts/OFL.txt', 'app/web/media/fonts/OFL.txt'],
-            ['web/assets/animations/z-surface.png', 'app/web/media/animations/z-surface.png'],
+            ['packaging/migrate-data.sh', 'migrate-data.sh'],
         ]) assert.deepEqual(readFileSync(join(extracted, target)), readFileSync(join(root, source)));
+        for (const name of readdirSync(join(root, 'web/dist/assets')))
+            assert.deepEqual(readFileSync(join(extracted, 'app/web/assets', name)), readFileSync(join(root, 'web/dist/assets', name)));
         assert.ok(existsSync(join(extracted, 'install.sh')));
         run('sh', [installer, '--extract', extracted], 1);
         const corrupt = readFileSync(installer);

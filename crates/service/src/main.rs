@@ -37,7 +37,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let log_dir = if options.mock {
         options.settings.with_file_name("logs")
     } else {
-        "/userdata/pimprobe-data".into()
+        "/userdata/cnc/logs/pimprobe".into()
     };
     let settings = settings::open(options.settings)?;
     let logs = LogStore::open(log_dir)?;

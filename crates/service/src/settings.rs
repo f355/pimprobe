@@ -14,65 +14,33 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use pimprobe_app::settings::{ProbeSettings, SettingsStore};
+use pimprobe_app::settings::{JsonSettingsStore, ProbeSettings};
 pub use pimprobe_app::settings::{SettingsError, schema};
 use serde_json::{Map, Value};
-use std::{
-    fs,
-    io::Write,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
-
-pub struct JsonSettingsStore {
-    path: PathBuf,
-}
-impl JsonSettingsStore {
-    pub fn new(path: impl AsRef<Path>) -> Self {
-        Self {
-            path: path.as_ref().to_owned(),
-        }
-    }
-}
-impl SettingsStore for JsonSettingsStore {
-    fn load(&self) -> std::io::Result<ProbeSettings> {
-        let mut saved: Map<String, Value> = match fs::read(&self.path) {
-            Ok(data) => serde_json::from_slice(&data).map_err(std::io::Error::other)?,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Map::new(),
-            Err(e) => return Err(e),
-        };
-        if !saved.contains_key("developmentUpdates")
-            && let Ok(version) = fs::read_to_string(self.path.with_file_name("VERSION"))
-        {
-            saved.insert(
-                "developmentUpdates".into(),
-                Value::Bool(crate::updates::stable_version(version.trim()).is_none()),
-            );
-        }
-        let values = ProbeSettings::from_saved(saved.clone());
-        if values.snapshot() != saved {
-            self.save(&values)?;
-        }
-        Ok(values)
-    }
-    fn save(&self, values: &ProbeSettings) -> std::io::Result<()> {
-        let parent = self
-            .path
-            .parent()
-            .filter(|p| !p.as_os_str().is_empty())
-            .unwrap_or(Path::new("."));
-        fs::create_dir_all(parent)?;
-        let mut file = tempfile::NamedTempFile::new_in(parent)?;
-        serde_json::to_writer_pretty(&mut file, values).map_err(std::io::Error::other)?;
-        file.write_all(b"\n")?;
-        file.as_file().sync_all()?;
-        file.persist(&self.path).map_err(|e| e.error)?;
-        fs::File::open(parent)?.sync_all()
-    }
-}
+use std::{fs, path::Path, sync::Arc};
 
 pub fn open(path: impl AsRef<Path>) -> Result<pimprobe_app::settings::Settings, SettingsError> {
-    pimprobe_app::settings::Settings::load(Arc::new(JsonSettingsStore::new(path)))
+    open_with_version(
+        path.as_ref(),
+        Path::new("/userdata/cnc/apps/pimprobe/VERSION"),
+    )
+}
+
+fn open_with_version(
+    path: &Path,
+    version_path: &Path,
+) -> Result<pimprobe_app::settings::Settings, SettingsError> {
+    let mut defaults = Map::new();
+    if let Ok(version) = fs::read_to_string(version_path) {
+        defaults.insert(
+            "developmentUpdates".into(),
+            Value::Bool(crate::updates::stable_version(version.trim()).is_none()),
+        );
+    }
+    pimprobe_app::settings::Settings::load(Arc::new(JsonSettingsStore::new(
+        path,
+        ProbeSettings::from_saved(defaults),
+    )))
 }
 #[cfg(test)]
 mod tests {
@@ -133,7 +101,7 @@ mod tests {
             saved.remove("developmentUpdates");
             saved.remove("automaticUpdateChecks");
             fs::write(&path, serde_json::to_vec(&saved).unwrap()).unwrap();
-            let mut settings = open(&path).unwrap();
+            let mut settings = open_with_version(&path, &dir.path().join("VERSION")).unwrap();
             assert_eq!(settings.snapshot()["developmentUpdates"], development);
             assert_eq!(settings.snapshot()["automaticUpdateChecks"], true);
             settings
@@ -166,8 +134,8 @@ mod tests {
             ProbeSettings::default().snapshot()["coarseFeed"]
         );
         assert_eq!(saved["centerXSearchDistance"], 40);
-        let stored: Map<String, Value> = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-        assert_eq!(stored, saved);
+        let stored: ProbeSettings = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert_eq!(stored.snapshot(), saved);
         fs::write(&path, "{").unwrap();
         assert!(open(path).is_err());
     }

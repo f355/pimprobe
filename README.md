@@ -11,7 +11,7 @@ Download the installer from the [latest stable release](https://github.com/f355/
 or the [rolling development release](https://github.com/f355/pimprobe/releases/tag/dev),
 rename it to `pimprobe.run` and copy it to a USB drive.
 
-Make sure the machine is idle with the spindle stopped.
+Open the stock UI and make sure the machine is idle with the spindle stopped.
 Connect a USB keyboard to the port on the right side of the machine.
 Press `Ctrl-Alt-T`, a terminal window will open on the NestPad.
 
@@ -19,13 +19,13 @@ Have your USB drive ready. Type the following in the terminal exactly, press Ent
 then swap the keyboard for the USB drive within 20 seconds, and wait for the NestPad UI to restart.
 
 ```sh
-sleep 20; sh /mnt/udisk/pimprobe.run -y -r
+sleep 20; sh /mnt/udisk/pimprobe.run
 ```
 
-To uninstall, including settings, follow the same procedure, just use a different command:
+To uninstall, follow the same procedure with a different command. Saved settings and logs are kept:
 
 ```sh
-sleep 20; sh /mnt/udisk/pimprobe.run --uninstall -y -r
+sleep 20; sh /mnt/udisk/pimprobe.run --uninstall
 ```
 
 To get new versions as they are released, head to the Settings tab and press "Check for updates".
@@ -157,35 +157,42 @@ The installer checks the archive, machine layout and runtime dependencies, and
 preserves configuration and settings during upgrades.
 
 A startup hook recreates the plugin links before CNC_Lab starts, including
-after CNC_Lab application updates. PIMProbe's files live in `/userdata/pimprobe`.
+after CNC_Lab application updates. PIMProbe's files live in `/userdata/cnc/apps/pimprobe`.
 
-Reboot later to activate the installation, or use `-r` to restart CNC_Lab immediately.
+The stock UI must be running. Installation proceeds without a confirmation
+prompt and restarts the stock UI when finished.
 
 ```sh
 sh installer.run --extract ./unpacked    # Extract to a new directory
-sh installer.run -y                      # Install; reboot later
-sh installer.run -y -r                   # Install and restart CNC_Lab
-sh installer.run --uninstall             # Remove PIMProbe and its data
-sh installer.run --uninstall -y -r
+sh installer.run                        # Install and restart the stock UI
+sh installer.run --confirm              # Ask before installing
+sh installer.run --no-restart           # Install; reboot later
+sh installer.run --uninstall            # Remove PIMProbe; keep settings and logs
 ```
 
-`-y` (`--yes`) confirms that you have made the machine idle with its spindle stopped.
+`--confirm` and `--no-restart` also work with `--uninstall`. The existing `-y`
+(`--yes`) and `-r` (`--restart`) flags remain accepted.
 Obtain installers from a trusted source; the checksum detects corruption.
 
-Uninstall removes PIMProbe's service, plugins, UI, settings and probing logs.
-The installer file remains available for reinstallation.
+Uninstall removes PIMProbe's service, plugins and UI. Saved probing settings and
+logs remain available for reinstallation or another application using the probe.
 
 ## Configuration
 
-The machine installation is in `/userdata/pimprobe`. Service options are in
-`config.json`, and probing settings are in `settings.json`.
+The machine installation is in `/userdata/cnc/apps/pimprobe`. Service options are in
+`/userdata/cnc/config/pimprobe-service.json`. Probing preferences are in
+`/userdata/cnc/config/probing.json`, and logs are under `/userdata/cnc/logs/pimprobe`.
+Upgrades copy settings and logs from older installations without overwriting
+configuration already stored in the shared directory.
+On the first upgrade, a saved ball diameter of exactly 2.00 mm changes to
+1.83 mm. Other saved diameters are kept. Calibrate the ball for accurate results.
 
 Choose English, 简体中文 or Svenska in Settings. The choice is saved.
 Until you choose, PIMProbe follows CNC_Lab's language on the machine and the
 system language in a local preview.
 
-For local use, settings default to `$XDG_CONFIG_HOME/pimprobe/settings.json`
-or `$HOME/.config/pimprobe/settings.json`. Override this with `--settings FILE`.
+For a local preview, settings default to `$XDG_CONFIG_HOME/pimprobe/preview-settings.json`
+or `$HOME/.config/pimprobe/preview-settings.json`. Override this with `--settings FILE`.
 
 The HTTP listener is `127.0.0.1:8137`. Use an SSH tunnel for remote access.
 

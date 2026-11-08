@@ -24,15 +24,15 @@ usage() {
 PIMProbe offline installer for NestPad (Linux ARM64).
 Run only with the machine idle and the spindle stopped.
 
-  sh installer.run                     Interactive installation
-  sh installer.run -y                   Install; activate after a reboot
-  sh installer.run -y -r                Install and restart CNC_Lab now
-  sh installer.run --uninstall          Remove PIMProbe and its data
+  sh installer.run                     Install and restart the stock UI
+  sh installer.run --confirm           Ask before installing
+  sh installer.run --no-restart        Install; activate after a reboot
+  sh installer.run --uninstall         Remove PIMProbe; keep settings and logs
   sh installer.run --extract DIRECTORY  Extract into a new directory; do not install
 
--y is short for --yes; -r is short for --restart. Without -y, changes ask first.
---uninstall supports -y and -r. It leaves this installer and shared system
-journals intact. Without a restart, reboot to unload plugins.
+The stock UI must be running. Installation does not ask for confirmation and
+restarts the stock UI by default. --confirm and --no-restart also work with
+--uninstall. -y/--yes and -r/--restart remain accepted.
 HELP
 }
 case "${1:-}" in

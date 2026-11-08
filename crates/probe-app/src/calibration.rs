@@ -55,7 +55,7 @@ impl ProbeApp {
                 .completed(&request.id, session)
                 .ok_or_else(|| AppError::conflict("result", "No completed result available"))?;
             let state = app.device.state();
-            let diameter = app.settings().await["probeDiameter"].as_f64().unwrap();
+            let diameter = app.settings().await?["probeDiameter"].as_f64().unwrap();
             let mut calibration =
                 pimprobe_core::calibrate_probe(&plan, &result, &state, diameter, &request.options)?;
             if !request.save {
@@ -133,7 +133,7 @@ impl ProbeApp {
                 })?;
             let state = app.device.state();
             let before = SavedProbeCalibration {
-                diameter: app.settings().await["probeDiameter"].as_f64().unwrap(),
+                diameter: app.settings().await?["probeDiameter"].as_f64().unwrap(),
                 offsets: [
                     state.probe_offset[0],
                     state.probe_offset[1],

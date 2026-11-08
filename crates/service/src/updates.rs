@@ -129,8 +129,8 @@ impl UpdateManager {
     pub fn production() -> Self {
         let mut manager = Self::new(
             "https://api.github.com/repos/f355/pimprobe/releases".into(),
-            "/userdata/pimprobe/VERSION".into(),
-            "/userdata".into(),
+            "/userdata/cnc/apps/pimprobe/VERSION".into(),
+            "/userdata/cnc/cache/pimprobe-updates".into(),
         );
         manager.status_root = "/run".into();
         manager
@@ -302,6 +302,9 @@ impl UpdateManager {
                 "release installer is too large",
             )));
         }
+        fs::create_dir_all(&self.staging_root)
+            .await
+            .map_err(UpdateError::Io)?;
         let stage_guard = tempfile::Builder::new()
             .prefix("pimprobe-update.")
             .tempdir_in(&self.staging_root)

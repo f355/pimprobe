@@ -38,7 +38,7 @@ impl LocalHost {
 #[async_trait]
 impl HostActions for LocalHost {
     fn software_info(&self) -> SoftwareInfo {
-        let root = Path::new("/userdata/pimprobe");
+        let root = Path::new("/userdata/cnc/apps/pimprobe");
         SoftwareInfo {
             version: fs::read_to_string(root.join("VERSION"))
                 .unwrap_or_else(|_| env!("CARGO_PKG_VERSION").into())

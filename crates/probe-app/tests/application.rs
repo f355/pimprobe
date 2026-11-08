@@ -146,6 +146,10 @@ struct Device {
     stopped: AtomicBool,
     entered: Notify,
     stopping: Notify,
+    pause_finish: AtomicBool,
+    finalized: AtomicBool,
+    finishing: Notify,
+    finished: Notify,
 }
 impl Device {
     fn new() -> Self {
@@ -160,6 +164,10 @@ impl Device {
             stopped: AtomicBool::new(false),
             entered: Notify::new(),
             stopping: Notify::new(),
+            pause_finish: AtomicBool::new(false),
+            finalized: AtomicBool::new(false),
+            finishing: Notify::new(),
+            finished: Notify::new(),
         }
     }
 }
@@ -180,6 +188,9 @@ impl Controller for Device {
         self.mock.subscribe()
     }
     async fn send(&self, command: &str) -> Result<(), Error> {
+        if self.finalized.load(Ordering::SeqCst) && !command.starts_with('$') {
+            return Err(Error::Controller("Execution is closed".into()));
+        }
         if command == "$#" {
             self.coordinates_read.store(true, Ordering::SeqCst);
         }
@@ -221,7 +232,10 @@ impl ProbeDevice for Device {
         self.owner
             .clone()
             .try_lock_owned()
-            .map(|g| Box::new(g) as ActionGuard)
+            .map(|g| {
+                self.finalized.store(false, Ordering::SeqCst);
+                Box::new(g) as ActionGuard
+            })
             .map_err(|_| Error::Preflight("Machine is in use".into()))
     }
     async fn select_wcs(&self, wcs: i32) -> Result<(), Error> {
@@ -235,6 +249,14 @@ impl ProbeDevice for Device {
         } else {
             Err(Error::Timeout)
         }
+    }
+    async fn finish_action(&self) -> Result<(), Error> {
+        if self.pause_finish.load(Ordering::SeqCst) {
+            self.finishing.notify_one();
+            self.finished.notified().await;
+        }
+        self.finalized.store(true, Ordering::SeqCst);
+        Ok(())
     }
 }
 fn app() -> (Arc<ProbeApp>, Arc<Device>, Arc<MemoryStore>) {
@@ -806,6 +828,50 @@ async fn dropping_a_run_keeps_machine_owned_until_stopping_is_confirmed() {
 }
 
 #[tokio::test]
+async fn measurement_waits_for_host_cleanup_before_reporting_success() {
+    let (app, device, _) = app();
+    device.pause_finish.store(true, Ordering::SeqCst);
+    let review = app.review(config()).await.unwrap();
+    let mut operation = app
+        .start_motion(Token { id: review.id }, Motion::Run)
+        .await
+        .unwrap();
+    tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        device.finishing.notified(),
+    )
+    .await
+    .unwrap();
+    assert!(device.owner.try_lock().is_err());
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(20), async {
+            while let Some(event) = operation.recv().await {
+                if matches!(
+                    event,
+                    OperationEvent::Result { .. } | OperationEvent::Error { .. }
+                ) {
+                    return event;
+                }
+            }
+            panic!("Operation closed before host cleanup");
+        })
+        .await
+        .is_err()
+    );
+    device.finished.notify_one();
+    while let Some(event) = operation.recv().await {
+        if let OperationEvent::Result { .. } = event {
+            assert!(device.owner.try_lock().is_ok());
+            return;
+        }
+        if let OperationEvent::Error { message, .. } = event {
+            panic!("{message}");
+        }
+    }
+    panic!("Measurement result was not delivered");
+}
+
+#[tokio::test]
 async fn measurement_and_later_work_zero_are_available_through_host_storage() {
     let (app, _, store) = app();
     let review = app.review(config()).await.unwrap();
@@ -863,6 +929,14 @@ async fn measurement_and_later_work_zero_are_available_through_host_storage() {
     assert!(opened.can_apply);
     app.clear_logs().await.unwrap();
     assert!(app.history().await.unwrap().is_empty());
+    assert!(
+        app.apply_history_result(
+            history[0].id.clone(),
+            pimprobe_app::HistoryAction::Zero([0.; 3])
+        )
+        .await
+        .is_err()
+    );
 }
 
 #[tokio::test]
@@ -896,5 +970,40 @@ async fn repeatability_distinguishes_stop_from_cancellation_in_events_and_histor
         };
         assert_eq!(code.as_deref(), Some(expected));
         assert_eq!(app.history().await.unwrap()[0].status, expected);
+    }
+}
+
+#[tokio::test]
+async fn rotary_failure_restores_modes_before_closing_execution() {
+    for cancel in [false, true] {
+        let (app, device, _) = app();
+        let before = device.state();
+        let review = app
+            .review_rotary(pimprobe_core::RotaryConfig::default())
+            .await
+            .unwrap();
+        device.stopped.store(true, Ordering::SeqCst);
+        device.pause.store(cancel, Ordering::SeqCst);
+        device.mock.set_geometry(pimprobe_core::MockGeometry::Empty);
+        let mut operation = app.run_rotary(Token { id: review.id }).await.unwrap();
+        if cancel {
+            device.entered.notified().await;
+            operation.cancel();
+        }
+        let mut terminal = None;
+        while let Some(event) = operation.recv().await {
+            if let OperationEvent::Error { code, message, .. } = event {
+                terminal = Some((code, message));
+            }
+        }
+        let (code, message) = terminal.unwrap();
+        assert_eq!(
+            code,
+            if cancel { "cancelled" } else { "no_contact" },
+            "{message}"
+        );
+        assert_eq!(device.state().modes, before.modes);
+        assert_eq!(device.state().plane, before.plane);
+        assert!(device.owner.try_lock().is_ok());
     }
 }

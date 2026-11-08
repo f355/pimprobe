@@ -34,6 +34,7 @@ impl ProbeApp {
                 .take_completed(&request.id, session)
                 .ok_or_else(|| AppError::conflict("result", "No completed result available"))?;
             let updated = pimprobe_core::rotate_angle_result(app.device.as_ref(), &result).await;
+            let updated = app.finish_action(updated).await;
             let saved = updated.as_ref().unwrap_or(&result).clone();
             let mut logged = Ok(());
             if updated.is_ok() {

@@ -45,6 +45,10 @@ pub trait ProbeDevice: RepeatabilityController + 'static {
         Ok(Box::new(()))
     }
     async fn select_wcs(&self, wcs: i32) -> Result<(), Error>;
+    /// Finish a host's private execution context before publishing an action result.
+    async fn finish_action(&self) -> Result<(), Error> {
+        Ok(())
+    }
     async fn stop(&self) -> Result<(), Error>;
     async fn shutdown(&self) {}
 }

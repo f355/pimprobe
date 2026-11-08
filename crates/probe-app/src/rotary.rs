@@ -110,6 +110,10 @@ impl ProbeApp {
                 },
             )
             .await;
+            let outcome = match outcome {
+                Ok(()) => app.finish_action(Ok(())).await,
+                Err(error) => Err(error),
+            };
             let event = match outcome {
                 Ok(()) => {
                     let saved = app
@@ -150,6 +154,12 @@ impl ProbeApp {
                                 }
                             }
                         }
+                    }
+                    if let Err(recovery) = app.device.finish_action().await {
+                        error = Error::Recovery {
+                            cause: Box::new(error),
+                            recovery: Box::new(recovery),
+                        };
                     }
                     let saved = app.logs.finish(
                         &token.id,
@@ -209,6 +219,7 @@ impl ProbeApp {
             } else {
                 pimprobe_core::zero_rotary(app.device.as_ref(), &result).await
             };
+            let outcome = app.finish_action(outcome).await;
             if let Err(error) = outcome {
                 log_warning(app.logs.action(
                     &token.id,

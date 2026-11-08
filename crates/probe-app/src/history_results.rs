@@ -194,6 +194,7 @@ impl ProbeApp {
                 }
             };
             let mut data = json!({"result":opened.result});
+            app.device.finish_action().await?;
             if let HistoryAction::Zero(offsets) = action {
                 data["offsets"] = json!(offsets);
             }

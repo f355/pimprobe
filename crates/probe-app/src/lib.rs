@@ -150,6 +150,11 @@ impl ProbeApp {
             }
         }
     }
+
+    async fn finish_action<T>(&self, result: Result<T, Error>) -> Result<T, Error> {
+        let finished = self.device.finish_action().await;
+        result.and_then(|value| finished.map(|()| value))
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -433,7 +438,9 @@ impl ProbeApp {
         tokio::task::spawn_blocking(move || logs.clear())
             .await
             .map_err(|e| AppError::conflict("log", e.to_string()))?
-            .map_err(log_error)
+            .map_err(log_error)?;
+        *self.history_result.lock().await = None;
+        Ok(())
     }
     pub async fn export_logs(&self) -> Result<host::ExportResult, AppError> {
         let _guard = self.acquire()?;
@@ -566,6 +573,7 @@ impl ProbeApp {
                 queue_progress(&sender, &run_cancel, event);
             },
         ).await;
+            let result = app.finish_action(result).await;
             let event = match result {
                 Ok(()) => {
                     let saved = app
@@ -745,6 +753,10 @@ impl ProbeApp {
                 }
                 _ => unreachable!(),
             };
+            let result = match result {
+                Ok(result) => app.finish_action(Ok(result)).await,
+                Err(error) => Err(error),
+            };
             let event = match result {
                 Ok(result) => {
                     let saved = match motion {
@@ -785,6 +797,12 @@ impl ProbeApp {
                             pimprobe_core::restore_modes(app.device.as_ref(), plan.start.modes)
                                 .await
                     {
+                        error = Error::Recovery {
+                            cause: Box::new(error),
+                            recovery: Box::new(recovery),
+                        };
+                    }
+                    if let Err(recovery) = app.device.finish_action().await {
                         error = Error::Recovery {
                             cause: Box::new(error),
                             recovery: Box::new(recovery),
@@ -855,6 +873,7 @@ impl ProbeApp {
                 app.shutdown.child_token(),
             )
             .await;
+            let updated = app.finish_action(updated).await;
             let mut saved = Ok(());
             if let Err(error) = &updated {
                 app.recover(error).await;

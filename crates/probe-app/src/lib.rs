@@ -201,6 +201,7 @@ pub struct OperationGuard {
 }
 fn error_code(error: &Error) -> &'static str {
     match error {
+        Error::Cancelled => "cancelled",
         Error::Stopped => "stopped",
         Error::MotionBlocked => "controller_alarm",
         Error::CoarseNoContact | Error::NoContact => "no_contact",
@@ -216,6 +217,24 @@ fn log_error(error: std::io::Error) -> AppError {
 fn log_warning(result: std::io::Result<()>) {
     if let Err(error) = result {
         eprintln!("Probing log: {error}");
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActionResult<T> {
+    #[serde(flatten)]
+    pub result: T,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub storage_warning: Option<String>,
+}
+
+fn action_result<T>(result: T, saved: std::io::Result<()>) -> ActionResult<T> {
+    ActionResult {
+        result,
+        storage_warning: saved.err().map(|error| {
+            format!("Work coordinates were saved, but their log could not be saved: {error}")
+        }),
     }
 }
 
@@ -690,7 +709,7 @@ impl ProbeApp {
                 log_warning(progress_logs.trace(&progress_id, name, data));
                 queue_progress(&progress_sender, &progress_cancel, event);
             };
-            let result = match (motion, completed) {
+            let result = match (motion, completed.as_ref()) {
                 (Motion::Run, None) => {
                     pimprobe_core::run(
                         app.device.as_ref(),
@@ -705,7 +724,7 @@ impl ProbeApp {
                     pimprobe_core::return_to_start(
                         app.device.as_ref(),
                         &plan,
-                        &result,
+                        result,
                         TimingPolicy::default(),
                         run_cancel,
                         observe,
@@ -716,7 +735,7 @@ impl ProbeApp {
                     pimprobe_core::go_to_measured(
                         app.device.as_ref(),
                         &plan,
-                        &result,
+                        result,
                         clearance,
                         TimingPolicy::default(),
                         run_cancel,
@@ -788,6 +807,12 @@ impl ProbeApp {
                             "action_failed",
                             json!({"message":error.to_string()}),
                         ));
+                        if let Some(result) = completed {
+                            app.reviews
+                                .lock()
+                                .await
+                                .finish(token.id, session, plan, result);
+                        }
                     }
                     OperationEvent::Error {
                         code: error_code(&error).into(),
@@ -809,7 +834,7 @@ impl ProbeApp {
     pub async fn zero(
         self: &Arc<Self>,
         token: ZeroRequest,
-    ) -> Result<pimprobe_core::RoutineResult, AppError> {
+    ) -> Result<ActionResult<pimprobe_core::RoutineResult>, AppError> {
         let app = self.clone();
         let guard = app.acquire()?;
         let session = app.device.session_id();
@@ -830,6 +855,7 @@ impl ProbeApp {
                 app.shutdown.child_token(),
             )
             .await;
+            let mut saved = Ok(());
             if let Err(error) = &updated {
                 app.recover(error).await;
                 log_warning(app.logs.action(
@@ -839,7 +865,7 @@ impl ProbeApp {
                 ));
             } else if let Ok(result) = &updated {
                 plan.start.rebase_work_coordinates(&app.device.state());
-                let saved = app.logs.action(
+                saved = app.logs.action(
                     &token.id,
                     "work_zero",
                     json!({"offsets":token.offsets,"result":result}),
@@ -848,14 +874,10 @@ impl ProbeApp {
                     .lock()
                     .await
                     .finish(token.id, session, plan, result.clone());
-                saved.map_err(|e| {
-                    AppError::storage(
-                        "log",
-                        format!("Work zero was set, but its history could not be saved: {e}"),
-                    )
-                })?;
             }
-            updated.map_err(AppError::from)
+            updated
+                .map(|result| action_result(result, saved))
+                .map_err(AppError::from)
         })
         .await
         .map_err(|e| AppError::conflict("zero", e.to_string()))??;

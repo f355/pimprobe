@@ -216,17 +216,17 @@ export function ProbeFlow({
     setConfirmation("");
     const id = token;
     try {
-      const updated = await client.request<RoutineResult | RotaryResult>(
-        `${history ? "history" : group}.${action}`,
-        {
-          id,
-          ...(action === "zero" && !rotary
-            ? { offsets: offsetsRef.current }
-            : {}),
-          ...(action === "wcs" ? { wcs } : {}),
-        },
-      );
+      const updated = await client.request<
+        (RoutineResult | RotaryResult) & { storageWarning?: string }
+      >(`${history ? "history" : group}.${action}`, {
+        id,
+        ...(action === "zero" && !rotary
+          ? { offsets: offsetsRef.current }
+          : {}),
+        ...(action === "wcs" ? { wcs } : {}),
+      });
       setResult(updated);
+      setError(updated.storageWarning || "");
       if ("family" in config) setConfig({ ...config, wcs: updated.wcs });
       if (action !== "wcs")
         setConfirmation(

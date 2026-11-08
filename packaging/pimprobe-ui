@@ -94,7 +94,7 @@ until wget -q -T 1 -O /dev/null http://127.0.0.1:8137/; do
     sleep 1
 done
 
-"$browser" --ozone-platform=wayland --disable-gpu --disable-dev-shm-usage \
+"$browser" --ozone-platform=wayland --touch-slop-distance=24 --disable-gpu --disable-dev-shm-usage \
     --kiosk --app="http://127.0.0.1:8137/?language=$language" \
     --lang="$language" --no-sandbox --no-first-run --no-default-browser-check \
     --disable-session-crashed-bubble --disable-background-mode --password-store=basic \

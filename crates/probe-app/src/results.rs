@@ -21,7 +21,7 @@ impl ProbeApp {
     pub async fn rotate_result(
         self: &Arc<Self>,
         request: Token,
-    ) -> Result<RoutineResult, AppError> {
+    ) -> Result<ActionResult<RoutineResult>, AppError> {
         let guard = self.acquire()?;
         let app = self.clone();
         tokio::spawn(async move {
@@ -35,19 +35,20 @@ impl ProbeApp {
                 .ok_or_else(|| AppError::conflict("result", "No completed result available"))?;
             let updated = pimprobe_core::rotate_angle_result(app.device.as_ref(), &result).await;
             let saved = updated.as_ref().unwrap_or(&result).clone();
+            let mut logged = Ok(());
             if updated.is_ok() {
                 plan.start.rebase_work_coordinates(&app.device.state());
-                log_warning(app.logs.action(
-                    &request.id,
-                    "apply_xy_alignment",
-                    json!({"result":saved}),
-                ));
+                logged =
+                    app.logs
+                        .action(&request.id, "apply_xy_alignment", json!({"result":saved}));
             }
             app.reviews
                 .lock()
                 .await
                 .finish(request.id, session, plan, saved);
-            updated.map_err(Into::into)
+            updated
+                .map(|result| action_result(result, logged))
+                .map_err(Into::into)
         })
         .await
         .map_err(|error| AppError::conflict("rotation", error.to_string()))?
@@ -56,7 +57,7 @@ impl ProbeApp {
     pub async fn select_result_wcs(
         self: &Arc<Self>,
         request: ResultWcsRequest,
-    ) -> Result<RoutineResult, AppError> {
+    ) -> Result<ActionResult<RoutineResult>, AppError> {
         if !(54..=59).contains(&request.wcs) {
             return Err(AppError::invalid(
                 "wcs",
@@ -92,15 +93,14 @@ impl ProbeApp {
             result.update_work_coordinates(&state);
             plan.config.wcs = state.wcs;
             plan.start.rebase_work_coordinates(&state);
-            log_warning(
-                app.logs
-                    .action(&request.id, "result_wcs", json!({"result":result})),
-            );
+            let logged = app
+                .logs
+                .action(&request.id, "result_wcs", json!({"result":result}));
             app.reviews
                 .lock()
                 .await
                 .finish(request.id, session, plan, result.clone());
-            Ok(result)
+            Ok(action_result(result, logged))
         })
         .await
         .map_err(|error| AppError::conflict("wcs", error.to_string()))?
@@ -109,7 +109,7 @@ impl ProbeApp {
     pub async fn select_rotary_result_wcs(
         self: &Arc<Self>,
         request: ResultWcsRequest,
-    ) -> Result<RotaryResult, AppError> {
+    ) -> Result<ActionResult<RotaryResult>, AppError> {
         if !(54..=59).contains(&request.wcs) {
             return Err(AppError::invalid(
                 "wcs",
@@ -143,15 +143,14 @@ impl ProbeApp {
             }
             result.wcs = state.wcs;
             plan.start.rebase_work_coordinates(&state);
-            log_warning(
-                app.logs
-                    .action(&request.id, "result_wcs", json!({"result":result})),
-            );
+            let logged = app
+                .logs
+                .action(&request.id, "result_wcs", json!({"result":result}));
             app.rotary_reviews
                 .lock()
                 .await
                 .finish(request.id, session, plan, result.clone());
-            Ok(result)
+            Ok(action_result(result, logged))
         })
         .await
         .map_err(|error| AppError::conflict("wcs", error.to_string()))?

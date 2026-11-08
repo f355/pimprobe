@@ -185,7 +185,7 @@ impl ProbeApp {
         self: &Arc<Self>,
         token: Token,
         rotate: bool,
-    ) -> Result<RotaryResult, AppError> {
+    ) -> Result<ActionResult<RotaryResult>, AppError> {
         let guard = self.acquire()?;
         let app = self.clone();
         tokio::spawn(async move {
@@ -231,12 +231,12 @@ impl ProbeApp {
             } else {
                 result.zeroed = true;
             }
-            log_warning(app.logs.action(&token.id, action, json!({"result":result})));
+            let logged = app.logs.action(&token.id, action, json!({"result":result}));
             app.rotary_reviews
                 .lock()
                 .await
                 .finish(token.id, session, plan, result.clone());
-            Ok(result)
+            Ok(action_result(result, logged))
         })
         .await
         .map_err(|error| AppError::conflict("result", error.to_string()))?

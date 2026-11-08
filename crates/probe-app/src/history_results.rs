@@ -106,7 +106,7 @@ impl ProbeApp {
         self: &Arc<Self>,
         id: String,
         action: HistoryAction,
-    ) -> Result<MeasurementResult, AppError> {
+    ) -> Result<ActionResult<MeasurementResult>, AppError> {
         if let HistoryAction::Wcs(wcs) = action
             && !(54..=59).contains(&wcs)
         {
@@ -199,13 +199,7 @@ impl ProbeApp {
             }
             let result = opened.result.clone();
             *app.history_result.lock().await = Some(opened);
-            app.logs.action(&id, name, data).map_err(|error| {
-                AppError::storage(
-                    "log",
-                    format!("Action completed, but its history could not be saved: {error}"),
-                )
-            })?;
-            Ok(result)
+            Ok(action_result(result, app.logs.action(&id, name, data)))
         })
         .await
         .map_err(|error| AppError::conflict("result", error.to_string()))?

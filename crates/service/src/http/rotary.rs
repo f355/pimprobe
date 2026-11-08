@@ -32,18 +32,18 @@ pub(super) async fn run(
 pub(super) async fn zero(
     State(app): State<Arc<App>>,
     ApiJson(token): ApiJson<Token>,
-) -> Result<Json<RotaryResult>, ApiError> {
+) -> Result<Json<pimprobe_app::ActionResult<RotaryResult>>, ApiError> {
     Ok(Json(app.probe.apply_rotary(token, false).await?))
 }
 pub(super) async fn rotation(
     State(app): State<Arc<App>>,
     ApiJson(token): ApiJson<Token>,
-) -> Result<Json<RotaryResult>, ApiError> {
+) -> Result<Json<pimprobe_app::ActionResult<RotaryResult>>, ApiError> {
     Ok(Json(app.probe.apply_rotary(token, true).await?))
 }
 pub(super) async fn wcs(
     State(app): State<Arc<App>>,
     ApiJson(request): ApiJson<ResultWcsRequest>,
-) -> Result<Json<RotaryResult>, ApiError> {
+) -> Result<Json<pimprobe_app::ActionResult<RotaryResult>>, ApiError> {
     Ok(Json(app.probe.select_rotary_result_wcs(request).await?))
 }

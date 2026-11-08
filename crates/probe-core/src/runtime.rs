@@ -58,6 +58,16 @@ pub struct RoutineResult {
 }
 
 impl RoutineResult {
+    fn record_work_zero(&mut self, offsets: [f64; 3]) {
+        self.zeroed = true;
+        self.reference_used = true;
+        for (i, axis) in ["X", "Y", "Z"].iter().enumerate() {
+            if self.axes.iter().any(|measured| measured == axis) {
+                self.point[i] = Some(-offsets[i]);
+            }
+        }
+    }
+
     pub fn update_work_coordinates(&mut self, state: &State) {
         let mut machine = state.position;
         machine[0] += state.probe_offset[0];
@@ -505,8 +515,7 @@ async fn run_inner<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync>(
         if p.config.zero {
             stream.command(p.steps.len() as isize, &refs, observe)?;
             write_zero(&c, p, &result, [0.0; 3], t).await?;
-            result.zeroed = true;
-            result.reference_used = true;
+            result.record_work_zero([0.; 3]);
         }
         Ok(())
     }
@@ -728,8 +737,7 @@ pub async fn zero_recorded_result<C: Controller + ?Sized>(
     }
     write?;
     let mut updated = result.clone();
-    updated.zeroed = true;
-    updated.reference_used = true;
+    updated.record_work_zero(offsets);
     Ok(updated)
 }
 
@@ -1012,7 +1020,6 @@ async fn zero_inner<C: Controller + ?Sized>(
     }
     result_zero?;
     let mut updated = result.clone();
-    updated.zeroed = true;
-    updated.reference_used = true;
+    updated.record_work_zero(offsets);
     Ok(updated)
 }

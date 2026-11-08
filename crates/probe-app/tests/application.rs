@@ -557,7 +557,7 @@ async fn probing_reads_active_tool_compensation_before_measuring_and_zeroing() {
             })
             .await
             .unwrap();
-        assert!(zeroed.zeroed);
+        assert!(zeroed.result.zeroed);
         let state = device.mock.state();
         assert!((state.wcs_origin.unwrap()[2] - surface).abs() < 0.001);
         assert!((state.work_position[2] - 16.0).abs() < 0.001);
@@ -589,6 +589,23 @@ async fn completed_measurement_can_zero_another_wcs_without_probing_again() {
     }
     let measured = measured.unwrap();
     let position = device.state().position;
+    let mut rejected = app
+        .start_motion(
+            Token {
+                id: review.id.clone(),
+            },
+            Motion::Measured(150.),
+        )
+        .await
+        .unwrap();
+    let mut failed = false;
+    while let Some(event) = rejected.recv().await {
+        if let OperationEvent::Error { .. } = event {
+            failed = true;
+        }
+    }
+    assert!(failed);
+    assert_eq!(device.state().position, position);
     assert!(
         app.select_result_wcs(ResultWcsRequest {
             id: review.id.clone(),
@@ -604,8 +621,8 @@ async fn completed_measurement_can_zero_another_wcs_without_probing_again() {
         })
         .await
         .unwrap();
-    assert_eq!(result.wcs, 55);
-    assert_eq!(result.machine_point, measured.machine_point);
+    assert_eq!(result.result.wcs, 55);
+    assert_eq!(result.result.machine_point, measured.machine_point);
     assert_eq!(device.state().wcs, 55);
     assert_eq!(device.state().position, position);
     let zero = app
@@ -615,8 +632,8 @@ async fn completed_measurement_can_zero_another_wcs_without_probing_again() {
         })
         .await
         .unwrap();
-    assert!(zero.zeroed);
-    assert_eq!(zero.wcs, 55);
+    assert!(zero.result.zeroed);
+    assert_eq!(zero.result.wcs, 55);
     assert_eq!(device.state().position, position);
     assert!(
         device
@@ -633,7 +650,7 @@ async fn completed_measurement_can_zero_another_wcs_without_probing_again() {
             })
             .await
             .unwrap();
-        assert_eq!(updated.machine_point, measured.machine_point);
+        assert_eq!(updated.result.machine_point, measured.machine_point);
         let state = device.state();
         assert_eq!(state.position, position);
         assert!(
@@ -652,7 +669,7 @@ async fn completed_measurement_can_zero_another_wcs_without_probing_again() {
         })
         .await
         .unwrap();
-    assert_eq!(result.machine_point, measured.machine_point);
+    assert_eq!(result.result.machine_point, measured.machine_point);
     app.zero(ZeroRequest {
         id: review.id,
         offsets: [0.0, 0.0, -1.0],
@@ -710,11 +727,13 @@ async fn rotary_uses_host_ownership_and_keeps_results_when_history_fails() {
         };
         assert_eq!(result.stations.len(), 2);
         assert!(!app.state().contact_active);
+        store.fail_actions.store(fail_history, Ordering::SeqCst);
         let result = app
             .apply_rotary(Token { id: review.id }, false)
             .await
             .unwrap();
-        assert!(result.zeroed);
+        assert!(result.result.zeroed);
+        assert_eq!(result.storage_warning.is_some(), fail_history);
     }
 }
 
@@ -817,8 +836,8 @@ async fn measurement_and_later_work_zero_are_available_through_host_storage() {
         })
         .await
         .unwrap();
-    assert!(result.zeroed);
-    assert_eq!(result.machine_point, measured.machine_point);
+    assert!(result.result.zeroed);
+    assert_eq!(result.result.machine_point, measured.machine_point);
     let history = app.history().await.unwrap();
     assert_eq!(history.len(), 1);
     assert_eq!(history[0].status, "success");
@@ -826,6 +845,56 @@ async fn measurement_and_later_work_zero_are_available_through_host_storage() {
     assert_eq!(history[0].work_zero.as_ref().unwrap()["offsets"][2], -2.);
     assert!(!store.diagnostics.lock().unwrap().is_empty());
     assert_eq!(app.export_logs().await.unwrap_err().code, "destination");
+    store.fail_actions.store(true, Ordering::SeqCst);
+    let warning = app
+        .zero(ZeroRequest {
+            id: history[0].id.clone(),
+            offsets: [0.; 3],
+        })
+        .await
+        .unwrap();
+    assert!(warning.result.zeroed);
+    assert_eq!(warning.result.machine_point, measured.machine_point);
+    assert!(warning.storage_warning.is_some());
+    let encoded = serde_json::to_value(warning).unwrap();
+    assert_eq!(encoded["zeroed"], true);
+    assert!(encoded["storageWarning"].is_string());
+    let opened = app.open_history_result(&history[0].id).await.unwrap();
+    assert!(opened.can_apply);
     app.clear_logs().await.unwrap();
     assert!(app.history().await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn repeatability_distinguishes_stop_from_cancellation_in_events_and_history() {
+    for operator_stop in [false, true] {
+        let (app, device, _) = app();
+        device.stopped.store(true, Ordering::SeqCst);
+        let mut operation = app
+            .repeatability(pimprobe_core::RepeatabilityOptions {
+                axes: [true, false, false],
+                repetitions: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        if operator_stop {
+            app.stop_repeatability().await;
+        } else {
+            operation.cancel();
+        }
+        let mut code = None;
+        while let Some(event) = operation.recv().await {
+            if let OperationEvent::Error { code: value, .. } = event {
+                code = Some(value);
+            }
+        }
+        let expected = if operator_stop {
+            "stopped"
+        } else {
+            "cancelled"
+        };
+        assert_eq!(code.as_deref(), Some(expected));
+        assert_eq!(app.history().await.unwrap()[0].status, expected);
+    }
 }

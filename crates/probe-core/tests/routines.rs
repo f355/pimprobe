@@ -40,6 +40,7 @@ async fn saved_machine_point_sets_rotated_work_zero_with_g92_and_tool_compensati
         .await
         .unwrap();
     assert!(updated.zeroed);
+    assert_eq!(updated.point, [Some(-1.), Some(2.), Some(-3.)]);
     assert_eq!(machine.state().position, state.position);
     assert_eq!(machine.state().modes, state.modes);
     let after = machine.state();

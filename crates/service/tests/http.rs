@@ -815,7 +815,9 @@ async fn review_run_stream_and_late_zero() {
     assert_eq!(code, StatusCode::OK, "{body}");
     let result: Value = serde_json::from_str(&body).unwrap();
     assert_eq!(result["zeroed"], true);
-    assert_eq!(result["point"], terminal["result"]["point"]);
+    assert_eq!(result["point"], json!([null, null, 0.]));
+    assert_eq!(result["machinePoint"], terminal["result"]["machinePoint"]);
+    assert_eq!(result["rawPoint"], terminal["result"]["rawPoint"]);
     assert_eq!(before, app.device.state().position);
     let origin = app.device.state().wcs_origin;
     let (code, body) = request(&router, "POST", "/api/v1/routine/zero", token.clone()).await;
@@ -930,11 +932,13 @@ async fn result_offsets_set_machine_origin_without_moving_or_changing_measuremen
         .await;
         assert_eq!(code, StatusCode::OK, "{body}");
         let updated: Value = serde_json::from_str(&body).unwrap();
-        assert_eq!(updated["point"], terminal["result"]["point"]);
+        assert_eq!(updated["machinePoint"], terminal["result"]["machinePoint"]);
+        assert_eq!(updated["rawPoint"], terminal["result"]["rawPoint"]);
         let after = app.device.state();
         assert_eq!(after.position, before.position);
         for (i, offset) in offsets.iter().enumerate() {
-            if let Some(point) = updated["point"][i].as_f64() {
+            if let Some(point) = terminal["result"]["point"][i].as_f64() {
+                assert_eq!(updated["point"][i], -offset);
                 let origin = point + start.position[i] - start.work_position[i] + offset;
                 assert!((after.position[i] - after.work_position[i] - origin).abs() < 0.002);
             } else {
@@ -998,7 +1002,17 @@ async fn zero_and_return_remain_available_in_either_order() {
             } else {
                 &reply
             };
-            assert_eq!(result["point"], measured["result"]["point"]);
+            assert_eq!(result["machinePoint"], measured["result"]["machinePoint"]);
+            assert_eq!(result["rawPoint"], measured["result"]["rawPoint"]);
+            for i in 0..3 {
+                let expected =
+                    if result["zeroed"] == true && measured["result"]["point"][i].is_number() {
+                        json!(0.)
+                    } else {
+                        measured["result"]["point"][i].clone()
+                    };
+                assert_eq!(result["point"][i], expected);
+            }
             assert_eq!(
                 result[if action == "return" {
                     "returned"

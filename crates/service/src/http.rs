@@ -207,7 +207,7 @@ async fn open_history(
 async fn history_wcs(
     State(app): State<Arc<App>>,
     ApiJson(request): ApiJson<ResultWcsRequest>,
-) -> Result<Json<pimprobe_app::MeasurementResult>, ApiError> {
+) -> Result<Json<pimprobe_app::ActionResult<pimprobe_app::MeasurementResult>>, ApiError> {
     Ok(Json(
         app.probe
             .apply_history_result(request.id, HistoryAction::Wcs(request.wcs))
@@ -217,7 +217,7 @@ async fn history_wcs(
 async fn history_zero(
     State(app): State<Arc<App>>,
     ApiJson(request): ApiJson<ZeroRequest>,
-) -> Result<Json<pimprobe_app::MeasurementResult>, ApiError> {
+) -> Result<Json<pimprobe_app::ActionResult<pimprobe_app::MeasurementResult>>, ApiError> {
     Ok(Json(
         app.probe
             .apply_history_result(request.id, HistoryAction::Zero(request.offsets))
@@ -227,7 +227,7 @@ async fn history_zero(
 async fn history_rotation(
     State(app): State<Arc<App>>,
     ApiJson(token): ApiJson<Token>,
-) -> Result<Json<pimprobe_app::MeasurementResult>, ApiError> {
+) -> Result<Json<pimprobe_app::ActionResult<pimprobe_app::MeasurementResult>>, ApiError> {
     Ok(Json(
         app.probe
             .apply_history_result(token.id, HistoryAction::Rotation)
@@ -245,7 +245,7 @@ async fn restore_calibration(
 async fn result_rotation(
     State(app): State<Arc<App>>,
     ApiJson(token): ApiJson<Token>,
-) -> Result<Json<pimprobe_core::RoutineResult>, ApiError> {
+) -> Result<Json<pimprobe_app::ActionResult<pimprobe_core::RoutineResult>>, ApiError> {
     Ok(Json(app.probe.rotate_result(token).await?))
 }
 async fn export_logs(
@@ -378,7 +378,7 @@ async fn go_to_measured(
 async fn zero(
     State(app): State<Arc<App>>,
     ApiJson(token): ApiJson<ZeroRequest>,
-) -> Result<Json<pimprobe_core::RoutineResult>, ApiError> {
+) -> Result<Json<pimprobe_app::ActionResult<pimprobe_core::RoutineResult>>, ApiError> {
     Ok(Json(app.probe.zero(token).await?))
 }
 async fn calibration(
@@ -390,7 +390,7 @@ async fn calibration(
 async fn result_wcs(
     State(app): State<Arc<App>>,
     ApiJson(request): ApiJson<ResultWcsRequest>,
-) -> Result<Json<pimprobe_core::RoutineResult>, ApiError> {
+) -> Result<Json<pimprobe_app::ActionResult<pimprobe_core::RoutineResult>>, ApiError> {
     Ok(Json(app.probe.select_result_wcs(request).await?))
 }
 async fn repeatability(

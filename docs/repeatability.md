@@ -10,7 +10,7 @@ Keep the ETS and bracket in their normal mounting positions.
 ## Options
 
 - **Axes:** choose which bracket walls and/or bed surface to measure.
-- **Repetitions:** readings per axis; default 5.
+- **Repetitions:** readings per axis.
 - **Retract each time:** include variation from retracting and extending the probe.
 - **Jog home each time:** retract, travel to G53 Z0 then X−20 Y−5, and return before measuring.
 - **Home each time:** also re-home on each visit to the home area.

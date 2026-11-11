@@ -26,7 +26,7 @@ function title(key) {
 const sections = Object.keys(clips).map((key,index) => `<section><h2>${String(index+1).padStart(2,'0')} · ${title(key)}</h2><canvas width="320" height="176" data-clip="${key}"></canvas><p></p></section>`).join('\n');
 await mkdir(output,{recursive:true});
 await writeFile(new URL('motion-loops.html',output),`<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="en-US"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Probing motion previews</title><style>
 *{box-sizing:border-box}body{margin:0;padding:24px;background:#202425;color:#f0f3f3;font:16px system-ui,sans-serif}
 h1{font-size:24px;font-weight:500;margin:0 0 24px}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:32px 24px;max-width:1200px;margin:auto}

@@ -17,7 +17,7 @@
 
 set -eu
 
-language=en
+language=en_US
 check=false
 for argument in "$@"; do
     case "$argument" in

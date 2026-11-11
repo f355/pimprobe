@@ -50,9 +50,8 @@ with another application client.
 Requirements: stable Rust, Node.js, CMake and Qt 6 Core, Network, Widgets and
 Test for the CNC_Lab plugins. The installed interface runs in Chromium.
 
-Operator text lives in `docs/` and supplies the on-screen Guide.
-Screenshots sit inside `guide-only` comment blocks. Browser tests save
-captures in `web/test-results`.
+The [UI guidelines](docs/developer/ui.md) cover shared controls, help and
+screen checks. Operator Markdown in `docs/` also supplies the on-screen Guide.
 
 ```sh
 cargo test --workspace
@@ -75,7 +74,7 @@ ctest --test-dir build/plugins --output-on-failure
 - `crates/service`: standalone HTTP API, file storage and software updates.
 - `plugins`: C++ controller proxy and launcher.
 - `web`: React interface, shared touch controls and interactive help.
-- `docs`: operator guide and contextual help sources.
+- `docs`: operator guide and developer documentation.
 - `packaging`: installer, service unit and launch scripts.
 
 The controller proxy exposes `/run/pimprobe-controller.sock` through CNC_Lab's
@@ -156,6 +155,10 @@ ssh -t root@<machine-host> 'sh /userdata/pimprobe-<git-version>.run'
 The installer checks the archive, machine layout and runtime dependencies, and
 preserves configuration and settings during upgrades.
 
+With the built ARM64 artifacts, run `node --test dev/test-installer.mjs`.
+Verify installation, launch, exit and uninstall on a NestPad or simulator
+running the stock UI.
+
 A startup hook recreates the plugin links before CNC_Lab starts, including
 after CNC_Lab application updates. PIMProbe's files live in `/userdata/cnc/apps/pimprobe`.
 
@@ -191,21 +194,11 @@ Choose English, 简体中文 or Svenska in Settings. The choice is saved.
 Until you choose, PIMProbe follows CNC_Lab's language on the machine and the
 system language in a local preview.
 
-For a local preview, settings default to `$XDG_CONFIG_HOME/pimprobe/preview-settings.json`
-or `$HOME/.config/pimprobe/preview-settings.json`. Override this with `--settings FILE`.
+`./dev/preview.sh` keeps its settings in `build/web-preview/settings.json`,
+separate from the machine's settings. For other service launches, use
+`--settings FILE` to choose a settings file.
 
 The HTTP listener is `127.0.0.1:8137`. Use an SSH tunnel for remote access.
-
-## Installer Tests
-
-These tests require the built ARM64 artifacts:
-
-```sh
-node --test dev/test-installer.mjs
-```
-
-Verify installation, launch, exit and uninstall on a NestPad or simulator
-running CNC_Lab.
 
 ## Safety
 
@@ -213,8 +206,9 @@ Secure the stock and check the full probe route against clamps, stock,
 the tool magazine and other obstacles. The controller enforces its configured
 travel limits.
 
-Positioning uses G38.3; contact releases use G1. Touching the probe while
-idle does not stop the machine. Use the physical emergency stop when needed.
+Probe contact does not stop manual jogging. Use the physical emergency stop
+when needed. See the [operator guide](docs/README.md#contact-and-failures) for
+contact detection during probing.
 
 ## License
 

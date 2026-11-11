@@ -51,7 +51,7 @@ pub fn probe_z_offset(calibration: f64, ets_contact: f64, stored_tool_length: f6
 
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum Error {
-    #[error("Probing cancelled. Check that the machine has stopped.")]
+    #[error("Probing canceled. Check that the machine has stopped.")]
     Cancelled,
     #[error("Check stopped.")]
     Stopped,

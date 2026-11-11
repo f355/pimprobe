@@ -15,7 +15,8 @@ Open **Settings → Utilities → Probe history**. Select a run to see its measu
 1. Select a **Probe calibration** entry. **Previous** shows the values before
    that change; **Saved** shows the values requested by it.
 2. Press **Restore previous calibration** and confirm.
-3. Probe your reference again to check the result.
+3. Check the restored calibration using the procedures in
+   [Calibrate the probe](calibration.md).
 
 This restores the ball diameter and X/Y/Z offsets. Work zero is unchanged.
 Restoring creates a new history entry, so you can undo a restoration too.

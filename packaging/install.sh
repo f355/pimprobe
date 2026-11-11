@@ -75,7 +75,7 @@ if [ "$yes" = false ]; then
         printf 'Install PIMProbe now? [y/N] '
     fi
     read -r answer || exit 1
-    case "$answer" in y|Y|yes) ;; *) echo 'Cancelled.'; exit 0 ;; esac
+    case "$answer" in y|Y|yes) ;; *) echo 'Canceled.'; exit 0 ;; esac
 fi
 # Serialize installation and removal with a directory lock.
 exec 8</userdata

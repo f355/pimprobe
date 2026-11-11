@@ -43,8 +43,11 @@ test("translations retain coordinates, error codes and reordered values", () => 
   ).toBe(
     "Mätningen är klar, men historiken kunde inte sparas: Kunde inte kommunicera med maskinen: error:5",
   );
-  expect(translate("en", "%1 offset %2 mm", ["X", -120.5])).toBe(
+  expect(translate("en_US", "%1 offset %2 mm", ["X", -120.5])).toBe(
     "X offset -120.5 mm",
+  );
+  expect(translate("en_US", "Status: %1", [translate("en_US", "cancelled")])).toBe(
+    "Status: canceled",
   );
   expect(translate("sv", "Unknown %1", [25])).toBe("Unknown 25");
 });

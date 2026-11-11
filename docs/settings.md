@@ -19,12 +19,13 @@ from a known size. The default 1.83 mm is a starting point, not a calibration.
 
 ## Backoff
 
-**Retract distance** is the backoff after each coarse and fine touch. It must let the probe release. The fine search goes back to the coarse contact, allowing another 0.5 mm beyond it.
+**Retract distance** is how far the probe backs away after each touch. It must
+be enough for the probe to release before the next touch.
 
 ## Feeds
 
 - **Coarse feed:** the first search for a surface.
-- **Fine feed:** the second touch, used for the measurement. Lower speeds reduce probe deflection and stopping error.
+- **Fine feed:** the speed of the second touch, which supplies the measurement.
 - **Positioning feed:** travel between touches and backoff moves.
 - **Rotary feed:** A rotation in degrees/min.
 

@@ -140,7 +140,7 @@ function Fixture() {
 
 createRoot(document.getElementById("root")!).render(
   <I18nProvider
-    language={new URLSearchParams(location.search).get("language") || "en"}
+    language={new URLSearchParams(location.search).get("language") || "en_US"}
   >
     <Fixture />
   </I18nProvider>,

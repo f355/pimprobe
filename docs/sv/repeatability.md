@@ -7,7 +7,7 @@ Utan förflyttning till referensområdet sker den första X/Y-förflyttningen p�
 ## Alternativ
 
 - **Axlar:** välj vilka av vinkelns väggar och/eller bordets yta som ska mätas.
-- **Upprepningar:** mätvärden per axel; standard 5.
+- **Upprepningar:** mätvärden per axel.
 - **Fäll in varje gång:** ta med variationen från infällning och utfällning av proben.
 - **Kör hem varje gång:** fäll in, kör till G53 Z0 och sedan X−20 Y−5 och återgå före mätningen.
 - **Referenskör varje gång:** referenskör också vid varje besök i referensområdet.

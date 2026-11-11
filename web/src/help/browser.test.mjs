@@ -44,7 +44,7 @@ test("context help and localized guide work on touch and desktop screens", async
     page.on("console", (message) => {
       if (message.type() === "error") errors.push(message.text());
     });
-    const load = (language = "en") =>
+    const load = (language = "en_US") =>
       page.goto(origin + "src/help/fixture.html?language=" + language);
     const popup = page.locator(".pp-help-popup");
     const close = () =>
@@ -161,10 +161,10 @@ test("context help and localized guide work on touch and desktop screens", async
     await mkdir(new URL("./test-results/", import.meta.url), {
       recursive: true,
     });
-    for (const language of ["en", "zh_CN", "sv"]) {
+    for (const language of ["en_US", "zh_CN", "sv"]) {
       await load(language);
       const expected = {
-        en: "Set X zero",
+        en_US: "Set X zero",
         zh_CN: "\u8bbe\u7f6e X \u96f6\u70b9",
         sv: "Nollst\u00e4ll X",
       };
@@ -186,7 +186,7 @@ test("context help and localized guide work on touch and desktop screens", async
       await page.locator(".pp-guide-button").click();
       await page
         .getByRole("button", {
-          name: { en: "Outside", zh_CN: "外侧", sv: "Utvändigt" }[language],
+          name: { en_US: "Outside", zh_CN: "外侧", sv: "Utvändigt" }[language],
           exact: true,
         })
         .click();
@@ -213,7 +213,7 @@ test("context help and localized guide work on touch and desktop screens", async
       await page
         .getByRole("button", {
           name: {
-            en: "Probing guide",
+            en_US: "Probing guide",
             zh_CN: "测量指南",
             sv: "Guide för probning",
           }[language],

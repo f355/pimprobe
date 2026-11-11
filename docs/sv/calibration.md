@@ -64,7 +64,7 @@ inte programmets mått eller diametern som står på verktyget.
 3. Jogga kulan ungefär över blockets centrum. Lyft den så att hela kulan kan
    passera över blockets ovansida utan att röra vid den.
 4. Öppna **Centrum** och välj **Block**.
-5. Ställ **Sökavstånd X** och **Sökavstånd Y**. Vardera anger rörelsen från
+5. Ställ **X-söksträcka** och **Y-söksträcka**. Vardera anger rörelsen från
    startpunkten ut åt respektive sida, innan kulan sänks. Hela kulan måste
    komma utanför blockets kant.
 6. Ställ **Djup** så att kulan når de lodräta sidorna. Om kulans undersida

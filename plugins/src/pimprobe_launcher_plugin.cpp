@@ -71,7 +71,7 @@ void PimProbeLauncherPlugin::tryInstallLauncher() {
                                      QSettings::IniFormat);
             const bool chinese = settings.value(QStringLiteral("language")).toString()
                                  == QStringLiteral("\u4e2d\u6587");
-            const QString language = chinese ? QStringLiteral("zh_CN") : QStringLiteral("en");
+            const QString language = chinese ? QStringLiteral("zh_CN") : QStringLiteral("en_US");
             if (!QProcess::startDetached(
                     QStringLiteral("/userdata/cnc/apps/pimprobe/bin/pimprobe-ui"),
                     {QStringLiteral("--language=") + language})) {

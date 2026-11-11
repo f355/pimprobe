@@ -26,7 +26,7 @@ These destinations position the **probe ball**, not the spindle. Z-only routines
 
 ## Calibrate the probe
 
-**Calibrate probe...** is available for centre and Z measurements. Choose
+**Calibrate probe...** is available for center and Z measurements. Choose
 ball diameter, X/Y offsets or Z offset; the page shows only the values that
 measurement can determine. Follow [Calibrate the probe](calibration.md) to
 prepare the reference and save the result.

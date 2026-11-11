@@ -18,14 +18,14 @@ import { createContext, useContext, useMemo, type ReactNode } from "react";
 import swedish from "./locales/sv.json" with { type: "json" };
 import chinese from "./locales/zh_CN.json" with { type: "json" };
 
-export type Language = "en" | "zh_CN" | "sv";
+export type Language = "en_US" | "zh_CN" | "sv";
 export type Translate = (
   source: string,
   values?: (string | number)[],
 ) => string;
 
 const catalogs: Record<Language, Record<string, string>> = {
-  en: {},
+  en_US: { cancelled: "canceled" },
   sv: swedish,
   zh_CN: chinese,
 };
@@ -33,7 +33,6 @@ type Template = { source: string; groups: number[]; expression: RegExp };
 const templates = new Map<Language, Template[]>();
 
 function message(language: Language, source: string): string {
-  if (language === "en") return source;
   const catalog = catalogs[language];
   if (Object.hasOwn(catalog, source)) return catalog[source];
   if (source.includes("\n"))
@@ -102,8 +101,8 @@ export function translate(
 }
 
 const I18nContext = createContext<{ language: Language; t: Translate }>({
-  language: "en",
-  t: (source, values) => translate("en", source, values),
+  language: "en_US",
+  t: (source, values) => translate("en_US", source, values),
 });
 
 export function I18nProvider({
@@ -114,7 +113,7 @@ export function I18nProvider({
   children: ReactNode;
 }) {
   const name = (
-    language || (typeof navigator !== "undefined" ? navigator.language : "en")
+    language || (typeof navigator !== "undefined" ? navigator.language : "en_US")
   )
     .replace(/-/g, "_")
     .toLowerCase();
@@ -123,7 +122,7 @@ export function I18nProvider({
       ? "zh_CN"
       : name === "sv" || name.startsWith("sv_")
         ? "sv"
-        : "en";
+        : "en_US";
   const value = useMemo(
     () => ({
       language: supported,

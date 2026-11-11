@@ -64,7 +64,7 @@ export function HelpGuide({ page, onBack, onTitle }: HelpGuideProps) {
       guideNames.map((name) => {
         const english = sources["../../../docs/" + name] || "";
         const localized =
-          language === "en"
+          language === "en_US"
             ? english
             : sources[`../../../docs/${language}/${name}`] || english;
         return { name, ...parseGuide(localized) };

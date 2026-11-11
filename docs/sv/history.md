@@ -15,7 +15,8 @@
 1. Välj en **Probkalibrering**. **Tidigare** visar värdena före ändringen;
    **Sparat** visar de begärda nya värdena.
 2. Tryck på **Återställ tidigare kalibrering** och bekräfta.
-3. Mät referensen igen för att kontrollera resultatet.
+3. Kontrollera den återställda kalibreringen med metoderna i
+   [Kalibrera proben](calibration.md).
 
 Kuldiametern och X/Y/Z-förskjutningarna återställs utan ändrad arbetsnollpunkt.
 Återställningen får en egen historikpost och kan också ångras. Även avbrutna

@@ -19,7 +19,7 @@ import type { RoutineConfig, RoutineResult, Settings } from "../src/types";
 import swedish from "../src/locales/sv.json" with { type: "json" };
 import chinese from "../src/locales/zh_CN.json" with { type: "json" };
 
-async function app(page: Page, language = "en") {
+async function app(page: Page, language = "en_US") {
   const calls: { path: string; body: Record<string, unknown> }[] = [];
   let settings: Settings = {
     probeDiameter: 2,
@@ -839,7 +839,7 @@ test("help explains result readings and actions without changing work coordinate
   }
 });
 
-for (const language of ["en", "sv", "zh_CN"]) {
+for (const language of ["en_US", "sv", "zh_CN"]) {
   test(`probe exit choices share a touch-sized row in ${language}`, async ({
     page,
   }, info) => {
@@ -979,7 +979,7 @@ test("language buttons save an explicit preference", async ({ page }) => {
   for (const [label, code] of [
     ["Svenska", "sv"],
     ["简体中文", "zh_CN"],
-    ["English", "en"],
+    ["English", "en_US"],
   ]) {
     await page.getByRole("button", { name: label, exact: true }).click();
     await expect(
@@ -1028,7 +1028,7 @@ for (const [locale, selected] of [
     });
   });
 }
-for (const language of ["en", "zh_CN", "sv"])
+for (const language of ["en_US", "zh_CN", "sv"])
   test(`probing tabs and keypad preserve the touchscreen layout in ${language}`, async ({
     page,
   }, info) => {

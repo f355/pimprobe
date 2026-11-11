@@ -364,7 +364,7 @@ export function CalibrationPage({
                   t(
                     mode === "z"
                       ? "Set Z0 on a surface with a measured tool before probing it. Do not set this zero from the probe result."
-                      : "First set the centre to X0/Y0 by milling it or finding it with an indicator in the spindle. The midpoint of two opposite contacts does not depend on ball diameter. Do not press Set Work Zero before calibrating.",
+                      : "First set the center to X0/Y0 by milling it or finding it with an indicator in the spindle. The midpoint of two opposite contacts does not depend on ball diameter. Do not press Set Work Zero before calibrating.",
                   ),
                 )}
               >

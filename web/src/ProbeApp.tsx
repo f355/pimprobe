@@ -548,7 +548,7 @@ function ProbePage({
                     <span className="pp-muted">{t("Language")}</span>
                     <div>
                       {[
-                        { code: "en", label: "English" },
+                        { code: "en_US", label: "English" },
                         { code: "zh_CN", label: "简体中文" },
                         { code: "sv", label: "Svenska" },
                       ].map((choice) => (

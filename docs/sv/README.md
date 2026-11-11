@@ -1,7 +1,7 @@
 # Guide för probning
 
-Börja med [Kalibrera proben](calibration.md). Förbered en referens, mät den
-och spara kuldiameter och förskjutningar innan du sätter arbetsnollpunkter.
+Börja med [Kalibrera proben](calibration.md) innan du använder proben för att
+sätta arbetsnollpunkter.
 
 Välj en mätning:
 
@@ -36,8 +36,14 @@ Proben probar varje yta två gånger: grovsökning, tillbakagång och sedan en l
 ## Koordinater och reglage
 
 - De stora koordinaterna visas i valt arbetskoordinatsystem; de små i maskinkoordinater, G53.
-- Tryck på koordinatvisningen för att växla mellan **Prob** och **Verktyg**. När spindeln är tom använder Verktyg fortfarande den senast uppmätta verktygslängdskompensationen.
+- Välj **Prob** för probkulan eller **Verktyg** för verktygsspetsen. Prob
+  använder sin egen kalibrering; Verktyg använder maskinens aktiva
+  verktygslängdskompensation.
 - **G54–G59** väljer arbetskoordinatsystem. Varje system sparar sin egen nollpunkt.
+
+Kanter, hörn och centrum följer de valda arbetskoordinataxlarna, även när de
+är roterade i X/Y. Vinkel- och rundaxelmätningar följer maskinaxlarna.
+
 - Tryck på **Infälld / Utfälld** bredvid flikarna för att fälla ut eller in proben oberoende av mätningarna. Den markerade raden visar aktuellt läge.
 - **?** markerar reglagen. Tryck på ett för en förklaring, eller på **Handbok** för de här sidorna. **×** lämnar hjälpen.
 
@@ -45,7 +51,9 @@ Proben probar varje yta två gånger: grovsökning, tillbakagång och sedan en l
 
 Positioneringsrörelser i sidled och nedåt stannar när kulan får kontakt. Manuell körning och vanliga uppåtrörelser gör det inte. En kollision med skaftet kan ske utan att kulan löser ut.
 
-Om den första sökningen inte får kontakt misslyckas mätningen. Om finprobningen inte får kontakt kan den fasta programvaran larma och återgå till maskinens huvudskärm. Kontrollera söksträckan och startläget innan du försöker igen.
+Om proben inte hittar ytan stoppas mätningen med ett felmeddelande. Ett larm
+kan behöva kvitteras i maskinens reglage innan du försöker igen. Kontrollera
+att kulan kan nå den avsedda ytan i vald riktning inom söksträckan.
 
 ## Övriga sidor
 

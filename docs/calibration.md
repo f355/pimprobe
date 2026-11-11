@@ -27,8 +27,8 @@ the physical ball diameter instead would put those walls in the wrong places.
 The probe is mounted beside the spindle. PIMProbe needs the X and Y distances
 between them to put the spindle over a point found by the probe.
 
-To measure these offsets, first locate the centre of a block, boss, hole or pocket
-with the spindle, then find the same centre with the probe. Touching both
+To measure these offsets, first locate the center of a block, boss, hole or pocket
+with the spindle, then find the same center with the probe. Touching both
 opposite sides gives their midpoint. The ball radius affects the two sides
 equally in opposite directions, so it does not change that midpoint. You can
 therefore calibrate X/Y offsets without knowing the ball diameter.
@@ -41,12 +41,12 @@ that same surface cut by a tool whose length has been measured.
 ## Make a block for calibration
 
 This example uses a rectangular raised block. The same method works with any
-X/Y centre feature on **Center**: block, boss, hole or pocket, provided you
+X/Y center feature on **Center**: block, boss, hole or pocket, provided you
 have instruments to measure its finished dimensions accurately.
 
 1. Clamp the stock to the worktable. Keep the clamps away from the four sides
    you will measure.
-2. Mill a block with its centre at X0/Y0 in a work coordinate system of your
+2. Mill a block with its center at X0/Y0 in a work coordinate system of your
    choice and its sides parallel to the X and Y axes. For Z calibration,
    finish its top at Z0 using a tool whose length has been measured with the
    tool setter. Leave the stock clamped and the work zero unchanged after milling.
@@ -64,11 +64,11 @@ for calibration, not the programmed dimensions or the size marked on the tool.
 2. Open PIMProbe and select the same work coordinate system used to mill the
    block. Extend the probe with the **Retracted / Extended** control and
    clean the ball if needed.
-3. Jog until the ball is roughly above the centre of the block. Raise it so
+3. Jog until the ball is roughly above the center of the block. Raise it so
    the whole ball can pass over the top without touching it.
 4. Open **Center** and select **Block**.
 5. Set **X search distance** and **Y search distance**. Each is the distance
-   travelled from the starting point to either side, before lowering the
+   traveled from the starting point to either side, before lowering the
    ball. It must put the whole ball beyond the edge of the block.
 6. Set **Depth** to lower the ball from its starting height to the vertical
    sides. For example, with the bottom of the ball 5 mm above the block,
@@ -76,9 +76,9 @@ for calibration, not the programmed dimensions or the size marked on the tool.
    sides, not the top edge, and the stem must not hit the block.
 7. On the review page, press **Proceed** to measure.
    The probe touches both X sides and both Y sides, then returns above the
-   measured centre.
+   measured center.
 
-For example, a 30 mm wide by 20 mm long block, started near its centre, could
+For example, a 30 mm wide by 20 mm long block, started near its center, could
 use an X search distance of 20 mm and a Y search distance of 15 mm. Check that
 these outward moves and the subsequent lowering moves cannot hit the stock
 or its clamps.
@@ -86,7 +86,7 @@ or its clamps.
 ## Save the block calibration
 
 Keep the result open. **Do not press Set Work Zero:** X0/Y0 already marks the
-centre used when milling. Replacing it with the uncalibrated probe reading
+center used when milling. Replacing it with the uncalibrated probe reading
 would remove the comparison needed to calculate the offsets.
 
 1. Press **Calibrate probe...**, then select **Ball diameter**.
@@ -98,12 +98,12 @@ would remove the comparison needed to calculate the offsets.
 4. Press **Save ball diameter**. This returns to the measurement result.
 5. Press **Calibrate probe...** again and select **X/Y offsets**.
 6. Select **X+Y**, then press **Save X/Y offsets**. These offsets make the
-   probed centre agree with the unchanged X0/Y0 used for milling.
+   probed center agree with the unchanged X0/Y0 used for milling.
 7. Close the result and probe the block again. Its measured sizes should
-   agree with the micrometer measurements, and its centre should be close
+   agree with the micrometer measurements, and its center should be close
    to X0/Y0.
 8. Close that result. Jog the ball above a flat part of the block's top,
-   a few millimetres above it.
+   a few millimeters above it.
 9. Choose **Center → Z**. Set **Depth** greater than the gap between the ball
    and the top; this is the maximum downward distance it will search.
 10. On the review page, press **Proceed**. After the touch, the probe rises
@@ -140,13 +140,13 @@ width or diameter. This procedure alone does not calibrate X/Y offsets.
 
 1. Clamp a gauge pin upright, parallel to Z, with enough of its cylindrical
    side exposed for the ball to touch all around it. Clean the pin.
-2. Extend the probe and jog the ball above the pin, roughly over its centre.
+2. Extend the probe and jog the ball above the pin, roughly over its center.
    On **Center**, choose **Boss**. Set search distances that put the whole
    ball beyond the pin, and a depth that reaches its cylindrical side.
 3. On the review page, press **Proceed**. After measuring,
-   the ball finishes above the pin's measured centre.
+   the ball finishes above the pin's measured center.
 4. Close the result and run **Boss** again from this position. This second
-   measurement crosses through the centre; an off-centre first measurement
+   measurement crosses through the center; an off-center first measurement
    can read less than the full diameter.
 5. Press **Calibrate probe... → Ball diameter**. Select **X+Y** and enter the
    pin's known diameter in both size fields. Press **Save ball diameter**.
@@ -156,12 +156,12 @@ width or diameter. This procedure alone does not calibrate X/Y offsets.
 
 Use a clamped part with a round hole or round boss. Its diameter does not
 need to be known. A dial test indicator in the spindle establishes where
-its centre is before the probe measures it.
+its center is before the probe measures it.
 
 1. Fit the indicator in the spindle. With the spindle motor stopped, rotate
    the spindle by hand to sweep the hole wall or the outside of the boss.
 2. Adjust X and Y until the indicator gives the same reading around the
-   circle. The spindle is now centred on the hole or boss.
+   circle. The spindle is now centered on the hole or boss.
 3. Use the machine's work-coordinate controls to set X and Y to zero in the
    chosen work coordinate system. Do not move the part after this.
 4. Remove the indicator and extend the probe. Select that same work
@@ -169,14 +169,14 @@ its centre is before the probe measures it.
 5. For a **Hole**, jog the ball inside the hole at the height to be measured.
    Set X/Y search distances long enough to reach both walls from the start.
    The ball crosses the hole at this height; **Depth** is not used.
-6. For a **Boss**, jog the ball above its centre and set search distances and
+6. For a **Boss**, jog the ball above its center and set search distances and
    depth as described for the gauge pin above.
 7. Choose **Center → Hole** or **Center → Boss** as appropriate. On the review
    page, press **Proceed**.
 8. Without pressing **Set Work Zero**, open
    **Calibrate probe... → X/Y offsets**. Select **X+Y** and press
    **Save X/Y offsets**.
-9. Probe again. The measured centre should be close to X0/Y0.
+9. Probe again. The measured center should be close to X0/Y0.
 
 ## When to recalibrate
 

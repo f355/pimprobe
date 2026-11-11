@@ -19,12 +19,13 @@ ett känt mått. Standardvärdet 1.83 mm är en utgångspunkt, inte en kalibreri
 
 ## Tillbakagång
 
-**Tillbakagång** är sträckan som proben backar efter varje grov- och finprobning. Den måste låta probkontakten släppa. Finsökningen går tillbaka till grovprobningens kontaktläge och får fortsätta ytterligare 0.5 mm förbi det.
+**Tillbakagång** är sträckan som proben backar efter varje kontakt. Den måste
+räcka för att probkontakten ska släppa före nästa beröring.
 
 ## Matningar
 
 - **Grovmatning:** den första sökningen efter en yta.
-- **Finmatning:** den andra kontakten, som ger mätvärdet. Lägre hastigheter minskar probens böjning och stoppfel.
+- **Finmatning:** hastigheten vid den andra kontakten, som ger mätvärdet.
 - **Matning vid flytt:** förflyttningar mellan kontakter och tillbakagång.
 - **Rundaxelmatning:** rotation av A i grader/min.
 

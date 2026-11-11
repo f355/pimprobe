@@ -24,10 +24,13 @@ Du kan ändra förskjutningarna och sätta nollpunkten igen, eller välja ett an
 
 Dessa mål placerar **probkulan**, inte spindeln. Rutiner som bara mäter Z har redan återgått till startläget.
 
-## Sparade mätningar
+## Kalibrera proben
 
 **Kalibrera proben...** finns för centrum- och Z-mätningar. Följ
 [Kalibrera proben](calibration.md) för att förbereda referensen och spara
-kuldiameter eller förskjutningar. Arbetsnollpunkten ändras inte.
+kuldiameter eller förskjutningar. Arbetsnollpunkten ändras inte. Den tidigare
+kalibreringen sparas i [Probhistorik](history.md).
+
+## Sparade mätningar
 
 Öppna **Inställningar → Hjälpfunktioner → Probhistorik**, välj en mätning och sedan **Öppna resultat**. Du kan sätta arbetsnollpunkten från den senare, så länge ämnet och maskinens referens är oförändrade.

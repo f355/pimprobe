@@ -229,7 +229,7 @@ fn valid(rule: &Rule, value: &Value) -> bool {
         Some(range) => value.as_f64().is_some_and(|n| range.contains(n)),
         None if rule.key == "language" => value
             .as_str()
-            .is_some_and(|language| ["", "en", "zh_CN", "sv"].contains(&language)),
+            .is_some_and(|language| ["", "en_US", "zh_CN", "sv"].contains(&language)),
         None => value.is_boolean(),
     }
 }
@@ -258,7 +258,10 @@ impl<'de> Deserialize<'de> for ProbeSettings {
 }
 
 impl ProbeSettings {
-    pub fn from_saved(saved: Map<String, Value>) -> Self {
+    pub fn from_saved(mut saved: Map<String, Value>) -> Self {
+        if saved.get("language").and_then(Value::as_str) == Some("en") {
+            saved.insert("language".into(), json!("en_US"));
+        }
         let mut values = Self::default();
         for rule in rules() {
             if let Some(value) = saved.get(rule.key).filter(|v| valid(&rule, v)) {
@@ -382,7 +385,7 @@ mod tests {
     fn language_preferences_are_validated_and_persisted() {
         let store = Arc::new(Store::default());
         let mut settings = Settings::load(store.clone()).unwrap();
-        for language in ["en", "zh_CN", "sv", ""] {
+        for language in ["en_US", "zh_CN", "sv", ""] {
             settings
                 .update(json!({"language": language}).as_object().unwrap().clone())
                 .unwrap();
@@ -399,6 +402,11 @@ mod tests {
             );
         }
         assert_eq!(settings.snapshot()["language"], "");
+        assert_eq!(
+            ProbeSettings::from_saved(json!({"language":"en"}).as_object().unwrap().clone())
+                .snapshot()["language"],
+            "en_US"
+        );
         assert_eq!(
             ProbeSettings::from_saved(json!({"language":"unknown"}).as_object().unwrap().clone())
                 .snapshot()["language"],

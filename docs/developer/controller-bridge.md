@@ -65,19 +65,7 @@ Controller output is asynchronous, so clients must parse the records carried
 by `D` frames rather than assume that the next frame is the reply to the most
 recent command.
 
-## Output sources
-
-The proxy forwards CNC_Lab's parsed controller records. When the installed
-CNC_Lab version also exposes raw controller data, the proxy extracts printable
-status records containing `|MPos:` and forwards those as well. This keeps the
-wire contract the same across supported CNC_Lab versions; clients may receive
-different subsets of controller records depending on the signals available in
-the host application.
-
-## Probe Actuator Reports
-
-The controller client reads actuator state from `PM` or the thirtieth character
-of `MS`. It uses 0 for retracted, 1 for extended, 2 for retracting and 3 for
-extending. Firmware can report the transitions as 2/3 or 7/6; the client maps
-both formats to the same application states.
+The controller records available depend on the installed stock UI. Use the
+parser in `crates/controller` for status and actuator fields rather than
+decoding firmware-specific fields in the UI.
 

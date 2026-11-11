@@ -192,7 +192,7 @@ pub fn check_repeatability<C: RepeatabilityController + ?Sized>(
 
 /// Approximate C500 L-bracket walls in carriage machine coordinates.
 pub const REPEATABILITY_CORNER_XY: [f64; 2] = [-232.5, -204.3];
-/// Vertical separation of the ETS contact surface and bed, in millimetres.
+/// Vertical separation of the ETS contact surface and bed, in millimeters.
 pub const REPEATABILITY_BED_BELOW_ETS: f64 = 62.9;
 
 fn measurement_start(s: &State) -> Result<Position, Error> {

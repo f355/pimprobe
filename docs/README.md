@@ -1,8 +1,7 @@
 # Probing guide
 
-Start with [Calibrate the probe](calibration.md): prepare a reference, measure
-it, and save the ball diameter and offsets. Calibration is not the same as
-setting a workpiece's zero.
+Start with [Calibrate the probe](calibration.md) before using the probe to set
+a workpiece's zero.
 
 Choose a measurement:
 
@@ -37,10 +36,12 @@ The probe touches each surface twice: a coarse search, backoff, then a slower fi
 ## Coordinates and controls
 
 - Large readouts use the selected work coordinate system; small readouts use machine coordinates, G53.
-- Tap the coordinate readout to switch between **Probe** and **Tool**. With an empty spindle, Tool still uses the last measured tool length offset.
+- Select **Probe** for the probe ball or **Tool** for the tool tip. Probe uses
+  its own calibration; Tool uses the machine's active tool-length compensation.
 - **G54–G59** selects a work coordinate system. Each stores its own zero.
 
 Edges, corners and centers follow the selected work-coordinate axes, including its X/Y rotation. Face-angle and rotary measurements follow the machine axes.
+
 - Tap **Retracted / Extended** beside the tabs to extend or retract the probe independently of measurements. The highlighted label shows its current state.
 - **?** highlights the controls. Tap one for an explanation, or **Guide** for these pages. **×** leaves help.
 
@@ -48,7 +49,10 @@ Edges, corners and centers follow the selected work-coordinate axes, including i
 
 Sideways and downward positioning moves stop on ball contact. Jogging and ordinary upward moves do not. A shaft collision may never trigger the ball.
 
-If the first search misses, the measurement fails. If the fine touch misses, the firmware can alarm and return you to the machine's main screen. Check the search distance and starting position before retrying.
+If a search misses the surface, the measurement stops with an error. A
+controller alarm may need clearing in the machine controls before retrying.
+Make sure the ball can reach the intended surface in the chosen direction
+within the search distance.
 
 ## Other pages
 

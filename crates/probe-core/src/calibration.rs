@@ -110,7 +110,7 @@ pub fn calibrate_probe(
         return Err(invalid("The saved ball diameter is invalid."));
     }
 
-    // Opposing contacts give a centre independent of ball diameter.
+    // Opposing contacts give a center independent of ball diameter.
     let (sin, cos) = result
         .measurement_rotation
         .or(plan.start.wcs_rotation)
@@ -143,7 +143,7 @@ pub fn calibrate_probe(
         if !offset_axes[i] {
             if options.offsets[i] {
                 return Err(invalid(
-                    "Calibrate X/Y from a centre measurement at an independently set work zero, or Z from a surface at Z0.",
+                    "Calibrate X/Y from a center measurement at an independently set work zero, or Z from a surface at Z0.",
                 ));
             }
             continue;

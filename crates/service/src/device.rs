@@ -17,8 +17,7 @@
 use pimprobe_app::device::{ControllerError, DeviceSnapshot, DeviceStatus};
 use pimprobe_controller::SocketController;
 use pimprobe_core::{
-    Controller, Error, MockController, MockGeometry, RepeatabilityController, RoutineConfig, State,
-    async_trait,
+    Controller, Error, MockController, MockGeometry, RoutineConfig, State, async_trait,
 };
 
 pub enum Device {
@@ -78,28 +77,6 @@ impl Device {
                 });
             }
         }
-    }
-
-    pub fn configure_repeatability(&self, diameter: f64) -> Result<(), Error> {
-        if let Self::Mock(mock) = self {
-            let state = mock.state();
-            let mut corner = state.position;
-            for (i, coordinate) in corner.iter_mut().enumerate().take(2) {
-                *coordinate = pimprobe_core::REPEATABILITY_CORNER_XY[i] - state.probe_offset[i]
-                    + diameter / 2.0;
-            }
-            let floor =
-                state.probe_z_calibration.unwrap() - pimprobe_core::REPEATABILITY_BED_BELOW_ETS;
-            mock.set_geometry(MockGeometry::Corner {
-                origin: corner,
-                directions: [-1, -1],
-                travel: [0.0, 0.0],
-                top: floor + 20.0,
-                floor,
-                internal: true,
-            });
-        }
-        Ok(())
     }
 
     pub fn snapshot(&self) -> DeviceSnapshot {
@@ -243,9 +220,6 @@ impl pimprobe_app::device::ProbeDevice for Device {
     fn configure(&self, config: &RoutineConfig) -> Result<(), Error> {
         self.configure(config)
     }
-    fn configure_repeatability(&self, diameter: f64) -> Result<(), Error> {
-        self.configure_repeatability(diameter)
-    }
     fn snapshot(&self) -> pimprobe_app::device::DeviceSnapshot {
         self.snapshot()
     }
@@ -261,17 +235,13 @@ impl pimprobe_app::device::ProbeDevice for Device {
 }
 
 #[async_trait]
-impl RepeatabilityController for Device {
+impl Controller for Device {
     async fn set_probe(&self, extended: bool) -> Result<(), Error> {
         match self {
             Self::Machine(c) => c.set_probe_extended(extended).await,
             Self::Mock(c) => c.set_probe(extended).await,
         }
     }
-}
-
-#[async_trait]
-impl Controller for Device {
     fn state(&self) -> State {
         match self {
             Self::Machine(c) => c.state(),

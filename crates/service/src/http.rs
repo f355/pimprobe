@@ -32,7 +32,7 @@ use pimprobe_app::{
     AppError, ErrorKind, HistoryAction, Motion, Operation, ProbeApp, ResultWcsRequest, Token,
     ZeroRequest, history::Records, settings::Settings,
 };
-use pimprobe_core::{Controller, RepeatabilityOptions, RoutineConfig};
+use pimprobe_core::{Controller, RoutineConfig};
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use std::{
@@ -98,8 +98,6 @@ pub fn router(app: Arc<App>) -> Router {
         .route("/api/v1/rotary/zero", post(rotary::zero))
         .route("/api/v1/rotary/wcs", post(rotary::wcs))
         .route("/api/v1/rotary/rotation", post(rotary::rotation))
-        .route("/api/v1/repeatability/run", post(repeatability))
-        .route("/api/v1/repeatability/stop", post(stop_repeatability))
         .route("/api/v1/logs/history", get(history))
         .route("/api/v1/logs/history/open", post(open_history))
         .route("/api/v1/logs/history/wcs", post(history_wcs))
@@ -393,17 +391,6 @@ async fn result_wcs(
 ) -> Result<Json<pimprobe_app::ActionResult<pimprobe_core::RoutineResult>>, ApiError> {
     Ok(Json(app.probe.select_result_wcs(request).await?))
 }
-async fn repeatability(
-    State(app): State<Arc<App>>,
-    ApiJson(options): ApiJson<RepeatabilityOptions>,
-) -> Result<Response, ApiError> {
-    Ok(stream(app.probe.repeatability(options).await?))
-}
-async fn stop_repeatability(State(app): State<Arc<App>>) -> StatusCode {
-    app.probe.stop_repeatability().await;
-    StatusCode::NO_CONTENT
-}
-
 struct RunStream(Operation);
 impl Stream for RunStream {
     type Item = Result<Bytes, Infallible>;

@@ -39,16 +39,16 @@ Välj engelska, förenklad kinesiska eller svenska. Tills du väljer används CN
 
 **Sök automatiskt** kontrollerar den valda kanalen varje gång gränssnittet öppnas. En grön punkt på Inställningar och uppdateringsknappen betyder att en ny version finns. Installationen startar om gränssnittet.
 
+## Probhistorik
+
+**Probhistorik** öppnar sparade mätningar och kalibreringar.
+
 ## Hjälpfunktioner
 
-**Probhistorik** öppnar sparade mätningar igen. **Exportera loggar** kopierar historik och diagnostikloggar till ett monterat USB-minne. **Rensa loggar** tar bort dem efter bekräftelse.
-
-**Probens repeterbarhet** mäter L-vinkelns väggar och bordet upprepade gånger för att jämföra mätvärden, med valfri infällning av proben och referenskörning mellan körningarna.
+**Exportera loggar** kopierar historik och diagnostikloggar till ett monterat USB-minne. **Rensa loggar** tar bort dem efter bekräftelse.
 
 <!-- guide-only -->
 [Historik och loggar](history.md)
-
-[Repeterbarhetskontroll](repeatability.md)
 
 [Redigera tal](editing.md)
 <!-- /guide-only -->

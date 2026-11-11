@@ -33,4 +33,4 @@ kalibreringen sparas i [Probhistorik](history.md).
 
 ## Sparade mätningar
 
-Öppna **Inställningar → Hjälpfunktioner → Probhistorik**, välj en mätning och sedan **Öppna resultat**. Du kan sätta arbetsnollpunkten från den senare, så länge ämnet och maskinens referens är oförändrade.
+Öppna **Inställningar → Probhistorik**, välj en mätning och sedan **Öppna resultat**. Du kan sätta arbetsnollpunkten från den senare, så länge ämnet och maskinens referens är oförändrade.

@@ -60,4 +60,3 @@ att kulan kan nå den avsedda ytan i vald riktning inom söksträckan.
 - [Inställningar](settings.md): kuldiameter, tillbakagång, matningar och uppdateringar.
 - [Redigera tal](editing.md)
 - [Historik och loggar](history.md)
-- [Repeterbarhetskontroll](repeatability.md)

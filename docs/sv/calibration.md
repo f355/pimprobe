@@ -178,7 +178,7 @@ infästning eller en kollision som kan ha böjt eller flyttat mätspetsen.
 
 ## Återställ tidigare kalibrering
 
-1. Öppna **Inställningar → Hjälpfunktioner → Probhistorik**.
+1. Öppna **Inställningar → Probhistorik**.
 2. Välj posten **Probkalibrering** för den ändring du vill ångra.
    **Tidigare** visar värdena före ändringen och **Sparat** visar de skrivna
    värdena.

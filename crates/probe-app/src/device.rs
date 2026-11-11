@@ -15,7 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use async_trait::async_trait;
-use pimprobe_core::{Error, RepeatabilityController, RoutineConfig};
+use pimprobe_core::{Controller, Error, RoutineConfig};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -24,16 +24,13 @@ use std::collections::BTreeMap;
 pub type ActionGuard = Box<dyn Send>;
 
 #[async_trait]
-pub trait ProbeDevice: RepeatabilityController + 'static {
+pub trait ProbeDevice: Controller + 'static {
     fn session_id(&self) -> u64;
     fn is_mock(&self) -> bool {
         false
     }
     fn snapshot(&self) -> DeviceSnapshot;
     fn configure(&self, _config: &RoutineConfig) -> Result<(), Error> {
-        Ok(())
-    }
-    fn configure_repeatability(&self, _diameter: f64) -> Result<(), Error> {
         Ok(())
     }
     fn configure_rotary(&self, _config: &pimprobe_core::RotaryConfig) -> Result<(), Error> {

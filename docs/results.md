@@ -36,4 +36,4 @@ calibration is saved in [Probe history](history.md) before any values change.
 
 ## Saved measurements
 
-Open **Settings → Utilities → Probe history**, select a measurement, then **Open result**. You can set work zero from it later, provided the stock and machine reference are still the same.
+Open **Settings → Probe history**, select a measurement, then **Open result**. You can set work zero from it later, provided the stock and machine reference are still the same.

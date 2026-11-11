@@ -340,16 +340,11 @@ function ProbePage({
       />
     ) : page !== "home" ? (
       <UtilityPage
-        page={page as "utilities" | "history" | "repeatability" | "updates"}
+        page={page as "utilities" | "history" | "updates"}
         client={client}
         settings={settings}
         onSettings={saveSettings}
-        onNavigate={navigate}
-        onBack={() =>
-          navigate(
-            page === "utilities" || page === "updates" ? "home" : "utilities",
-          )
-        }
+        onBack={() => navigate("home")}
         onBusyChange={setBusy}
         onOpenResult={(opened) => {
           setHistory(opened);
@@ -518,12 +513,12 @@ function ProbePage({
               {tab === "Settings" ? (
                 <div className="pp-settings-shortcuts">
                   <Button
-                    onClick={() => navigate("utilities")}
+                    onClick={() => navigate("history")}
                     help={t(
-                      "Open probe history, log export and the repeatability check.",
+                      "Browse saved measurements. Open a successful result to set work zero from it again.",
                     )}
                   >
-                    {t("Utilities")}
+                    {t("Probe history")}
                   </Button>
                   {updates && (
                     <Button
@@ -560,8 +555,10 @@ function ProbePage({
                           aria-pressed={language === choice.code}
                           disabled={!loaded || locked}
                           onClick={() =>
-                            void saveSettings({ language: choice.code }).catch(
-                              (failure) => setActionError(failure.message),
+                            void saveSettings({
+                              language: choice.code,
+                            }).catch((failure) =>
+                              setActionError(failure.message),
                             )
                           }
                         >
@@ -569,6 +566,20 @@ function ProbePage({
                         </Button>
                       ))}
                     </div>
+                  </div>
+                  <div className="pp-settings-actions">
+                    <Button onClick={() => navigate("utilities")}>
+                      {t("Utilities")}
+                    </Button>
+                    {help && (
+                      <Button
+                        data-help-bypass=""
+                        onClick={() => setGuide(true)}
+                      >
+                        <BookOpen />
+                        {t("Guide")}
+                      </Button>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -812,20 +823,21 @@ function ProbePage({
               <HelpGuide onBack={() => setGuide(false)} />
             </div>
           )}
-          {help && !guide && !chooseWcs && page === "home" && (
-            <Button
-              className="pp-floating-guide"
-              helpTitle={t("Guide")}
-              data-help-bypass=""
-              style={
-                tab === "Settings" ? { left: 16, right: "auto" } : undefined
-              }
-              onClick={() => setGuide(true)}
-            >
-              <BookOpen />
-              {t("Guide")}
-            </Button>
-          )}
+          {help &&
+            !guide &&
+            !chooseWcs &&
+            page === "home" &&
+            tab !== "Settings" && (
+              <Button
+                className="pp-floating-guide"
+                helpTitle={t("Guide")}
+                data-help-bypass=""
+                onClick={() => setGuide(true)}
+              >
+                <BookOpen />
+                {t("Guide")}
+              </Button>
+            )}
           {leavePrompt && (
             <ConfirmDialog
               title={t("Probe extended")}

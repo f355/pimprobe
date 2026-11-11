@@ -58,8 +58,6 @@ for (const group of ["routine", "rotary"]) {
     routes[`${group}.${action}`] = ["POST", `/${group}/${action}`];
   }
 }
-routes["repeatability.run"] = ["POST", "/repeatability/run"];
-routes["repeatability.stop"] = ["POST", "/repeatability/stop"];
 
 export class ServiceError extends Error {
   constructor(

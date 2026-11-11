@@ -91,7 +91,6 @@ impl ProbeApp {
                     .as_ref()
                     .map_or(rotary.stations.len() == 2, |level| level.touches.len() == 2)
             }
-            MeasurementResult::Repeatability(_) => unreachable!(),
         };
         let opened = HistoryResult {
             can_apply: entry.status == "success" && complete,
@@ -155,7 +154,6 @@ impl ProbeApp {
                             }
                             result.wcs = wcs;
                         }
-                        MeasurementResult::Repeatability(_) => unreachable!(),
                     }
                     "result_wcs"
                 }
@@ -173,7 +171,6 @@ impl ProbeApp {
                             pimprobe_core::zero_rotary(app.device.as_ref(), result).await?;
                             result.zeroed = true;
                         }
-                        MeasurementResult::Repeatability(_) => unreachable!(),
                     }
                     "work_zero"
                 }
@@ -188,7 +185,6 @@ impl ProbeApp {
                             pimprobe_core::align_rotary(app.device.as_ref(), result).await?;
                             result.rotation_applied = true;
                         }
-                        MeasurementResult::Repeatability(_) => unreachable!(),
                     }
                     "apply_xy_alignment"
                 }

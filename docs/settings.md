@@ -39,16 +39,16 @@ Choose English, Simplified Chinese or Swedish. Until you choose, the interface u
 
 **Check automatically** checks the selected channel each time the interface opens. A green dot on Settings and the update button means a new version is available. Installing it restarts the interface.
 
+## Probe history
+
+**Probe history** reopens saved measurements and saved calibrations.
+
 ## Utilities
 
-**Probe history** reopens saved measurements. **Export logs** copies history and diagnostic logs to a mounted USB drive. **Clear logs** deletes them after confirmation.
-
-**Probe repeatability** measures the L bracket walls and bed repeatedly to compare readings, with optional probe retraction and homing between runs.
+**Export logs** copies history and diagnostic logs to a mounted USB drive. **Clear logs** deletes them after confirmation.
 
 <!-- guide-only -->
 [History and logs](history.md)
-
-[Repeatability check](repeatability.md)
 
 [Editing numbers](editing.md)
 <!-- /guide-only -->

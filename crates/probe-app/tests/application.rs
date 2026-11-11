@@ -22,9 +22,7 @@ use pimprobe_app::{
     host::{ExportResult, HostActions, SoftwareInfo},
     settings::{ProbeSettings, Settings, SettingsStore},
 };
-use pimprobe_core::{
-    Controller, Error, MockController, RepeatabilityController, RoutineConfig, State, async_trait,
-};
+use pimprobe_core::{Controller, Error, MockController, RoutineConfig, State, async_trait};
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, Ordering},
@@ -201,9 +199,6 @@ impl Controller for Device {
         }
         self.mock.send(command).await
     }
-}
-#[async_trait]
-impl RepeatabilityController for Device {
     async fn set_probe(&self, extended: bool) -> Result<(), Error> {
         self.mock.set_extended(extended)
     }
@@ -937,40 +932,6 @@ async fn measurement_and_later_work_zero_are_available_through_host_storage() {
         .await
         .is_err()
     );
-}
-
-#[tokio::test]
-async fn repeatability_distinguishes_stop_from_cancellation_in_events_and_history() {
-    for operator_stop in [false, true] {
-        let (app, device, _) = app();
-        device.stopped.store(true, Ordering::SeqCst);
-        let mut operation = app
-            .repeatability(pimprobe_core::RepeatabilityOptions {
-                axes: [true, false, false],
-                repetitions: 1,
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-        if operator_stop {
-            app.stop_repeatability().await;
-        } else {
-            operation.cancel();
-        }
-        let mut code = None;
-        while let Some(event) = operation.recv().await {
-            if let OperationEvent::Error { code: value, .. } = event {
-                code = Some(value);
-            }
-        }
-        let expected = if operator_stop {
-            "stopped"
-        } else {
-            "cancelled"
-        };
-        assert_eq!(code.as_deref(), Some(expected));
-        assert_eq!(app.history().await.unwrap()[0].status, expected);
-    }
 }
 
 #[tokio::test]

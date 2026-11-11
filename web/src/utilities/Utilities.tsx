@@ -20,12 +20,7 @@ import { useTranslation } from "../i18n";
 import { errorMessage, useUtilityBusy } from "./common";
 import type { UtilityPageProps } from "./UtilityPage";
 
-export function Utilities({
-  client,
-  onNavigate,
-  onBack,
-  onBusyChange,
-}: UtilityPageProps) {
+export function Utilities({ client, onBack, onBusyChange }: UtilityPageProps) {
   const { t } = useTranslation();
   const [pending, setPending] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
@@ -87,16 +82,6 @@ export function Utilities({
         backDisabled={pending}
       />
       <div className="pp-utility-content pp-utility-menu">
-        <Button
-          className="pp-utility-history-action"
-          disabled={pending}
-          onClick={() => onNavigate("history")}
-          help={t(
-            "Browse saved measurements. Open a successful result to set work zero from it again.",
-          )}
-        >
-          {t("Probe history")}
-        </Button>
         <div className="pp-utility-log-actions">
           <Button
             disabled={pending}
@@ -119,17 +104,6 @@ export function Utilities({
           </Button>
         </div>
         {message && <Notice error={failure}>{message}</Notice>}
-        <div className="pp-utility-spacer" />
-        <Button
-          className="pp-utility-repeat-action"
-          disabled={pending}
-          onClick={() => onNavigate("repeatability")}
-          help={t(
-            "Repeat touches against the L bracket and bed, then compare their spread. Options include homing and probe retraction between repetitions.",
-          )}
-        >
-          {t("Probe repeatability")}
-        </Button>
       </div>
       {confirmClear && (
         <ConfirmDialog

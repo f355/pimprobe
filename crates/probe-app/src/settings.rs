@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use pimprobe_core::{NumericRange, Parameter, RepeatabilitySettings};
+use pimprobe_core::{NumericRange, Parameter};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
@@ -285,16 +285,6 @@ impl ProbeSettings {
         let mut values = self.clone();
         values.0.extend(patch);
         Ok(values)
-    }
-
-    pub fn repeatability(&self) -> RepeatabilitySettings {
-        RepeatabilitySettings {
-            diameter: self.0["probeDiameter"].as_f64().unwrap(),
-            retract: self.0["retractDistance"].as_f64().unwrap(),
-            positioning_feed: self.0["positioningFeed"].as_f64().unwrap(),
-            coarse_feed: self.0["coarseFeed"].as_f64().unwrap(),
-            fine_feed: self.0["fineFeed"].as_f64().unwrap(),
-        }
     }
 }
 

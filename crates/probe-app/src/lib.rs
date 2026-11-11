@@ -33,10 +33,7 @@ pub use rotary::RotaryReview;
 use device::{DeviceSnapshot, ProbeDevice};
 use history::{HistoryEntry, Records};
 use host::HostActions;
-use pimprobe_core::{
-    CancellationToken, Error, RepeatabilityEvent, RepeatabilityOptions, RepeatabilityReport,
-    RoutineConfig, TimingPolicy,
-};
+use pimprobe_core::{CancellationToken, Error, RoutineConfig, TimingPolicy};
 use reviews::Reviews;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
@@ -59,7 +56,6 @@ pub struct ProbeApp {
     action: Arc<Mutex<()>>,
     active: AtomicBool,
     recovery_failed: AtomicBool,
-    repeatability_stop: Mutex<Option<CancellationToken>>,
     shutdown: CancellationToken,
     host: Arc<dyn HostActions>,
     logs: Arc<Records>,
@@ -81,7 +77,6 @@ impl ProbeApp {
             action: Arc::new(Mutex::new(())),
             active: AtomicBool::new(false),
             recovery_failed: AtomicBool::new(false),
-            repeatability_stop: Mutex::new(None),
             shutdown: CancellationToken::new(),
             host,
             logs: Arc::new(logs),
@@ -503,126 +498,6 @@ impl ProbeApp {
             program,
             simulated: app.device.is_mock(),
         })
-    }
-
-    pub async fn stop_repeatability(&self) {
-        if let Some(stop) = self.repeatability_stop.lock().await.as_ref() {
-            stop.cancel();
-        }
-    }
-
-    pub async fn repeatability(
-        self: &Arc<Self>,
-        options: RepeatabilityOptions,
-    ) -> Result<Operation, AppError> {
-        let app = self.clone();
-        let guard = app.acquire()?;
-        let values = app.settings().await?;
-        let settings = settings::ProbeSettings::from_saved(values.clone()).repeatability();
-        app.validate_feeds(&[
-            ("positioningFeed", settings.positioning_feed),
-            ("coarseFeed", settings.coarse_feed),
-            ("fineFeed", settings.fine_feed),
-        ])
-        .await?;
-        options.validate()?;
-        settings.validate()?;
-        pimprobe_core::query_coordinates(app.device.as_ref()).await?;
-        pimprobe_core::check_repeatability(app.device.as_ref(), &options, settings)?;
-        app.device.configure_repeatability(settings.diameter)?;
-        let run_id = uuid::Uuid::new_v4().to_string();
-        app.logs
-            .start(
-                &run_id,
-                "Probe repeatability",
-                "repeatability",
-                json!({"options":options,"settings":values}),
-                json!({"controller":app.device.state(),"software":app.host.software_info()}),
-            )
-            .map_err(log_error)?;
-        let cancel = app.shutdown.child_token();
-        let run_cancel = cancel.clone();
-        let stop = CancellationToken::new();
-        *app.repeatability_stop.lock().await = Some(stop.clone());
-        let (sender, receiver) = mpsc::channel(256);
-        app.active.store(true, Ordering::SeqCst);
-        tokio::spawn(async move {
-            let _guard = guard;
-            let mut report = RepeatabilityReport::default();
-            let progress_id = run_id.clone();
-            let progress_logs = app.logs.clone();
-            let result = pimprobe_core::run_repeatability(
-            app.device.as_ref(), &options, settings, &mut report, run_cancel.clone(), stop, |event| {
-                let event = match event {
-                    RepeatabilityEvent::Progress(progress) => OperationEvent::Progress { elapsed_ms:None, progress },
-                    RepeatabilityEvent::Measurement { repetition, axis, value, statistics } =>
-                        OperationEvent::Measurement { repetition, axis, value, statistics },
-                };
-                let encoded = json!(event);
-                let name = if encoded["progress"]["kind"] == "contact" {
-                    "contact"
-                } else {
-                    encoded["type"].as_str().unwrap_or("progress")
-                };
-                let data = if name == "contact" {
-                    json!({"measurement":encoded["progress"]["measurement"],"contact":encoded["progress"]["contact"]})
-                } else {
-                    encoded.clone()
-                };
-                log_warning(progress_logs.trace(&progress_id, name, data));
-                queue_progress(&sender, &run_cancel, event);
-            },
-        ).await;
-            let result = app.finish_action(result).await;
-            let event = match result {
-                Ok(()) => {
-                    let saved = app
-                        .logs
-                        .finish(&run_id, "success", Some(json!(report)), None);
-                    persisted(
-                        OperationEvent::Result {
-                            result: MeasurementResult::Repeatability(report),
-                        },
-                        saved,
-                    )
-                }
-                Err(error) => {
-                    app.recover(&error).await;
-                    let saved = app.logs.finish(
-                        &run_id,
-                        if matches!(error, Error::Stopped) {
-                            "stopped"
-                        } else if matches!(error, Error::Cancelled) {
-                            "cancelled"
-                        } else {
-                            "failed"
-                        },
-                        Some(json!(report)),
-                        if matches!(error, Error::Stopped) {
-                            None
-                        } else {
-                            Some(error.to_string())
-                        },
-                    );
-                    persisted(
-                        OperationEvent::Error {
-                            code: error_code(&error).into(),
-                            message: error.to_string(),
-                            result: Some(MeasurementResult::Repeatability(report)),
-                        },
-                        saved,
-                    )
-                }
-            };
-            log_warning(
-                app.logs
-                    .trace(&run_id, "end_state", json!(app.device.state())),
-            );
-            *app.repeatability_stop.lock().await = None;
-            app.active.store(false, Ordering::SeqCst);
-            let _ = sender.try_send(event);
-        });
-        Ok(Operation { receiver, cancel })
     }
 
     pub async fn start_motion(

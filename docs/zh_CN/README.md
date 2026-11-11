@@ -54,4 +54,3 @@
 - [设置](settings.md)：测球直径、回退距离、进给和更新。
 - [编辑数值](editing.md)
 - [测量记录与日志](history.md)
-- [重复性检查](repeatability.md)

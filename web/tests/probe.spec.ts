@@ -417,7 +417,6 @@ test("calibration history restores previous values only after confirmation", asy
     return route.fulfill({ json: before });
   });
   await page.getByRole("tab", { name: "Settings", exact: true }).click();
-  await page.getByRole("button", { name: "Utilities", exact: true }).click();
   await page
     .getByRole("button", { name: "Probe history", exact: true })
     .click();
@@ -973,7 +972,7 @@ for (const language of ["en_US", "sv", "zh_CN"]) {
   });
 }
 
-test("language buttons save an explicit preference", async ({ page }) => {
+test("language buttons save an explicit preference", async ({ page }, info) => {
   const m = await app(page);
   await page.getByRole("tab").nth(5).click();
   for (const [label, code] of [
@@ -990,6 +989,11 @@ test("language buttons save an explicit preference", async ({ page }) => {
         .filter((call) => call.path === "settings" && call.body.language)
         .at(-1)?.body,
     ).toEqual({ language: code });
+    for (const button of await page
+      .locator(".pp-settings-shortcuts button")
+      .all())
+      await expect(button).toBeInViewport({ ratio: 0.99 });
+    await capture(page, info.outputPath(`settings-${code}.png`));
   }
 });
 
@@ -1326,7 +1330,7 @@ test("Guide leaves a running operation mounted and returns to its completed resu
   ).toBeVisible();
 });
 
-test("history opens saved measurements and repeatability keeps its options", async ({
+test("history opens saved measurements from settings", async ({
   page,
 }, info) => {
   await app(page);
@@ -1360,39 +1364,8 @@ test("history opens saved measurements and repeatability keeps its options", asy
   await page.route("**/api/v1/logs/history/open", (route) =>
     route.fulfill({ json: { entry, result: entry.result, canApply: true } }),
   );
-  await page.route("**/api/v1/repeatability/run", (route) =>
-    route.fulfill({
-      contentType: "application/x-ndjson",
-      body:
-        JSON.stringify({
-          type: "result",
-          result: {
-            measurements: [
-              [-175, -180, -100],
-              [-175.002, -180.001, -100],
-            ],
-            statistics: [
-              {
-                mean: -175.001,
-                median: -175.001,
-                stddev: 0.0014,
-                range: 0.002,
-              },
-              {
-                mean: -180.0005,
-                median: -180.0005,
-                stddev: 0.0007,
-                range: 0.001,
-              },
-              { mean: -100, median: -100, stddev: 0, range: 0 },
-            ],
-          },
-        }) + "\n",
-    }),
-  );
   await page.getByRole("tab", { name: "Settings", exact: true }).click();
-  await page.getByRole("button", { name: "Utilities", exact: true }).click();
-  await capture(page, info.outputPath("utilities.png"));
+  await capture(page, info.outputPath("settings.png"));
   await page
     .getByRole("button", { name: "Probe history", exact: true })
     .click();
@@ -1412,25 +1385,15 @@ test("history opens saved measurements and repeatability keeps its options", asy
   await page.getByRole("button", { name: "Result", exact: true }).click();
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page.getByRole("button", { name: "Back", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Probe repeatability", exact: true })
-    .click();
-  await capture(page, info.outputPath("repeat-prepare.png"));
-  await page
-    .getByRole("button", { name: "Fixture is ready", exact: true })
-    .click();
-  await page
-    .getByRole("switch", { name: "Home each time", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Utilities", exact: true }).click();
   await expect(
-    page.getByRole("switch", { name: "Retract each time", exact: true }),
-  ).toHaveAttribute("aria-checked", "true");
-  await capture(page, info.outputPath("repeat-options.png"));
-  await page.getByRole("button", { name: "Start check", exact: true }).click();
-  await expect(
-    page.getByText("Deviation from mean (mm)", { exact: true }),
+    page.getByRole("button", { name: "Export logs", exact: true }),
   ).toBeVisible();
-  await capture(page, info.outputPath("repeat-result.png"));
+  await capture(page, info.outputPath("utilities.png"));
+  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await expect(
+    page.getByRole("tab", { name: "Settings", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
 });
 
 test("the update channel reloads release notes and installation asks for confirmation", async ({

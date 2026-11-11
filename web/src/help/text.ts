@@ -114,15 +114,13 @@ export const descriptions: Record<string, string> = {
   Log: "Show the commands and messages recorded during this measurement.",
   Result: "Show the measured coordinates and work-zero controls.",
   Details: "Show the saved measurement's options and command log.",
-  Utilities: "Open probe history, log export and the repeatability check.",
+  Utilities: "Export or clear probing logs.",
   "Probe history":
     "Browse saved measurements. Open a successful result to set work zero from it again.",
   "Export logs":
     "Save probe history and diagnostic logs to a downloadable archive.",
   "Clear logs":
     "Delete saved probe history and diagnostic logs after confirmation.",
-  "Probe repeatability":
-    "Repeat touches against the L bracket and bed, then compare their spread. Options include homing and probe retraction between repetitions.",
   "Check for updates":
     "Check GitHub for an update on the selected release or development channel.",
   "Install update":

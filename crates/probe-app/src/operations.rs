@@ -14,14 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use pimprobe_core::{Axis, AxisStatistics, Progress, RepeatabilityReport, RoutineResult};
+use pimprobe_core::{Progress, RoutineResult};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum MeasurementResult {
     Routine(RoutineResult),
-    Repeatability(RepeatabilityReport),
     Rotary(pimprobe_core::RotaryResult),
 }
 
@@ -32,12 +31,6 @@ pub enum OperationEvent {
         #[serde(rename = "elapsedMs", skip_serializing_if = "Option::is_none")]
         elapsed_ms: Option<u64>,
         progress: Progress,
-    },
-    Measurement {
-        repetition: usize,
-        axis: Axis,
-        value: f64,
-        statistics: [Option<AxisStatistics>; 3],
     },
     Result {
         result: MeasurementResult,

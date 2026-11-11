@@ -15,8 +15,15 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import type { HistoryEntry } from "../types";
-import type { RepeatabilityReport } from "./repeatability-model";
-import { measurementNumber } from "./repeatability-model";
+
+function measurementNumber(
+  value: number | null | undefined,
+  digits = 4,
+): string {
+  return value == null || !Number.isFinite(value)
+    ? "--"
+    : value.toFixed(digits);
+}
 
 type Translate = (message: string, values?: (string | number)[]) => string;
 type Config = {
@@ -42,7 +49,13 @@ type Config = {
   coarseFeed?: number;
   fineFeed?: number;
 };
-type Result = Partial<RepeatabilityReport> & {
+type Result = {
+  measurements?: (number | null)[][];
+  statistics?: ({
+    mean: number;
+    median: number;
+    stddev: number | null;
+  } | null)[];
   machinePoint?: (number | null)[];
   spans?: (number | null)[];
   wcs?: number;

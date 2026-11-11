@@ -26,7 +26,6 @@ export const guideNames = [
   "results.md",
   "editing.md",
   "history.md",
-  "repeatability.md",
 ] as const;
 
 export interface GuideSection {

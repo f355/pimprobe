@@ -25,11 +25,9 @@ mod motion;
 mod parameters;
 mod plan;
 pub use parameters::*;
-mod repeatability;
 mod rotary;
 pub use rotary::*;
 mod runtime;
-pub use repeatability::*;
 mod script;
 pub use mock::*;
 pub use tokio_util::sync::CancellationToken;
@@ -218,6 +216,9 @@ pub trait Controller: Send + Sync {
     fn state(&self) -> State;
     fn subscribe(&self) -> EventReceiver;
     async fn send(&self, command: &str) -> Result<(), Error>;
+    async fn set_probe(&self, extended: bool) -> Result<(), Error> {
+        self.send(if extended { "M122" } else { "M121" }).await
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

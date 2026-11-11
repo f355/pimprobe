@@ -18,16 +18,14 @@ import type { ProbeClient } from "../client";
 import type { HistoryResult, Settings } from "../types";
 import { Utilities } from "./Utilities";
 import { History } from "./History";
-import { Repeatability } from "./Repeatability";
 import { Updates } from "./Updates";
 import "./utilities.css";
 
 export interface UtilityPageProps {
-  page: "utilities" | "history" | "repeatability" | "updates";
+  page: "utilities" | "history" | "updates";
   client: ProbeClient;
   settings: Settings;
   onSettings: (patch: Partial<Settings>) => Promise<void>;
-  onNavigate: (page: string) => void;
   onBack: () => void;
   onOpenResult: (result: HistoryResult) => void;
   onBusyChange?: (busy: boolean) => void;
@@ -37,8 +35,6 @@ export function UtilityPage(props: UtilityPageProps) {
   switch (props.page) {
     case "history":
       return <History {...props} />;
-    case "repeatability":
-      return <Repeatability {...props} />;
     case "updates":
       return <Updates {...props} />;
     default:

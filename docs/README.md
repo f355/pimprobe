@@ -59,4 +59,3 @@ within the search distance.
 - [Settings](settings.md): ball diameter, backoff, feeds and updates.
 - [Editing numbers](editing.md)
 - [History and logs](history.md)
-- [Repeatability check](repeatability.md)

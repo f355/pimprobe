@@ -185,7 +185,7 @@ the probe's mounting, or a collision that may have bent or shifted the stylus.
 
 ## Restore a previous calibration
 
-1. Open **Settings → Utilities → Probe history**.
+1. Open **Settings → Probe history**.
 2. Select the **Probe calibration** entry for the change you want to undo.
    **Previous** shows the values before that change; **Saved** shows the
    values written by it.

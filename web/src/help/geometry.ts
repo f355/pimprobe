@@ -26,6 +26,25 @@ export interface HelpTarget {
 }
 export const targetSelector = '[data-help]:not([data-help=""])';
 
+// A labeled row and its input can describe the same setting. Use the whole
+// row for both the outline and the tap, but keep distinct nested topics.
+export function helpTarget(node: Element | null): HTMLElement | null {
+  let target = node?.closest<HTMLElement>(targetSelector) ?? null;
+  while (target) {
+    const outer = target.parentElement?.closest<HTMLElement>(targetSelector);
+    if (
+      !outer ||
+      target.dataset.help !== outer.dataset.help ||
+      target.dataset.helpTitle !== outer.dataset.helpTitle ||
+      target.dataset.helpGuide !== outer.dataset.helpGuide ||
+      !outer.getClientRects().length
+    )
+      break;
+    target = outer;
+  }
+  return target;
+}
+
 export function intersection(a: Rect, b: Rect): Rect {
   const left = Math.max(a.left, b.left),
     top = Math.max(a.top, b.top);
@@ -54,6 +73,13 @@ export function visibleRect(element: HTMLElement, viewport: Rect): Rect | null {
     )
       return null;
     if (parent === element) continue;
+    // Chromium returns layout boxes even for children of a closed disclosure.
+    if (
+      parent instanceof HTMLDetailsElement &&
+      !parent.open &&
+      !parent.querySelector(":scope > summary")?.contains(element)
+    )
+      return null;
     const bounds = parent.getBoundingClientRect();
     const clip = {
       left: viewport.left,

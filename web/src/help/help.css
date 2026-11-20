@@ -49,28 +49,14 @@
 .pp-help-highlight {
   position: fixed;
   box-sizing: border-box;
-  border: 2px solid var(--pp-bright);
+  border: 1px solid var(--pp-bright);
   border-radius: 6px;
-  animation: pp-help-pulse 1.7s ease-in-out infinite alternate;
+  opacity: 0.65;
 }
 
 .pp-help-chosen {
-  animation: none;
-  border-width: 3px;
-}
-
-@keyframes pp-help-pulse {
-  from {
-    opacity: 0.4;
-  }
-  to {
-    opacity: 1;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .pp-help-highlight {
-    animation: none;
-  }
+  border-width: 2px;
+  opacity: 1;
 }
 
 .pp-help-popup {

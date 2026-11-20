@@ -30,6 +30,7 @@ import { X } from "lucide-react";
 import { useTranslation } from "../i18n";
 import {
   contains,
+  helpTarget,
   intersection,
   popupPosition,
   targetSelector,
@@ -139,7 +140,7 @@ export function HelpProvider({
       const found = [
         ...(top || scope).querySelectorAll<HTMLElement>(targetSelector),
       ]
-        .filter((element) => element.dataset.help?.trim())
+        .filter((element) => helpTarget(element) === element)
         .flatMap((element) => {
           const rect = visibleRect(element, area);
           return rect ? [{ element, rect }] : [];
@@ -245,10 +246,9 @@ export function HelpProvider({
       return undefined;
     const scope = modal || root.current;
     if (!scope) return undefined;
-    const element =
-      event.target instanceof Element
-        ? event.target.closest<HTMLElement>(targetSelector)
-        : null;
+    const element = helpTarget(
+      event.target instanceof Element ? event.target : null,
+    );
     // A scroll can move targets before the highlight snapshot refreshes.
     if (element && scope.contains(element)) {
       const rect = visibleRect(element, viewport);
@@ -260,6 +260,7 @@ export function HelpProvider({
     for (const element of [
       ...scope.querySelectorAll<HTMLElement>(targetSelector),
     ].reverse()) {
+      if (helpTarget(element) !== element) continue;
       const rect = visibleRect(element, viewport);
       if (rect && contains(rect, event.clientX, event.clientY))
         return { element, rect };
@@ -326,10 +327,9 @@ export function HelpProvider({
   }
   function keyboard(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === "F1") {
-      const element =
-        event.target instanceof Element
-          ? event.target.closest<HTMLElement>(targetSelector)
-          : null;
+      const element = helpTarget(
+        event.target instanceof Element ? event.target : null,
+      );
       if (
         !element ||
         isPanel(event) ||

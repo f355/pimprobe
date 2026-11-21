@@ -104,7 +104,7 @@ async fn modes_require_a_fresh_parser_report_not_an_acknowledgment() {
 }
 
 #[tokio::test]
-async fn settings_read_and_write_wait_for_completed_replies() {
+async fn settings_use_readback_and_include_the_end_of_the_listing() {
     let (_path, _listener, controller, mut socket) = ready().await;
     let mut task = tokio::spawn({
         let controller = controller.clone();
@@ -117,16 +117,20 @@ async fn settings_read_and_write_wait_for_completed_replies() {
         frame::read_frame(&mut socket).await.unwrap(),
         (b'Q', b"$33=2.250000\n".to_vec())
     );
-    data(&mut socket, "$33=2.25\n").await;
-    assert!(timeout(Duration::from_millis(20), &mut task).await.is_err());
-    data(&mut socket, "ok\n").await;
-    assert_eq!(
-        frame::read_frame(&mut socket).await.unwrap(),
-        (b'Q', b"$$\n".to_vec())
-    );
-    data(&mut socket, "$33=2.25\n$34=-7\n$35=-50\n").await;
-    assert!(timeout(Duration::from_millis(20), &mut task).await.is_err());
-    data(&mut socket, "$201=-40\n$202=-100\nok\n").await;
+    for _ in 0..2 {
+        for command in [b"$$\n", b"$G\n"] {
+            assert_eq!(
+                timeout(Duration::from_millis(250), frame::read_frame(&mut socket))
+                    .await
+                    .expect("missing follow-up query")
+                    .unwrap(),
+                (b'Q', command.to_vec())
+            );
+        }
+        data(&mut socket, "$33=2.25\n$34=-7\n$35=-50\n").await;
+        assert!(timeout(Duration::from_millis(20), &mut task).await.is_err());
+        data(&mut socket, "$201=-40\n$202=-100\n[GC:G21 G17 G90 G94]\n").await;
+    }
     let settings = task.await.unwrap().unwrap();
     assert_eq!(
         settings,
@@ -134,4 +138,35 @@ async fn settings_read_and_write_wait_for_completed_replies() {
     );
     assert_eq!(controller.state().probe_offset, [2.25, -7., 10., 0.]);
     controller.shutdown().await;
+}
+
+#[tokio::test]
+async fn queued_command_uses_a_following_parser_report_and_preserves_errors() {
+    for error in [false, true] {
+        let (_path, _listener, controller, mut socket) = ready().await;
+        let mut task = tokio::spawn({
+            let controller = controller.clone();
+            async move { controller.command("M117", Duration::from_secs(1)).await }
+        });
+        for command in ["M117\n", "$G\n"] {
+            assert_eq!(
+                timeout(Duration::from_millis(250), frame::read_frame(&mut socket))
+                    .await
+                    .expect("missing queued command")
+                    .unwrap(),
+                (b'Q', command.as_bytes().to_vec())
+            );
+        }
+        data(&mut socket, "ok\n").await;
+        assert!(timeout(Duration::from_millis(20), &mut task).await.is_err());
+        if error {
+            data(&mut socket, "error:9\n").await;
+            data(&mut socket, "[GC:G21 G17 G90 G94]\n").await;
+            assert!(matches!(task.await.unwrap(), Err(Error::Controller(_))));
+        } else {
+            data(&mut socket, "[GC:G21 G17 G90 G94]\n").await;
+            task.await.unwrap().unwrap();
+        }
+        controller.shutdown().await;
+    }
 }

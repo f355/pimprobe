@@ -16,6 +16,60 @@
 
 use super::*;
 
+impl SocketController {
+    pub async fn command(&self, command: &str, limit: Duration) -> Result<(), Error> {
+        let mut events = self.subscribe();
+        let mut rejected = None;
+        let result = timeout(limit, async {
+            self.send(command).await?;
+            // CNC_Lab consumes "ok". A later queued query proves this command
+            // was processed, but not that any resulting movement has stopped.
+            self.send("$G").await?;
+            loop {
+                match receive(&mut events).await {
+                    Ok(event) if event.modes.is_some() => return Ok(()),
+                    Ok(_) => (),
+                    Err(error @ Error::Controller(_)) => {
+                        rejected.get_or_insert(error);
+                    }
+                    Err(error) => return Err(error),
+                }
+            }
+        })
+        .await;
+        rejected.map_or_else(|| result.map_err(|_| Error::Timeout)?, Err)
+    }
+
+    async fn settings_after(&self, command: Option<&str>) -> Result<BTreeMap<i32, f64>, Error> {
+        let mut events = self.subscribe();
+        timeout(IO_TIMEOUT, async {
+            if let Some(command) = command {
+                self.send(command).await?;
+            }
+            self.send("$$").await?;
+            self.send("$G").await?;
+            let mut settings = BTreeMap::new();
+            loop {
+                let event = receive(&mut events).await?;
+                if let Some((key, value)) = event.setting {
+                    settings.insert(key, value);
+                }
+                if event.modes.is_some() {
+                    return if settings.is_empty() {
+                        Err(Error::Controller(
+                            "The machine did not report its settings.".into(),
+                        ))
+                    } else {
+                        Ok(settings)
+                    };
+                }
+            }
+        })
+        .await
+        .map_err(|_| Error::Timeout)?
+    }
+}
+
 async fn receive(events: &mut broadcast::Receiver<Event>) -> Result<Event, Error> {
     let event = events.recv().await.map_err(|error| match error {
         broadcast::error::RecvError::Lagged(_) => Error::EventLagged,
@@ -43,22 +97,7 @@ impl Controller for SocketController {
         SocketController::send(self, command).await
     }
     async fn read_settings(&self) -> Result<BTreeMap<i32, f64>, Error> {
-        let mut events = self.subscribe();
-        timeout(IO_TIMEOUT, async {
-            self.send("$$").await?;
-            let mut settings = BTreeMap::new();
-            loop {
-                let event = receive(&mut events).await?;
-                if let Some((key, value)) = event.setting {
-                    settings.insert(key, value);
-                }
-                if event.acknowledged && !settings.is_empty() {
-                    return Ok(settings);
-                }
-            }
-        })
-        .await
-        .map_err(|_| Error::Timeout)?
+        self.settings_after(None).await
     }
 
     async fn read_modes(&self) -> Result<Modes, Error> {
@@ -108,9 +147,7 @@ impl Controller for SocketController {
         timeout(IO_TIMEOUT, async {
             self.send("$$").await?;
             self.send("$#").await?;
-            while !received.into_iter().all(|value| value)
-                || !calibration.into_iter().all(|value| value)
-            {
+            loop {
                 let event = receive(&mut events).await?;
                 if let Some((key, _)) = event.setting {
                     if let Some(i) = [35, 201, 202].iter().position(|k| *k == key) {
@@ -122,8 +159,12 @@ impl Controller for SocketController {
                 received[2] |= event.coordinate_offset.is_some();
                 received[3] |= event.tool_length_offset.is_some();
                 received[4] |= event.probe.is_some();
+                if received.into_iter().all(|value| value)
+                    && calibration.into_iter().all(|value| value)
+                {
+                    return Ok(self.state());
+                }
             }
-            Ok(self.state())
         })
         .await
         .map_err(|_| Error::Preflight("The machine did not report its work coordinates.".into()))?
@@ -133,17 +174,18 @@ impl Controller for SocketController {
         if key < 0 || !value.is_finite() {
             return Err(Error::InvalidConfig("Invalid machine setting".into()));
         }
-        let mut events = self.subscribe();
-        timeout(Duration::from_secs(5), async {
-            self.send(&format!("${key}={value:.6}")).await?;
-            loop {
-                if receive(&mut events).await?.acknowledged {
-                    return Ok(());
-                }
-            }
-        })
-        .await
-        .map_err(|_| Error::Timeout)?
+        if self
+            .settings_after(Some(&format!("${key}={value:.6}")))
+            .await?
+            .get(&key)
+            .is_some_and(|actual| (actual - value).abs() <= 0.00051)
+        {
+            Ok(())
+        } else {
+            Err(Error::Controller(format!(
+                "The machine did not confirm the new value for ${key}."
+            )))
+        }
     }
 
     async fn write_modes(&self, modes: Modes, plane: Option<i32>) -> Result<(), Error> {
@@ -202,7 +244,7 @@ impl Controller for SocketController {
             let mut origin_received = axes.iter().all(Option::is_none);
             let mut rotation_received = rotation.is_none();
             let mut probe_received = false;
-            while !origin_received || !rotation_received || !probe_received {
+            loop {
                 let event = receive(&mut events).await?;
                 // Consume the historical contact before the next motion subscribes.
                 probe_received |= event.probe.is_some();
@@ -230,8 +272,10 @@ impl Controller for SocketController {
                     }
                     rotation_received = true;
                 }
+                if origin_received && rotation_received && probe_received {
+                    return Ok(());
+                }
             }
-            Ok(())
         })
         .await
         .map_err(|_| Error::Timeout)?

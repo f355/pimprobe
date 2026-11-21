@@ -71,10 +71,9 @@ try {
     copy(join(root, 'packaging/pimprobe-ui'), 'app/bin/pimprobe-ui');
     chmodSync(join(payload, 'app/bin/pimprobe-ui'), 0o755);
     copy(join(root, 'packaging/config.example.json'), 'app/config.json');
-    copy(join(root, 'packaging/pimprobe-service.service'), 'pimprobe-service.service');
-    copy(join(root, 'packaging/nestpad-pimprobe.conf'), 'nestpad-pimprobe.conf');
-    copy(join(root, 'packaging/install.sh'), 'install.sh');
-    copy(join(root, 'packaging/migrate-data.sh'), 'migrate-data.sh');
+    copy(join(root, 'packaging/nestpad-system-update'), 'app/bin/nestpad-system-update');
+    for (const name of ['pimprobe-service.service', 'nestpad-pimprobe.conf', 'install.sh', 'migrate-data.sh'])
+        copy(join(root, 'packaging', name), 'app/' + name);
     for (const name of ['LICENSE.md', 'LICENSE-GPL-3.0.md', 'README.md']) {
         copy(join(root, name), name);
         copy(join(root, name), 'app/' + name);

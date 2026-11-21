@@ -1,0 +1,232 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (c) 2026 Konstantin Tcepliaev <f355@f355.org>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+set -eu
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+umask 022
+engine=/usr/bin/updateEngine
+vendor=$engine.vendor
+hooks=/userdata/cnc/system-update.d
+unit=nestpad-restore-apps.service
+restore_runner=/etc/nestpad-restore-apps
+known=ce2278ab886b441bcc0a17a0a2e358bbdbbc234d834cae8f86f30446eb0ffee2
+marker='# NestPad system update wrapper'
+# NestPad system update wrapper
+
+warn() { printf 'NestPad system update: %s\n' "$*" >&2; }
+fail() { warn "$*"; exit 1; }
+
+is_wrapper() { grep -qsFx "$marker" "$engine"; }
+
+install_wrapper() (
+    [ -x "$engine" ] || exit 0
+    original=$engine
+    if is_wrapper; then original=$vendor; fi
+    digest=$(sha256sum "$original") || exit 1
+    [ "${digest%% *}" = "$known" ] || {
+        warn 'Unrecognized stock updater; leaving it unchanged.'
+        exit 0
+    }
+    if [ "$original" = "$engine" ]; then
+        if [ -e "$vendor" ]; then
+            [ "$vendor" -ef "$engine" ] || exit 1
+        else
+            ln "$engine" "$vendor" || exit 1
+            sync || exit 1
+        fi
+    fi
+    # An already-installed wrapper is the source only when run as updateEngine.
+    [ "$0" -ef "$engine" ] && exit 0
+    tmp=$(mktemp -d /usr/bin/.updateEngine.XXXXXX) || exit 1
+    trap 'rm -rf "$tmp"' EXIT
+    install -m 755 "$0" "$tmp/wrapper" && sync &&
+        mv -Tf "$tmp/wrapper" "$engine" && sync
+)
+
+case "${1:-}" in
+    --install-hook|--remove-hook|--restore-apps)
+        [ "$(id -u)" -eq 0 ] || fail 'Run as root.'
+        mkdir -p /run
+        exec 9>/run/nestpad-system-update.lock
+        flock -n 9 || fail 'Another system update or restore is running.'
+        ;;
+esac
+case "${1:-}" in
+    --install-hook)
+        [ "$#" -eq 3 ] && [ -f "$3" ] || fail 'Invalid restore hook.'
+        mkdir -p "$hooks"
+        ln -sfnT "$3" "$hooks/$2"
+        sync
+        install_wrapper
+        exit
+        ;;
+    --remove-hook)
+        rm -f "$hooks/$2"
+        for hook in "$hooks/"*; do [ ! -f "$hook" ] || exit 0; done
+        if is_wrapper && [ -x "$vendor" ]; then
+            mv -Tf "$vendor" "$engine"
+        fi
+        sync
+        exit
+        ;;
+    --restore-apps)
+        install_wrapper || warn 'Could not restore the system update wrapper.'
+        for hook in "$hooks/"*; do
+            [ -f "$hook" ] || continue
+            timeout -k 2 12 /bin/sh "$(readlink -f "$hook")" --restore-system 9>&- ||
+                warn "Could not restore ${hook##*/}; continuing with stock startup."
+        done
+        rm -f "/etc/systemd/system/multi-user.target.wants/$unit" \
+            "/etc/systemd/system/$unit" "$restore_runner"
+        sync
+        exit
+        ;;
+esac
+
+# Only the synchronous local system update needs post-processing.
+if [ "$#" -ne 2 ] || [ "$1" != --update ] || [ "$2" != --image_url=/userdata/update.img ]; then
+    exec "$vendor" "$@"
+fi
+for hook in "$hooks/"*; do [ ! -f "$hook" ] || break; done
+[ -f "$hook" ] || exec "$vendor" "$@"
+
+exec 9>/run/nestpad-system-update.lock
+flock -n 9 || fail 'Another system update or restore is running.'
+
+slot=$(awk '{
+    for (i = 1; i <= NF; i++)
+        if ($i ~ /^(android_slotsuffix|android_slotsufix|androidboot\.slot_suffix)=/)
+            print substr($i, index($i, "=")+1)
+}' /proc/cmdline | sort -u)
+case "$slot" in
+    _a) other=b ;;
+    _b) other=a ;;
+    *) fail 'Cannot determine the running system slot.' ;;
+esac
+partition_id() {
+    hex=$(stat -Lc '%t %T' "$1") || return 1
+    printf '%d:%d\n' "0x${hex% *}" "0x${hex#* }"
+}
+active=/dev/block/by-name/system$slot
+target=/dev/block/by-name/system_$other
+[ -b "$active" ] && [ -b "$target" ] || fail 'Cannot find both system partitions.'
+active_id=$(partition_id "$active")
+target_id=$(partition_id "$target")
+root_id=$(awk '$5 == "/" {print $3}' /proc/self/mountinfo)
+[ "$active_id" = "$root_id" ] && [ "$target_id" != "$root_id" ] ||
+    fail 'The running root does not match the system slot.'
+if awk -v id="$target_id" '$3 == id {found=1} END {exit !found}' /proc/self/mountinfo; then
+    fail 'The target system partition is already mounted.'
+fi
+
+work=$(mktemp -d /run/nestpad-system-update.XXXXXX)
+mounted=no
+cleanup() {
+    status=$?
+    if [ "$mounted" = yes ] && ! umount "$work/root"; then
+        warn "Could not unmount $work/root."
+        exit 1
+    fi
+    rm -rf "$work"
+    exit "$status"
+}
+trap cleanup EXIT
+trap 'exit 1' HUP INT TERM
+mkdir "$work/root"
+# Keep CNC_Lab's progress output live, but keep the updater's exit status.
+(
+    status=0
+    "$vendor" "$@" || status=$?
+    printf '%s\n' "$status" >"$work/status"
+) | tee "$work/log"
+status=$(cat "$work/status")
+[ "$status" = 0 ] || exit "$status"
+grep -Fxq "LOG_INFO: check $target ok." "$work/log" ||
+    fail 'The updater did not verify the target system partition.'
+
+mount -t ext4 -o rw,nodev,nosuid,noexec "$target" "$work/root" ||
+    fail 'Cannot mount the updated system.'
+mounted=yes
+new=$work/root
+old_keys=/root/.ssh/authorized_keys
+new_keys=$new$old_keys
+if [ -e "$old_keys" ] || [ -L "$old_keys" ]; then
+    (
+        [ -f "$old_keys" ] && [ -d "$new/root" ] && [ ! -L "$new/root" ] &&
+            [ ! -L "$new/root/.ssh" ] && [ ! -L "$new_keys" ] || exit 1
+        umask 077
+        mkdir -p "${new_keys%/*}" || exit 1
+        keys=$(mktemp "${new_keys%/*}/.authorized_keys.XXXXXX") || exit 1
+        trap 'rm -f "$keys"' EXIT
+        fresh=$new_keys
+        [ -e "$fresh" ] || fresh=/dev/null
+        [ -f "$fresh" ] || [ "$fresh" = /dev/null ] || exit 1
+        awk '!seen[$0]++' "$old_keys" "$fresh" >"$keys" &&
+            sync && mv -Tf "$keys" "$new_keys" && sync
+    ) || fail 'Could not preserve SSH authorized keys on the updated system.'
+fi
+
+preserve_host_keys() (
+    dir=$new/etc/ssh
+    [ -d "$dir" ] && [ "$(readlink -f "$dir")" = "$dir" ] || exit 1
+    staged=$(mktemp -d "$dir/.host-keys.XXXXXX") || exit 1
+    trap 'rm -rf "$staged"' EXIT
+    for key in /etc/ssh/ssh_host_*_key; do
+        [ -f "$key" ] || continue
+        path=$staged/${key##*/}
+        install -o 0 -g 0 -m 600 "$key" "$path" &&
+            ssh-keygen -y -f "$path" </dev/null >"$path.pub" || exit 1
+    done
+    sync || exit 1
+    for key in "$staged/"*; do
+        [ -f "$key" ] && mv -Tf "$key" "$dir/${key##*/}" || exit 1
+    done
+    sync
+)
+preserve_host_keys || fail 'Could not preserve SSH host keys on the updated system.'
+
+stage_unit() (
+    units=$new/etc/systemd/system
+    [ "$(readlink -f "$units")" = "$units" ] || exit 1
+    wants=$units/multi-user.target.wants
+    [ ! -L "$wants" ] || exit 1
+    mkdir -p "$wants" || exit 1
+    tmp=$(mktemp -d "$units/.nestpad-restore.XXXXXX") || exit 1
+    trap 'rm -rf "$tmp"' EXIT
+    install -m 755 "$0" "$tmp/restore" || exit 1
+    cat >"$tmp/unit" <<EOF || exit 1
+[Unit]
+Description=Restore installed apps after a NestPad system update
+RequiresMountsFor=$hooks
+# The stock mount helper remounts /userdata during sysv-compat startup.
+After=sysv-compat.service
+Before=nestpad.service
+ConditionPathIsMountPoint=/userdata
+
+[Service]
+Type=oneshot
+ExecStart=$restore_runner --restore-apps
+TimeoutStartSec=40
+EOF
+    sync &&
+        mv -Tf "$tmp/restore" "$new$restore_runner" &&
+        mv -Tf "$tmp/unit" "$units/$unit" &&
+        ln -sfnT "../$unit" "$wants/$unit" && sync
+)
+stage_unit || warn 'Could not install the app restore unit; use the local installer after reboot.'
+umount "$new" || fail 'Could not unmount the updated system.'
+mounted=no

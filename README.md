@@ -30,6 +30,17 @@ sleep 20; sh /mnt/udisk/pimprobe.run --uninstall
 
 To get new versions as they are released, head to the Settings tab and press "Check for updates".
 
+### After a NestPad system update
+
+If the PIMProbe button is missing after a system update, open the stock
+terminal with **Ctrl-Alt-T** while the machine is idle and run:
+
+```sh
+sh /userdata/cnc/apps/pimprobe/install.sh
+```
+
+If that file is missing, use the USB installer above.
+
 ## Documentation
 
 [Operator guide](docs/README.md): routines, settings and work zero, with pictures.

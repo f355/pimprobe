@@ -47,12 +47,14 @@ test('self-extracting package preserves its payload and rejects corruption', () 
             ['LICENSE.md', 'app/LICENSE.md'],
             ['LICENSE-GPL-3.0.md', 'app/LICENSE-GPL-3.0.md'],
             ['README.md', 'app/README.md'],
-            ['packaging/nestpad-pimprobe.conf', 'nestpad-pimprobe.conf'],
-            ['packaging/migrate-data.sh', 'migrate-data.sh'],
+            ['packaging/nestpad-pimprobe.conf', 'app/nestpad-pimprobe.conf'],
+            ['packaging/pimprobe-service.service', 'app/pimprobe-service.service'],
+            ['packaging/migrate-data.sh', 'app/migrate-data.sh'],
+            ['packaging/install.sh', 'app/install.sh'],
+            ['packaging/nestpad-system-update', 'app/bin/nestpad-system-update'],
         ]) assert.deepEqual(readFileSync(join(extracted, target)), readFileSync(join(root, source)));
         for (const name of readdirSync(join(root, 'web/dist/assets')))
             assert.deepEqual(readFileSync(join(extracted, 'app/web/assets', name)), readFileSync(join(root, 'web/dist/assets', name)));
-        assert.ok(existsSync(join(extracted, 'install.sh')));
         run('sh', [installer, '--extract', extracted], 1);
         const corrupt = readFileSync(installer);
         corrupt[corrupt.length - 20] ^= 1;

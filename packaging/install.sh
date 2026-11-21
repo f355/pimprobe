@@ -28,8 +28,10 @@ plugin_hook=/etc/systemd/system/nestpad.service.d/pimprobe.conf
 restart=yes
 yes=true
 uninstall=false
+restore=false
 for arg in "$@"; do
     case "$arg" in
+        --restore-system) restore=true ;;
         --uninstall) uninstall=true ;;
         --yes|-y) yes=true ;;
         --confirm) yes=false ;;
@@ -45,10 +47,12 @@ for command in systemctl flock readlink wget; do
     command -v "$command" >/dev/null 2>&1 || fail "Required command missing: $command"
 done
 [ -x "$vendor/CNC_Lab" ] || fail 'Supported NestPad application not found in /root/app.'
-systemctl is-active --quiet nestpad.service || fail 'Open the stock UI before installing or removing PIMProbe.'
+if [ "$restore" = false ]; then
+    systemctl is-active --quiet nestpad.service || fail 'Open the stock UI before installing or removing PIMProbe.'
+fi
 if [ "$uninstall" = false ]; then
-    sh "$payload/app/bin/pimprobe-ui" --check
-    for file in "$payload/app/bin/pimprobe-service" "$payload/app/lib/"*.so; do
+    sh "$payload/bin/pimprobe-ui" --check
+    for file in "$payload/bin/pimprobe-service" "$payload/lib/"*.so; do
         report=$(LD_LIBRARY_PATH="$vendor${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" ldd "$file" 2>&1) || fail "Cannot load $file: $report"
         case "$report" in *'not found'*) fail "Missing runtime dependency for $file: $report" ;; esac
     done
@@ -64,8 +68,38 @@ for name in libpimprobeproxyplugin.so libpimprobelauncherplugin.so; do
         esac
     fi
 done
+install_config() (
+    directory=${2%/*}
+    mkdir -p "$directory"
+    temporary=$(mktemp "$directory/.pimprobe.XXXXXX")
+    trap 'rm -f "$temporary"' EXIT
+    install -m 644 "$1" "$temporary"
+    sync
+    mv -Tf "$temporary" "$2"
+    sync
+)
+install_integration() {
+    plugins_changed=true
+    for name in libpimprobeproxyplugin.so libpimprobelauncherplugin.so; do
+        ln -sfn "$destination/lib/$name" "$vendor/$name"
+    done
+    install_config "$destination/nestpad-pimprobe.conf" "$plugin_hook"
+    unit_changed=true
+    install_config "$destination/pimprobe-service.service" "$unit"
+    systemctl daemon-reload
+    systemctl enable pimprobe-service
+}
+if [ "$restore" = true ]; then
+    [ "$#" -eq 1 ] && [ "$payload" = "$destination" ] || fail 'Restore requires the installed package.'
+    install_integration
+    systemctl --no-block start pimprobe-service
+    sync
+    exit
+fi
 echo 'The machine must be idle with the spindle stopped.'
 if [ "$uninstall" = true ]; then
+    sh "$payload/bin/nestpad-system-update" --remove-hook pimprobe ||
+        echo 'Could not unregister system update recovery.' >&2
     echo 'Saved probing settings and logs will be kept.'
 fi
 if [ "$yes" = false ]; then
@@ -167,7 +201,7 @@ trap 'exit 143' TERM
 if [ "$uninstall" = false ]; then
     mkdir -p "$root/apps" "$root/backups"
     stage=$(mktemp -d "$root/apps/pimprobe-stage.XXXXXX")
-    cp -a "$payload/app/." "$stage/"
+    cp -a "$payload/." "$stage/"
     chown -R root:root "$stage"
     rollback=$(mktemp -d "$root/backups/pimprobe-install.XXXXXX")
     if [ -e "$unit" ]; then cp -a "$unit" "$rollback/"; fi
@@ -187,7 +221,7 @@ if [ "$restart" = no ] || [ "$uninstall" = true ]; then stop_pimprobe_ui; fi
 sh "$payload/migrate-data.sh" /userdata /root
 if [ ! -e "$root/config/pimprobe-service.json" ]; then
     temporary=$(mktemp "$root/config/pimprobe-service.json.XXXXXX")
-    cp "$payload/app/config.json" "$temporary"
+    cp "$payload/config.json" "$temporary"
     sync
     mv "$temporary" "$root/config/pimprobe-service.json"
     sync
@@ -215,16 +249,7 @@ else
     mv "$stage" "$destination"
     stage=''
     destination_installed=true
-    plugins_changed=true
-    for name in libpimprobeproxyplugin.so libpimprobelauncherplugin.so; do
-        ln -sfn "$destination/lib/$name" "$vendor/$name"
-    done
-    mkdir -p "$(dirname "$plugin_hook")"
-    cp "$payload/nestpad-pimprobe.conf" "$plugin_hook"
-    unit_changed=true
-    cp "$payload/pimprobe-service.service" "$unit"
-    systemctl daemon-reload
-    systemctl enable pimprobe-service
+    install_integration
     if [ "$previous_destination" = "$legacy" ]; then
         backup=$(mktemp -d "$root/backups/pimprobe-legacy.XXXXXX")
         if [ -d "$rollback/installation" ]; then
@@ -236,6 +261,10 @@ else
         sync
     fi
     echo "Installed $(cat "$destination/VERSION")."
+fi
+if [ "$uninstall" = false ]; then
+    sh "$destination/bin/nestpad-system-update" --install-hook pimprobe "$destination/install.sh" ||
+        echo 'Could not register system update recovery.' >&2
 fi
 if [ "$restart" = no ]; then
     if [ "$uninstall" = true ]; then

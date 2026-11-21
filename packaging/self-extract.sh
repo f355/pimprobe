@@ -58,5 +58,5 @@ if [ "${1:-}" = --extract ]; then
 fi
 mkdir "$scratch/files"
 tar -xzf "$scratch/payload.tar.gz" -C "$scratch/files"
-sh "$scratch/files/install.sh" "$@"
+sh "$scratch/files/app/install.sh" "$@"
 exit 0

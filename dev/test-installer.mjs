@@ -3,7 +3,7 @@
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
+// the Free Software Foundation, either version 2 of the License, or
 // (at your option) any later version.
 //
 // This program is distributed in the hope that it will be useful,
@@ -45,6 +45,7 @@ test('self-extracting package preserves its payload and rejects corruption', () 
             ['plugins/build-arm64/libpimprobelauncherplugin.so', 'app/lib/libpimprobelauncherplugin.so'],
             ['web/dist/index.html', 'app/web/index.html'],
             ['LICENSE.md', 'app/LICENSE.md'],
+            ['LICENSE-GPL-3.0.md', 'app/LICENSE-GPL-3.0.md'],
             ['README.md', 'app/README.md'],
             ['packaging/nestpad-pimprobe.conf', 'nestpad-pimprobe.conf'],
             ['packaging/migrate-data.sh', 'migrate-data.sh'],

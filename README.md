@@ -214,14 +214,14 @@ contact detection during probing.
 
 Copyright (c) 2026 Konstantin Tcepliaev <f355@f355.org>.
 
-Licensed under [GPLv3 or later](LICENSE.md). Third-party dependencies
-retain their own licenses.
+Licensed under [GPLv2 or later](LICENSE.md). Third-party dependencies retain
+their own licenses.
 
 ### Linking Exception
 
 The following permission applies only to code in `plugins/src/`.
 
-Additional permission under GNU GPL version 3 section 7
+This additional permission applies under GNU GPL version 2 or any later version.
 
 If you modify this Program, or any covered work, by linking or combining
 it with the CNC_Lab application, libabstractplugin.so, or the vendor

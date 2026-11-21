@@ -3,7 +3,7 @@
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
+// the Free Software Foundation, either version 2 of the License, or
 // (at your option) any later version.
 //
 // This program is distributed in the hope that it will be useful,
@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 //
-// Additional permission under GNU GPL version 3 section 7
+// This additional permission applies under GNU GPL version 2 or any later version.
 //
 // If you modify this Program, or any covered work, by linking or combining
 // it with the CNC_Lab application, libabstractplugin.so, or the vendor

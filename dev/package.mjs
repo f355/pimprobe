@@ -4,7 +4,7 @@
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
+// the Free Software Foundation, either version 2 of the License, or
 // (at your option) any later version.
 //
 // This program is distributed in the hope that it will be useful,
@@ -75,7 +75,7 @@ try {
     copy(join(root, 'packaging/nestpad-pimprobe.conf'), 'nestpad-pimprobe.conf');
     copy(join(root, 'packaging/install.sh'), 'install.sh');
     copy(join(root, 'packaging/migrate-data.sh'), 'migrate-data.sh');
-    for (const name of ['LICENSE.md', 'README.md']) {
+    for (const name of ['LICENSE.md', 'LICENSE-GPL-3.0.md', 'README.md']) {
         copy(join(root, name), name);
         copy(join(root, name), 'app/' + name);
     }

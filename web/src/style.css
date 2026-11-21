@@ -23,6 +23,9 @@
   src: url("../assets/fonts/Geist-Bold.otf");
   font-weight: 700;
 }
+html[data-kiosk] * {
+  cursor: none !important;
+}
 .pp-app {
   --pp-page: #202425;
   --pp-header: #282e30;

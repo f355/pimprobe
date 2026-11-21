@@ -17,6 +17,8 @@
 import { createRoot } from "react-dom/client";
 import { ProbeApp } from "./ProbeApp";
 const parameters = new URLSearchParams(location.search);
+const kiosk = parameters.has("kiosk");
+if (kiosk) document.documentElement.dataset.kiosk = "";
 if (parameters.has("preview")) {
   document.body.style.cssText = "display:grid;place-items:center;overflow:auto";
   document.getElementById("root")!.style.cssText =

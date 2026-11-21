@@ -212,6 +212,15 @@ async function app(page: Page, language = "en_US") {
     miss: () => (miss = true),
   };
 }
+
+test("only the local panel hides the mouse cursor", async ({ page }) => {
+  await app(page);
+  const button = page.locator(".pp-routine-button").first();
+  await expect(button).toHaveCSS("cursor", "pointer");
+  await page.goto("/?kiosk");
+  await expect(button).toHaveCSS("cursor", "none");
+});
+
 test("calibration separates diameter from offsets and shows the mean of both dimensions", async ({
   page,
 }, info) => {

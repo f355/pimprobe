@@ -16,6 +16,9 @@ defaults in `web/src` rather than copying their CSS into individual pages.
 `NumericProvider` manages number editing. Use `NumberField` for inputs and
 `KeypadSlot` where the keypad should replace other content.
 
+Use `pp-segmented` to group buttons that switch between mutually exclusive modes
+or settings. Keep page tabs and separate commands visually distinct.
+
 Scope styles to the component. Hosts can change the `--pp-` CSS variables
 without affecting the rest of their application.
 

@@ -570,7 +570,7 @@ function ProbePage({
                     )}
                   >
                     <span className="pp-muted">{t("Language")}</span>
-                    <div>
+                    <div className="pp-segmented">
                       {[
                         { code: "en_US", label: "English" },
                         { code: "zh_CN", label: "简体中文" },
@@ -578,9 +578,6 @@ function ProbePage({
                       ].map((choice) => (
                         <Button
                           key={choice.code}
-                          className={
-                            language === choice.code ? "pp-selected" : ""
-                          }
                           aria-pressed={language === choice.code}
                           disabled={!loaded || locked}
                           onClick={() =>

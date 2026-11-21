@@ -241,6 +241,31 @@ html[data-kiosk] * {
   border-color: var(--pp-bright);
   background: #344d44;
 }
+.pp-segmented {
+  display: flex;
+  min-width: 0;
+  gap: 0;
+  border: 1px solid var(--pp-divider);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.pp-segmented > .pp-button {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  overflow-wrap: anywhere;
+}
+.pp-segmented > :not(:first-child) {
+  border-inline-start: 1px solid var(--pp-divider);
+}
+.pp-segmented > .pp-button:is([aria-pressed="true"], [aria-selected="true"]) {
+  background: #344d44;
+  color: var(--pp-bright);
+}
+.pp-segmented > .pp-button:focus-visible {
+  outline-offset: -3px;
+}
 .pp-icon {
   width: 48px;
   height: 48px;
@@ -679,13 +704,7 @@ html[data-kiosk] * {
 .pp-language-selector > span {
   font-size: 18px;
 }
-.pp-language-selector > div {
-  display: flex;
-  gap: 4px;
-}
 .pp-language-selector .pp-button {
-  flex: 1;
-  min-width: 0;
   padding: 8px;
   font-size: 18px;
 }
@@ -785,14 +804,7 @@ html[data-kiosk] * {
 .pp-calibration {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
-.pp-calibration-tabs,
-.pp-calibration-directions {
-  display: flex;
-  gap: 8px;
-}
-.pp-calibration-tabs > .pp-button,
-.pp-calibration-directions > .pp-button {
-  flex: 1;
+.pp-calibration-segments > .pp-button {
   min-height: 48px;
 }
 .pp-calibration-values {
@@ -960,8 +972,12 @@ html[data-kiosk] * {
   font-size: 18px;
 }
 @media (max-width: 680px) {
-  .pp-language-selector > div {
+  .pp-language-selector > .pp-segmented {
     flex-direction: column;
+  }
+  .pp-language-selector > .pp-segmented > :not(:first-child) {
+    border-inline-start: 0;
+    border-block-start: 1px solid var(--pp-divider);
   }
   .pp-app {
     --pp-column: 44%;

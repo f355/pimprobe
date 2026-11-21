@@ -205,7 +205,7 @@ export function CalibrationPage({
       <main className="pp-content">
         {modes.length > 1 && (
           <div
-            className="pp-calibration-tabs"
+            className="pp-segmented pp-calibration-segments"
             role="tablist"
             aria-label={t("Calibration type")}
           >
@@ -214,7 +214,6 @@ export function CalibrationPage({
                 key={item.id}
                 role="tab"
                 aria-selected={mode === item.id}
-                className={mode === item.id ? "pp-selected" : ""}
                 disabled={saving}
                 help={t(
                   item.id === "ball"
@@ -301,7 +300,7 @@ export function CalibrationPage({
           <section className="pp-calibration-inputs">
             {mode !== "z" && available?.[0] && available?.[1] && (
               <div
-                className="pp-calibration-directions"
+                className="pp-segmented pp-calibration-segments"
                 role="group"
                 aria-label={t("Measurement directions")}
               >
@@ -309,7 +308,6 @@ export function CalibrationPage({
                   <Button
                     key={value}
                     aria-pressed={direction === value}
-                    className={direction === value ? "pp-selected" : ""}
                     disabled={saving}
                     help={t(
                       "Use the selected measurement directions for this calibration.",

@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-FROM rust:1.98.0-slim-bookworm
+FROM rust:1.100.0-slim-bookworm
 WORKDIR /src
 ENV CARGO_TARGET_DIR=/src/target/linux
 CMD ["cargo", "build", "--locked", "--release", "--bin", "pimprobe-service"]

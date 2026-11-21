@@ -323,7 +323,7 @@ impl UpdateManager {
         }
         file.flush().await.map_err(UpdateError::Io)?;
         drop(file);
-        let actual = format!("{:x}", digest.finalize());
+        let actual = hex::encode(digest.finalize());
         if !actual.eq_ignore_ascii_case(expected) {
             return Err(UpdateError::Digest);
         }

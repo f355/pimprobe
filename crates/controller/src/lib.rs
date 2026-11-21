@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+mod configuration;
 pub mod frame;
 pub mod parser;
 
@@ -354,18 +355,6 @@ impl SocketController {
         .map_err(|_| Error::Timeout)?
     }
 }
-#[async_trait::async_trait]
-impl Controller for SocketController {
-    fn state(&self) -> State {
-        SocketController::state(self)
-    }
-    fn subscribe(&self) -> pimprobe_core::EventReceiver {
-        SocketController::subscribe(self).into()
-    }
-    async fn send(&self, command: &str) -> Result<(), Error> {
-        SocketController::send(self, command).await
-    }
-}
 
 fn invalidate(inner: &Inner, message: &str) {
     let mut stored = inner.stored.write().unwrap();
@@ -548,6 +537,7 @@ fn apply(inner: &Inner, record: Record) {
 
 #[cfg(test)]
 mod tests {
+    mod configuration;
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
     use tokio::net::UnixListener;

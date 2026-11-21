@@ -37,6 +37,7 @@ pub use motion::*;
 pub use plan::*;
 pub use runtime::*;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 pub type Position = [f64; 4];
 
@@ -67,9 +68,13 @@ pub enum Error {
     MotionBlocked,
     #[error("{0}")]
     Position(String),
-    #[error("The probe reached the search distance without touching. Move closer or increase the search distance.")]
+    #[error(
+        "The probe reached the search distance without touching. Move closer or increase the search distance."
+    )]
     CoarseNoContact,
-    #[error("The probe did not touch again on the slow pass. Check that the workpiece is secure and the probe works.")]
+    #[error(
+        "The probe did not touch again on the slow pass. Check that the workpiece is secure and the probe works."
+    )]
     NoContact,
     #[error("The probe touched something while positioning. Check the path before trying again.")]
     UnexpectedContact { position: Position, retracted: bool },
@@ -216,6 +221,23 @@ pub trait Controller: Send + Sync {
     fn state(&self) -> State;
     fn subscribe(&self) -> EventReceiver;
     async fn send(&self, command: &str) -> Result<(), Error>;
+    /// Configuration operations return after reading or confirming the change.
+    /// Callers do not need to consume protocol acknowledgments or old contacts.
+    async fn read_settings(&self) -> Result<BTreeMap<i32, f64>, Error>;
+    async fn read_modes(&self) -> Result<Modes, Error>;
+    async fn read_firmware_version(&self) -> Result<String, Error>;
+    /// Refresh calibration and coordinates in the same frame as `state`.
+    async fn read_coordinates(&self) -> Result<State, Error>;
+    async fn write_setting(&self, key: i32, value: f64) -> Result<(), Error>;
+    async fn write_modes(&self, modes: Modes, plane: Option<i32>) -> Result<(), Error>;
+    /// Patch absolute work origins in millimeters and unwrapped degrees.
+    /// Unspecified axes and rotation remain unchanged. WCS is G54 through G59.
+    async fn write_coordinates(
+        &self,
+        wcs: i32,
+        axes: [Option<f64>; 4],
+        rotation: Option<f64>,
+    ) -> Result<(), Error>;
     async fn set_probe(&self, extended: bool) -> Result<(), Error> {
         self.send(if extended { "M122" } else { "M121" }).await
     }

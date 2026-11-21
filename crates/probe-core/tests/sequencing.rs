@@ -28,7 +28,6 @@ struct Scripted {
     replies: Mutex<VecDeque<Vec<Event>>>,
     commands: Mutex<Vec<String>>,
     delay: Duration,
-    modes_ack_only: bool,
 }
 impl Scripted {
     fn new(replies: Vec<Vec<Event>>) -> Self {
@@ -42,12 +41,48 @@ impl Scripted {
             replies: Mutex::new(replies.into()),
             commands: Mutex::new(Vec::new()),
             delay: Duration::ZERO,
-            modes_ack_only: false,
         }
     }
 }
 #[async_trait]
 impl Controller for Scripted {
+    async fn read_settings(&self) -> Result<std::collections::BTreeMap<i32, f64>, Error> {
+        MockController::with_state(self.state())
+            .read_settings()
+            .await
+    }
+    async fn read_modes(&self) -> Result<Modes, Error> {
+        Ok(self.state().modes)
+    }
+    async fn read_firmware_version(&self) -> Result<String, Error> {
+        Ok(self.state().firmware_version)
+    }
+    async fn read_coordinates(&self) -> Result<State, Error> {
+        Ok(self.state())
+    }
+    async fn write_setting(&self, key: i32, value: f64) -> Result<(), Error> {
+        let machine = MockController::with_state(self.state());
+        machine.write_setting(key, value).await?;
+        *self.state.lock().unwrap() = machine.state();
+        Ok(())
+    }
+    async fn write_modes(&self, modes: Modes, plane: Option<i32>) -> Result<(), Error> {
+        self.read_modes().await?;
+        let mut state = self.state.lock().unwrap();
+        state.modes = modes;
+        if let Some(plane) = plane {
+            state.plane = plane;
+        }
+        Ok(())
+    }
+    async fn write_coordinates(
+        &self,
+        _wcs: i32,
+        _axes: [Option<f64>; 4],
+        _rotation: Option<f64>,
+    ) -> Result<(), Error> {
+        self.respond().await
+    }
     fn state(&self) -> State {
         self.state.lock().unwrap().clone()
     }
@@ -56,49 +91,11 @@ impl Controller for Scripted {
     }
     async fn send(&self, command: &str) -> Result<(), Error> {
         self.commands.lock().unwrap().push(command.into());
-        if command == "$G" {
-            self.events
-                .send(Event {
-                    modes: (!self.modes_ack_only).then(|| self.state().modes),
-                    acknowledged: self.modes_ack_only,
-                    ..Event::default()
-                })
-                .unwrap();
-            return Ok(());
-        }
-        if command == "$#" {
-            let state = self.state();
-            self.events
-                .send(Event {
-                    wcs_origin: Some((state.wcs, state.wcs_origin.unwrap())),
-                    wcs_rotation: Some((state.wcs, state.wcs_rotation.unwrap_or(0.0))),
-                    coordinate_offset: Some(state.coordinate_offset),
-                    tool_length_offset: Some(state.tool_length_offset),
-                    probe: Some(Contact {
-                        position: state.position,
-                        success: false,
-                    }),
-                    ..Event::default()
-                })
-                .unwrap();
-            return Ok(());
-        }
-        if command == "$$" {
-            for setting in [(35, -49.98), (201, 0.), (202, 0.)] {
-                self.events
-                    .send(Event {
-                        setting: Some(setting),
-                        ..Event::default()
-                    })
-                    .unwrap();
-            }
-            return Ok(());
-        }
-        if matches!(command, "G21 G94 G91" | "G21 G94 G90") {
-            self.state.lock().unwrap().modes.distance =
-                if command.ends_with("91") { 91 } else { 90 };
-            return Ok(());
-        }
+        self.respond().await
+    }
+}
+impl Scripted {
+    async fn respond(&self) -> Result<(), Error> {
         let replies = self.replies.lock().unwrap().pop_front().unwrap_or_default();
         for event in replies {
             if !self.delay.is_zero() {
@@ -545,26 +542,6 @@ fn feed_and_deadline_validation_has_no_rapid_fallback() {
     assert!(timing().deadline(&stage).is_err());
 }
 
-#[tokio::test(start_paused = true)]
-async fn modes_require_fresh_parser_report_not_acknowledgment() {
-    let mut c = Scripted::new(vec![]);
-    c.modes_ack_only = true;
-    assert_eq!(query_modes(&c).await.unwrap_err(), Error::Timeout);
-    let p = review(c.state(), RoutineConfig::default()).unwrap();
-    assert_eq!(
-        run(&c, &p, timing(), CancellationToken::new(), |_| {})
-            .await
-            .unwrap_err(),
-        Error::Timeout
-    );
-    assert!(!c
-        .commands
-        .lock()
-        .unwrap()
-        .iter()
-        .any(|v| v.starts_with("G38")));
-}
-
 fn measured_x(c: &Scripted) -> (RoutinePlan, RoutineResult) {
     let plan = review(
         c.state(),
@@ -590,34 +567,6 @@ fn measured_x(c: &Scripted) -> (RoutinePlan, RoutineResult) {
         ..RoutineResult::default()
     };
     (plan, result)
-}
-
-#[tokio::test(start_paused = true)]
-async fn zero_requires_confirmed_coordinates_not_ack_or_unchanged_status() {
-    for replies in [
-        vec![Event {
-            acknowledged: true,
-            ..Event::default()
-        }],
-        vec![status(-120.0, true)],
-    ] {
-        let c = Scripted::new(vec![replies]);
-        let (plan, result) = measured_x(&c);
-        assert_eq!(
-            zero_result(
-                &c,
-                &plan,
-                &result,
-                [0.0; 3],
-                timing(),
-                CancellationToken::new()
-            )
-            .await
-            .unwrap_err(),
-            Error::Timeout
-        );
-        assert!(!result.zeroed);
-    }
 }
 
 #[tokio::test]

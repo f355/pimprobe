@@ -595,6 +595,32 @@ mod tests {
 
     #[async_trait]
     impl Controller for CompletingSender {
+        async fn read_settings(&self) -> Result<std::collections::BTreeMap<i32, f64>, Error> {
+            self.machine.read_settings().await
+        }
+        async fn read_modes(&self) -> Result<Modes, Error> {
+            self.machine.read_modes().await
+        }
+        async fn read_firmware_version(&self) -> Result<String, Error> {
+            self.machine.read_firmware_version().await
+        }
+        async fn read_coordinates(&self) -> Result<State, Error> {
+            self.machine.read_coordinates().await
+        }
+        async fn write_setting(&self, key: i32, value: f64) -> Result<(), Error> {
+            self.machine.write_setting(key, value).await
+        }
+        async fn write_modes(&self, modes: Modes, plane: Option<i32>) -> Result<(), Error> {
+            self.machine.write_modes(modes, plane).await
+        }
+        async fn write_coordinates(
+            &self,
+            wcs: i32,
+            axes: [Option<f64>; 4],
+            rotation: Option<f64>,
+        ) -> Result<(), Error> {
+            self.machine.write_coordinates(wcs, axes, rotation).await
+        }
         fn state(&self) -> State {
             self.machine.state()
         }

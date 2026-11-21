@@ -142,6 +142,60 @@ impl<C: Controller + ?Sized> Controller for FrameController<'_, C> {
     fn subscribe(&self) -> EventReceiver {
         self.inner.subscribe().in_frame(self.frame)
     }
+    async fn read_settings(&self) -> Result<BTreeMap<i32, f64>, Error> {
+        self.inner.read_settings().await
+    }
+    async fn read_modes(&self) -> Result<Modes, Error> {
+        self.inner.read_modes().await
+    }
+    async fn read_firmware_version(&self) -> Result<String, Error> {
+        self.inner.read_firmware_version().await
+    }
+    async fn read_coordinates(&self) -> Result<State, Error> {
+        Ok(self.frame.state(self.inner.read_coordinates().await?))
+    }
+    async fn write_setting(&self, key: i32, value: f64) -> Result<(), Error> {
+        self.inner.write_setting(key, value).await
+    }
+    async fn write_modes(&self, modes: Modes, plane: Option<i32>) -> Result<(), Error> {
+        self.inner.write_modes(modes, plane).await
+    }
+    async fn write_coordinates(
+        &self,
+        wcs: i32,
+        mut axes: [Option<f64>; 4],
+        rotation: Option<f64>,
+    ) -> Result<(), Error> {
+        if self.frame.angle.abs() >= 1e-9 {
+            let state = self.state();
+            if wcs != state.wcs {
+                return Err(Error::Preflight(
+                    "Select the measurement's work coordinates before setting zero".into(),
+                ));
+            }
+            if rotation.is_some() {
+                return Err(Error::InvalidConfig(
+                    "Work-axis origin writes cannot change rotation".into(),
+                ));
+            }
+            let mut origin = state
+                .wcs_origin
+                .ok_or_else(|| Error::Preflight("Work zero is unavailable".into()))?;
+            for i in 0..4 {
+                if let Some(value) = axes[i] {
+                    origin[i] = value;
+                }
+            }
+            rotate(&mut origin, self.frame.angle);
+            let xy = axes[0].is_some() || axes[1].is_some();
+            for i in 0..4 {
+                if axes[i].is_some() || i < 2 && xy {
+                    axes[i] = Some(quantize(origin[i]));
+                }
+            }
+        }
+        self.inner.write_coordinates(wcs, axes, rotation).await
+    }
     async fn send(&self, command: &str) -> Result<(), Error> {
         if self.frame.angle.abs() < 1e-9 {
             return self.inner.send(command).await;
@@ -180,62 +234,6 @@ impl<C: Controller + ?Sized> Controller for FrameController<'_, C> {
                 return self.inner.send(&format!("{code} {}", tail.join(" "))).await;
             }
         }
-        if code == "G10" {
-            let mut mode = 2;
-            let mut p = 0;
-            let mut axes = [None; 4];
-            for word in words {
-                let value = word[1..]
-                    .parse::<f64>()
-                    .map_err(|_| Error::InvalidConfig("Invalid probing work zero".into()))?;
-                match &word[..1] {
-                    "L" => mode = value as i32,
-                    "P" => p = value as i32,
-                    "X" => axes[0] = Some(value),
-                    "Y" => axes[1] = Some(value),
-                    "Z" => axes[2] = Some(value),
-                    "A" => axes[3] = Some(value),
-                    _ => {
-                        return Err(Error::InvalidConfig(
-                            "Unsupported probing work-zero command".into(),
-                        ))
-                    }
-                }
-            }
-            let state = self.state();
-            if p != state.wcs - 53 {
-                return Err(Error::Preflight(
-                    "Select the measurement's work coordinates before setting zero".into(),
-                ));
-            }
-            let mut origin = state
-                .wcs_origin
-                .ok_or_else(|| Error::Preflight("Work zero is unavailable".into()))?;
-            for i in 0..4 {
-                if let Some(value) = axes[i] {
-                    origin[i] = if mode == 20 {
-                        state.position[i]
-                            - state.coordinate_offset[i]
-                            - if i == 2 { state.tool_length_offset } else { 0. }
-                            - value
-                    } else {
-                        value
-                    };
-                }
-            }
-            rotate(&mut origin, self.frame.angle);
-            let mut command = format!("G10 L2 P{p}");
-            for i in 0..4 {
-                if axes[i].is_some() || i < 2 && (axes[0].is_some() || axes[1].is_some()) {
-                    command += &format!(
-                        " {}{}",
-                        ["X", "Y", "Z", "A"][i],
-                        crate::script::number(origin[i])
-                    );
-                }
-            }
-            return self.inner.send(&command).await;
-        }
         self.inner.send(command).await
     }
 }
@@ -261,5 +259,34 @@ impl RoutinePlan {
         let mut plan = self.clone();
         plan.start = self.frame().state(plan.start);
         plan
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn partial_work_axis_origin_write_preserves_the_other_rotated_axis() {
+        let mut start = MockController::new().state();
+        start.wcs_origin = Some([-10., -20., 30., 40.]);
+        start.coordinate_offset = [1., 2., 3., 4.];
+        start.tool_length_offset = 8.;
+        let machine = MockController::with_state(start);
+        let axes = FrameController {
+            inner: &machine,
+            frame: Frame::new(&machine.state(), 90.),
+        };
+        axes.write_coordinates(54, [Some(-33.), None, None, None], None)
+            .await
+            .unwrap();
+        let origin = machine.state().wcs_origin.unwrap();
+        assert!((origin[0] + 10.).abs() < 0.001);
+        assert!((origin[1] + 33.).abs() < 0.001);
+        assert_eq!(origin[2..], [30., 40.]);
+        assert_eq!(machine.state().coordinate_offset, [1., 2., 3., 4.]);
+        assert_eq!(machine.state().tool_length_offset, 8.);
+        let refreshed = axes.read_coordinates().await.unwrap();
+        assert!((refreshed.wcs_origin.unwrap()[0] + 33.).abs() < 0.001);
     }
 }

@@ -42,7 +42,7 @@ import { angleName, featureName, reviewPlan } from "./model";
 import { useTranslation } from "./i18n";
 import { helpProps } from "./help/context";
 import { descriptions, optionHelp } from "./help/text";
-import { WcsPicker } from "./WcsPicker";
+import { WcsPicker, type RenderWcsChoices } from "./WcsPicker";
 import { historyDetail } from "./utilities/history-detail";
 import { CalibrationPage } from "./CalibrationPage";
 
@@ -69,6 +69,7 @@ export function ProbeFlow({
   onReload,
   onSetting,
   onAlarm,
+  renderResultWcs,
 }: {
   client: ProbeClient;
   config: RunConfig;
@@ -80,6 +81,7 @@ export function ProbeFlow({
   onReload: () => Promise<void>;
   onSetting: (key: string, value: number) => Promise<void>;
   onAlarm?: () => void;
+  renderResultWcs?: RenderWcsChoices;
 }) {
   const { t } = useTranslation();
   const editor = useNumeric();
@@ -315,6 +317,7 @@ export function ProbeFlow({
         onSelect={(wcs) => apply("wcs", wcs)}
         pending={pending}
         title={t("Save result to work coordinates")}
+        renderChoices={renderResultWcs}
         error={error}
       />
     );

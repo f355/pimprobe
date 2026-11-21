@@ -171,6 +171,37 @@ impl Device {
 }
 #[async_trait]
 impl Controller for Device {
+    async fn read_settings(&self) -> Result<std::collections::BTreeMap<i32, f64>, Error> {
+        self.mock.read_settings().await
+    }
+    async fn read_modes(&self) -> Result<pimprobe_core::Modes, Error> {
+        self.mock.read_modes().await
+    }
+    async fn read_firmware_version(&self) -> Result<String, Error> {
+        self.mock.read_firmware_version().await
+    }
+    async fn read_coordinates(&self) -> Result<State, Error> {
+        self.coordinates_read.store(true, Ordering::SeqCst);
+        self.mock.read_coordinates().await
+    }
+    async fn write_setting(&self, key: i32, value: f64) -> Result<(), Error> {
+        self.mock.write_setting(key, value).await
+    }
+    async fn write_modes(
+        &self,
+        modes: pimprobe_core::Modes,
+        plane: Option<i32>,
+    ) -> Result<(), Error> {
+        self.mock.write_modes(modes, plane).await
+    }
+    async fn write_coordinates(
+        &self,
+        wcs: i32,
+        axes: [Option<f64>; 4],
+        rotation: Option<f64>,
+    ) -> Result<(), Error> {
+        self.mock.write_coordinates(wcs, axes, rotation).await
+    }
     fn state(&self) -> State {
         let mut state = self.mock.state();
         if !self.coordinates_read.load(Ordering::SeqCst) {
@@ -188,9 +219,6 @@ impl Controller for Device {
     async fn send(&self, command: &str) -> Result<(), Error> {
         if self.finalized.load(Ordering::SeqCst) && !command.starts_with('$') {
             return Err(Error::Controller("Execution is closed".into()));
-        }
-        if command == "$#" {
-            self.coordinates_read.store(true, Ordering::SeqCst);
         }
         if self.pause.load(Ordering::SeqCst) && command.contains("G38.") {
             self.moving.store(true, Ordering::SeqCst);
@@ -363,10 +391,9 @@ async fn calibration_saves_selected_values_without_moving_or_changing_work_zero(
     );
     let stored = store.settings.lock().unwrap().snapshot();
     assert_eq!(stored, app.settings().await.unwrap());
-    assert!(
-        device.mock.commands()[count..]
-            .iter()
-            .all(|line| line.starts_with("$33=") || line == "$$")
+    assert_eq!(
+        device.mock.read_settings().await.unwrap()[&33],
+        after.probe_offset[0]
     );
     let again = app.calibrate(request).await.unwrap();
     assert_eq!(again.offsets, saved.offsets);
@@ -652,13 +679,7 @@ async fn completed_measurement_can_zero_another_wcs_without_probing_again() {
     assert!(zero.result.zeroed);
     assert_eq!(zero.result.wcs, 55);
     assert_eq!(device.state().position, position);
-    assert!(
-        device
-            .mock
-            .commands()
-            .iter()
-            .any(|s| s.starts_with("G10 L20 P2 "))
-    );
+    assert_eq!(zero.result.point[2], Some(0.));
     for offset in [1.25, -2.0, 0.0] {
         let updated = app
             .zero(ZeroRequest {

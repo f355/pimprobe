@@ -82,10 +82,6 @@ async fn captured_modes_plane_and_rotation_survive_a_missed_touch() {
     assert_eq!(machine.state().modes, state.modes);
     assert_eq!(machine.state().plane, state.plane);
     assert_eq!(machine.state().wcs_rotation, state.wcs_rotation);
-    assert!(machine
-        .commands()
-        .iter()
-        .any(|command| command == "G10 L2 P1 R0.000000"));
 }
 
 #[tokio::test]

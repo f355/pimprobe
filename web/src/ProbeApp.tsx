@@ -64,7 +64,7 @@ import {
   tabs,
 } from "./model";
 import { ProbeFlow } from "./ProbeFlow";
-import { WcsPicker } from "./WcsPicker";
+import { WcsPicker, type RenderWcsChoices } from "./WcsPicker";
 import { UtilityPage } from "./utilities/UtilityPage";
 import "./style.css";
 
@@ -82,13 +82,13 @@ export interface ProbeWorkspaceProps {
   onLeave?: () => void;
   onAlarm?: () => void;
   renderHeader?: (props: ProbeHeaderProps) => ReactNode;
+  renderResultWcs?: RenderWcsChoices;
   renderFooter?: (props: ProbeFooterProps) => ReactNode;
 }
 export interface ProbeHeaderProps extends PageHeaderProps {
   state: MachineState;
   reference: "probe" | "spindle";
   onReferenceChange: (reference: "probe" | "spindle") => void;
-  onChooseWcs: () => void;
   wcsDisabled: boolean;
   help: { active: boolean; toggle: () => void; guide: () => void };
 }
@@ -170,6 +170,7 @@ function ProbePage({
   onLeave,
   onAlarm,
   renderHeader,
+  renderResultWcs,
   renderFooter,
 }: {
   navigationRef?: Ref<ProbeNavigation>;
@@ -187,6 +188,7 @@ function ProbePage({
   onLeave?: () => void;
   onAlarm?: () => void;
   renderHeader?: ProbeAppProps["renderHeader"];
+  renderResultWcs?: RenderWcsChoices;
   renderFooter?: ProbeAppProps["renderFooter"];
 }) {
   const { t, language } = useTranslation();
@@ -314,11 +316,6 @@ function ProbePage({
           reference: probeReference ? "probe" : "spindle",
           onReferenceChange: (reference) =>
             setProbeReference(reference === "probe"),
-          onChooseWcs: () => {
-            editor.cancel();
-            setGuide(false);
-            setChooseWcs(true);
-          },
           wcsDisabled: locked || pending,
           help: headerHelp,
         })
@@ -336,6 +333,7 @@ function ProbePage({
         onRefresh={onRefresh}
         onReload={onReload}
         onAlarm={onAlarm}
+        renderResultWcs={renderResultWcs}
         onSetting={(key, value) => saveSettings({ [key]: value })}
       />
     ) : page !== "home" ? (

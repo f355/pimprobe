@@ -91,22 +91,13 @@ impl RoutineResult {
 }
 
 pub async fn query_modes<C: Controller + ?Sized>(c: &C) -> Result<Modes, Error> {
-    let mut rx = c.subscribe();
-    tokio::time::timeout(Duration::from_secs(3), async {
-        c.send("$G").await?;
-        loop {
-            if let Some(m) = receive(&mut rx).await?.modes {
-                if !m.valid() {
-                    return Err(Error::Preflight(
-                        "The machine did not report all active G-code modes.".into(),
-                    ));
-                }
-                return Ok(m);
-            }
-        }
-    })
-    .await
-    .map_err(|_| Error::Timeout)?
+    let modes = c.read_modes().await?;
+    if !modes.valid() {
+        return Err(Error::Preflight(
+            "The machine did not report all active G-code modes.".into(),
+        ));
+    }
+    Ok(modes)
 }
 pub(crate) async fn set_modes<C: Controller + ?Sized>(c: &C, m: Modes) -> Result<(), Error> {
     if !m.valid() {
@@ -117,15 +108,9 @@ pub(crate) async fn set_modes<C: Controller + ?Sized>(c: &C, m: Modes) -> Result
     if c.state().motion_blocked {
         return Err(Error::MotionBlocked);
     }
-    tokio::time::timeout(Duration::from_secs(3), c.send(&m.command()))
+    tokio::time::timeout(Duration::from_secs(3), c.write_modes(m, None))
         .await
-        .map_err(|_| Error::Timeout)??;
-    if query_modes(c).await? != m {
-        return Err(Error::Controller(
-            "The machine did not confirm the requested G-code modes.".into(),
-        ));
-    }
-    Ok(())
+        .map_err(|_| Error::Timeout)?
 }
 
 pub async fn restore_modes<C: Controller + ?Sized>(c: &C, modes: Modes) -> Result<(), Error> {
@@ -161,28 +146,49 @@ pub(crate) struct Observed<'a, C: ?Sized, F> {
     pub(crate) scripted: &'a AtomicBool,
 }
 
-pub(crate) struct Cancellable<'a, C: ?Sized> {
-    pub(crate) inner: &'a C,
-    pub(crate) cancel: &'a CancellationToken,
-}
-#[async_trait]
-impl<C: Controller + ?Sized> Controller for Cancellable<'_, C> {
-    fn state(&self) -> State {
-        self.inner.state()
-    }
-    fn subscribe(&self) -> crate::EventReceiver {
-        self.inner.subscribe()
-    }
-    async fn send(&self, command: &str) -> Result<(), Error> {
-        tokio::select! {
-            biased;
-            _=self.cancel.cancelled()=>Err(Error::Cancelled),
-            result=self.inner.send(command)=>result,
-        }
-    }
-}
 #[async_trait]
 impl<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync> Controller for Observed<'_, C, F> {
+    async fn read_settings(&self) -> Result<BTreeMap<i32, f64>, Error> {
+        self.inner.read_settings().await
+    }
+    async fn read_modes(&self) -> Result<Modes, Error> {
+        self.inner.read_modes().await
+    }
+    async fn read_firmware_version(&self) -> Result<String, Error> {
+        self.inner.read_firmware_version().await
+    }
+    async fn read_coordinates(&self) -> Result<State, Error> {
+        self.inner.read_coordinates().await
+    }
+    async fn write_setting(&self, key: i32, value: f64) -> Result<(), Error> {
+        self.inner.write_setting(key, value).await
+    }
+    async fn write_modes(&self, modes: Modes, plane: Option<i32>) -> Result<(), Error> {
+        self.scripted.store(false, Ordering::Relaxed);
+        self.inner.write_modes(modes, plane).await?;
+        (self.observe)(Progress {
+            kind: "command".into(),
+            command: modes.command(),
+            message: "Submitted".into(),
+            ..Progress::default()
+        });
+        Ok(())
+    }
+    async fn write_coordinates(
+        &self,
+        wcs: i32,
+        axes: [Option<f64>; 4],
+        rotation: Option<f64>,
+    ) -> Result<(), Error> {
+        self.scripted.store(false, Ordering::Relaxed);
+        self.inner.write_coordinates(wcs, axes, rotation).await?;
+        (self.observe)(Progress {
+            kind: "command".into(),
+            message: "Work zero updated".into(),
+            ..Progress::default()
+        });
+        Ok(())
+    }
     fn state(&self) -> State {
         self.inner.state()
     }
@@ -190,7 +196,7 @@ impl<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync> Controller for Obser
         self.inner.subscribe()
     }
     async fn send(&self, command: &str) -> Result<(), Error> {
-        if command != "$G" && !self.scripted.swap(false, Ordering::Relaxed) {
+        if !self.scripted.swap(false, Ordering::Relaxed) {
             (self.observe)(Progress {
                 kind: "script".into(),
                 command: String::new(),
@@ -199,14 +205,12 @@ impl<C: Controller + ?Sized, F: Fn(Progress) + Send + Sync> Controller for Obser
             });
         }
         self.inner.send(command).await?;
-        if command != "$G" {
-            (self.observe)(Progress {
-                kind: "command".into(),
-                command: command.into(),
-                message: "Submitted".into(),
-                ..Progress::default()
-            });
-        }
+        (self.observe)(Progress {
+            kind: "command".into(),
+            command: command.into(),
+            message: "Submitted".into(),
+            ..Progress::default()
+        });
         Ok(())
     }
 }
@@ -293,8 +297,7 @@ pub async fn run<C: Controller + ?Sized>(
     let plan = p.execution_plan();
     let mut result=in_machine_axes(c,&observe,async {
         let axes=FrameController {inner:c,frame};
-        let controller=Cancellable {inner:&axes,cancel:&cancel};
-        tokio::select! {biased; _=cancel.cancelled()=>Err(Error::Cancelled), result=run_inner(&controller,&plan,t,&observe)=>result}
+        tokio::select! {biased; _=cancel.cancelled()=>Err(Error::Cancelled), result=run_inner(&axes,&plan,t,&observe)=>result}
     }).await?;
     result.update_work_coordinates(&plan.start);
     result.measurement_rotation = Some(frame.angle);
@@ -596,34 +599,40 @@ async fn write_zero<C: Controller + ?Sized>(
         return Ok(());
     }
     let mut desired = state.work_position;
-    let mut words = Vec::new();
+    let mut axes = [None; 4];
     for a in p.axes() {
         let i = a.index();
         let surface = result.machine_point[i]
             .filter(|v| v.is_finite())
             .ok_or_else(|| Error::Compensation(format!("No {a} measurement is available.")))?
             + offsets[i];
-        // The result is a work origin; G10 L20 needs the compensated current WPos.
+        // Keep the same rounded work position when resolving the absolute origin.
         let tool_offset = if a == Axis::Z {
             state.tool_length_offset
         } else {
             0.
         };
         desired[i] = quantize(state.position[i] - surface - tool_offset);
-        words.push(format!("{a}{:.3}", desired[i]));
+        axes[i] = Some(quantize(
+            state.position[i] - state.coordinate_offset[i] - tool_offset - desired[i],
+        ));
     }
     let duration = t
         .response_margin
         .checked_add(Duration::from_secs(3))
         .ok_or_else(|| Error::InvalidConfig("The configured wait time is too long.".into()))?;
     tokio::time::timeout(duration, async {
-        c.send(&format!(
-            "G10 L20 P{} {}",
-            p.config.wcs - 53,
-            words.join(" ")
-        ))
-        .await?;
+        c.write_coordinates(p.config.wcs, axes, None).await?;
         loop {
+            let current = c.state();
+            if current.wcs != p.config.wcs || !within(current.position, state.position, 0.05) {
+                return Err(Error::Position(
+                    "The machine moved or changed work coordinates while setting work zero.".into(),
+                ));
+            }
+            if current.ready && within(current.work_position, desired, 0.05) {
+                return Ok(());
+            }
             if let Some(s) = receive(&mut rx).await?.status {
                 if s.wcs != p.config.wcs || !within(s.position, state.position, 0.05) {
                     return Err(Error::Position(
@@ -648,14 +657,10 @@ pub async fn zero_result<C: Controller + ?Sized>(
     t: TimingPolicy,
     cancel: CancellationToken,
 ) -> Result<RoutineResult, Error> {
-    let controller = Cancellable {
-        inner: c,
-        cancel: &cancel,
-    };
     tokio::select! {
         biased;
         _ = cancel.cancelled() => Err(Error::Cancelled),
-        result = zero_inner(&controller, p, result, offsets, t) => result,
+        result = zero_inner(c, p, result, offsets, t) => result,
     }
 }
 
@@ -753,8 +758,8 @@ pub async fn return_to_start<C: Controller + ?Sized>(
     let plan = p.execution_plan();
     let result = frame.result(result.clone(), &p.start, false);
     let result=in_machine_axes(c,&observe,async {
-        let axes=FrameController {inner:c,frame}; let controller=Cancellable {inner:&axes,cancel:&cancel};
-        tokio::select! {biased; _=cancel.cancelled()=>Err(Error::Cancelled), result=return_inner(&controller,&plan,&result,t,&observe)=>result}
+        let axes=FrameController {inner:c,frame};
+        tokio::select! {biased; _=cancel.cancelled()=>Err(Error::Cancelled), result=return_inner(&axes,&plan,&result,t,&observe)=>result}
     }).await?;
     Ok(frame.result(result, &p.start, true))
 }
@@ -771,8 +776,8 @@ pub async fn go_to_measured<C: Controller + ?Sized>(
     let plan = p.execution_plan();
     let result = frame.result(result.clone(), &p.start, false);
     let result=in_machine_axes(c,&observe,async {
-        let axes=FrameController {inner:c,frame}; let controller=Cancellable {inner:&axes,cancel:&cancel};
-        tokio::select! {biased; _=cancel.cancelled()=>Err(Error::Cancelled), result=measured_inner(&controller,&plan,&result,clearance,t,&observe)=>result}
+        let axes=FrameController {inner:c,frame};
+        tokio::select! {biased; _=cancel.cancelled()=>Err(Error::Cancelled), result=measured_inner(&axes,&plan,&result,clearance,t,&observe)=>result}
     }).await?;
     Ok(frame.result(result, &p.start, true))
 }

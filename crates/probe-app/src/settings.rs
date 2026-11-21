@@ -54,39 +54,16 @@ impl FeedLimits {
 
 impl super::ProbeApp {
     async fn feed_limits(&self) -> Result<FeedLimits, super::AppError> {
-        let mut settings = self.device.snapshot().settings;
+        let settings = self.device.snapshot().settings;
         if let Some(limits) = FeedLimits::from_settings(&settings) {
             return Ok(limits);
         }
-        let mut events = self.device.subscribe();
-        self.device.send("$$").await?;
-        tokio::time::timeout(std::time::Duration::from_secs(3), async {
-            loop {
-                let event = events
-                    .recv()
-                    .await
-                    .map_err(|_| pimprobe_core::Error::Disconnected)?;
-                if let Some(code) = event.controller_error {
-                    return Err(pimprobe_core::Error::Controller(format!(
-                        "The machine reported error {code}."
-                    )));
-                }
-                if let Some((key, value)) = event.setting {
-                    settings.insert(key, value);
-                    if let Some(limits) = FeedLimits::from_settings(&settings) {
-                        return Ok(limits);
-                    }
-                }
-            }
-        })
-        .await
-        .map_err(|_| {
+        FeedLimits::from_settings(&self.device.read_settings().await?).ok_or_else(|| {
             super::AppError::conflict(
                 "settings",
                 "Could not read machine feed limits ($110-$113); reconnect and try again",
             )
-        })?
-        .map_err(Into::into)
+        })
     }
 
     pub async fn settings_schema(&self) -> Result<Map<String, Value>, super::AppError> {

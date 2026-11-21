@@ -16,7 +16,6 @@
 
 use super::*;
 use pimprobe_core::{Calibration, CalibrationOptions};
-use std::time::Duration;
 
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -249,49 +248,9 @@ impl ProbeApp {
             let Some(value) = value else {
                 continue;
             };
-            let mut events = self.device.subscribe();
-            self.device.send(&format!("${}={value:.6}", 33 + i)).await?;
-            tokio::time::timeout(Duration::from_secs(5), async {
-                loop {
-                    let event = events.recv().await.map_err(|_| Error::Disconnected)?;
-                    if let Some(code) = event.controller_error {
-                        return Err(Error::Controller(format!(
-                            "The machine could not save probe calibration (error {code})."
-                        )));
-                    }
-                    if event.acknowledged {
-                        return Ok(());
-                    }
-                }
-            })
-            .await
-            .map_err(|_| Error::Timeout)??;
+            self.device.write_setting(33 + i as i32, *value).await?;
         }
-        // Standalone transports send commands without awaiting a reply. Read the
-        // saved settings once so the next operation uses the new calibration.
-        let mut events = self.device.subscribe();
-        self.device.send("$$").await?;
-        tokio::time::timeout(Duration::from_secs(5), async {
-            let mut seen = offsets.map(|v| v.is_none());
-            loop {
-                let event = events.recv().await.map_err(|_| Error::Disconnected)?;
-                if let Some(code) = event.controller_error {
-                    return Err(Error::Controller(format!(
-                        "The machine could not read probe calibration (error {code})."
-                    )));
-                }
-                if let Some((key, _)) = event.setting {
-                    if (33..=35).contains(&key) {
-                        seen[(key - 33) as usize] = true;
-                    }
-                    if seen.iter().all(|v| *v) {
-                        return Ok(());
-                    }
-                }
-            }
-        })
-        .await
-        .map_err(|_| Error::Timeout)??;
+        self.device.read_settings().await?;
         Ok(())
     }
 }

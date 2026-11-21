@@ -20,6 +20,13 @@ cancellation. If the host batches commands, implement `finish_action` to finish
 that batch before publishing a result. Dropping an `Operation` requests
 cancellation; it does not mean the machine has already stopped.
 
+The shared `Controller` uses completed typed operations for settings, modes and
+work coordinates. `read_coordinates` returns the existing `State` frame and its
+probe calibration. `write_coordinates` patches absolute work origins in
+millimeters and unwrapped degrees; omitted axes and rotation stay unchanged.
+Adapters own protocol queries, write confirmation and historical-contact draining.
+Keep G-code in `send` for movement and publish its live contacts and settled status.
+
 A storage error after successful probing can carry the measured result. Preserve
 that result and display the storage warning rather than discarding the measurement.
 

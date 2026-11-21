@@ -15,10 +15,10 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-    runtime::{set_modes, Cancellable, Observed},
+    runtime::{set_modes, Observed},
     *,
 };
-use std::{sync::atomic::AtomicBool, time::Duration};
+use std::sync::atomic::AtomicBool;
 
 mod level;
 pub use level::LevelResult;
@@ -223,56 +223,13 @@ pub fn review_rotary(start: State, config: RotaryConfig) -> Result<RotaryPlan, E
 
 pub async fn query_rotary_state<C: Controller + ?Sized>(c: &C) -> Result<State, Error> {
     query_modes(c).await?;
-    let mut rx = c.subscribe();
-    tokio::time::timeout(Duration::from_secs(3), async {
-        c.send("$V").await?;
-        loop {
-            if receive(&mut rx).await?.firmware_version.is_some() {
-                break;
-            }
-        }
-        query_coordinates(c).await
-    })
-    .await
-    .map_err(|_| Error::Timeout)?
+    c.read_firmware_version().await?;
+    query_coordinates(c).await
 }
 
 /// Read probe calibration, the stored tool reference and active work coordinates.
 pub async fn query_coordinates<C: Controller + ?Sized>(c: &C) -> Result<State, Error> {
-    let mut rx = c.subscribe();
-    let wcs = c.state().wcs;
-    let mut received = [
-        false,
-        !rotary_supported(&c.state().firmware_version),
-        false,
-        false,
-        false,
-    ];
-    let mut calibration = [false; 3];
-    tokio::time::timeout(Duration::from_secs(3), async {
-        c.send("$$").await?;
-        c.send("$#").await?;
-        while !received.into_iter().all(|value| value) || !calibration.into_iter().all(|v| v) {
-            let event = receive(&mut rx).await?;
-            if let Some((key, _)) = event.setting {
-                if let Some(i) = [35, 201, 202].iter().position(|k| *k == key) {
-                    calibration[i] = true;
-                }
-            }
-            received[0] |= event
-                .wcs_origin
-                .is_some_and(|(selected, _)| selected == wcs);
-            received[1] |= event
-                .wcs_rotation
-                .is_some_and(|(selected, _)| selected == wcs);
-            received[2] |= event.coordinate_offset.is_some();
-            received[3] |= event.tool_length_offset.is_some();
-            received[4] |= event.probe.is_some();
-        }
-        Ok(c.state())
-    })
-    .await
-    .map_err(|_| Error::Preflight("The machine did not report its work coordinates.".into()))?
+    c.read_coordinates().await
 }
 
 fn comment(observe: &impl Fn(Progress), text: impl Into<String>) {
@@ -541,13 +498,9 @@ pub async fn run_rotary<C: Controller + ?Sized>(
             "The machine position or probe calibration changed. Start the operation again.".into(),
         ));
     }
-    let guarded = Cancellable {
-        inner: machine,
-        cancel: &cancel,
-    };
     let scripted = AtomicBool::new(false);
     let c = Observed {
-        inner: &guarded,
+        inner: machine,
         observe: &observe,
         scripted: &scripted,
     };
@@ -627,14 +580,8 @@ pub async fn restore_rotary_state<C: Controller + ?Sized>(
     if rotary_supported(&plan.start.firmware_version) {
         write_rotary_rotation(c, plan.start.wcs, plan.start.wcs_rotation.unwrap()).await?;
     }
-    c.send(&format!("G{}", plan.start.plane)).await?;
-    query_modes(c).await?;
-    if c.state().plane != plan.start.plane {
-        return Err(Error::Controller(
-            "The machine did not confirm the requested G-code plane.".into(),
-        ));
-    }
-    set_modes(c, plan.start.modes).await
+    c.write_modes(plan.start.modes, Some(plan.start.plane))
+        .await
 }
 
 pub(crate) async fn write_coordinate_data<C: Controller + ?Sized>(
@@ -643,57 +590,16 @@ pub(crate) async fn write_coordinate_data<C: Controller + ?Sized>(
     axes: &[(usize, f64)],
     rotation: Option<f64>,
 ) -> Result<(), Error> {
-    let mut command = format!("G10 L2 P{}", wcs - 53);
+    let mut patch = [None; 4];
     for &(axis, value) in axes {
-        command.push_str(&format!(" {}{value:.3}", ["X", "Y", "Z", "A"][axis]));
+        patch[axis] = Some(quantize(value));
     }
-    if let Some(angle) = rotation {
-        command.push_str(&format!(" R{angle:.6}"));
-    }
-    let mut rx = c.subscribe();
-    tokio::time::timeout(Duration::from_secs(3), async {
-        c.send(&command).await?;
-        c.send("$#").await?;
-        let mut origin_received = axes.is_empty();
-        let mut rotation_received = rotation.is_none();
-        let mut probe_received = false;
-        while !origin_received || !rotation_received || !probe_received {
-            let event = receive(&mut rx).await?;
-            // $# ends with the stored probe result. Consume it before motion
-            // can mistake that historical result for its own contact.
-            probe_received |= event.probe.is_some();
-            if let Some((_, origin)) = event
-                .wcs_origin
-                .filter(|(selected, _)| *selected == wcs && !axes.is_empty())
-            {
-                if axes
-                    .iter()
-                    .any(|&(axis, value)| (origin[axis] - value).abs() > 0.0015)
-                {
-                    return Err(Error::Controller(
-                        "The machine did not confirm the new work zero.".into(),
-                    ));
-                }
-                origin_received = true;
-            }
-            if let Some(((_, actual), expected)) = event
-                .wcs_rotation
-                .filter(|(selected, _)| *selected == wcs)
-                .zip(rotation)
-            {
-                let difference = (actual - expected + 180.0).rem_euclid(360.0) - 180.0;
-                if difference.abs() > 0.0015 {
-                    return Err(Error::Controller(
-                        "The machine did not confirm the new work coordinate rotation.".into(),
-                    ));
-                }
-                rotation_received = true;
-            }
-        }
-        Ok(())
-    })
+    c.write_coordinates(
+        wcs,
+        patch,
+        rotation.map(|angle| (angle * 1e6).round() / 1e6),
+    )
     .await
-    .map_err(|_| Error::Timeout)?
 }
 pub async fn write_rotary_rotation<C: Controller + ?Sized>(
     c: &C,

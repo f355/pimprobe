@@ -14,8 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+import type { ReactNode } from "react";
 import { Button, Notice, PageHeader } from "./controls";
 import { useTranslation } from "./i18n";
+interface WcsChoices {
+  current: number;
+  onSelect: (wcs: number) => void;
+  pending?: boolean;
+}
+export type RenderWcsChoices = (choices: WcsChoices) => ReactNode;
+
 export function WcsPicker({
   current,
   onBack,
@@ -23,13 +31,12 @@ export function WcsPicker({
   pending,
   title,
   error,
-}: {
-  current: number;
+  renderChoices,
+}: WcsChoices & {
   onBack: () => void;
-  onSelect: (wcs: number) => void;
-  pending?: boolean;
   title?: string;
   error?: string;
+  renderChoices?: RenderWcsChoices;
 }) {
   const { t } = useTranslation();
   return (
@@ -41,22 +48,26 @@ export function WcsPicker({
       />
       <div className="pp-content">
         {error && <Notice error>{t(error)}</Notice>}
-        <div className="pp-wcs-grid">
-          {[54, 55, 56, 57, 58, 59].map((wcs) => (
-            <Button
-              key={wcs}
-              className={current === wcs ? "pp-selected" : ""}
-              aria-pressed={current === wcs}
-              disabled={pending}
-              onClick={() => onSelect(wcs)}
-              help={t(
-                "Select this work coordinate system for readouts and new measurements.",
-              )}
-            >
-              G{wcs}
-            </Button>
-          ))}
-        </div>
+        {renderChoices ? (
+          renderChoices({ current, onSelect, pending })
+        ) : (
+          <div className="pp-wcs-grid">
+            {[54, 55, 56, 57, 58, 59].map((wcs) => (
+              <Button
+                key={wcs}
+                className={current === wcs ? "pp-selected" : ""}
+                aria-pressed={current === wcs}
+                disabled={pending}
+                onClick={() => onSelect(wcs)}
+                help={t(
+                  "Select this work coordinate system for readouts and new measurements.",
+                )}
+              >
+                G{wcs}
+              </Button>
+            ))}
+          </div>
+        )}
       </div>
     </>
   );

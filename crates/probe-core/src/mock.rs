@@ -484,6 +484,15 @@ impl MockController {
         });
     }
 }
+impl MockController {
+    async fn configuration_ready(&self) -> Result<(), Error> {
+        tokio::time::sleep(self.command_delay).await;
+        if !self.state().connected {
+            return Err(Error::Disconnected);
+        }
+        Ok(())
+    }
+}
 #[async_trait]
 impl Controller for MockController {
     fn state(&self) -> State {
@@ -491,6 +500,118 @@ impl Controller for MockController {
     }
     fn subscribe(&self) -> crate::EventReceiver {
         self.events.subscribe().into()
+    }
+    async fn read_settings(&self) -> Result<BTreeMap<i32, f64>, Error> {
+        self.configuration_ready().await?;
+        let state = self.state();
+        let calibration = state.probe_z_calibration.unwrap();
+        Ok([
+            (33, state.probe_offset[0]),
+            (34, state.probe_offset[1]),
+            (35, calibration),
+            (201, state.tool_length_offset),
+            (
+                202,
+                calibration - state.probe_offset[2] + state.tool_length_offset,
+            ),
+        ]
+        .into())
+    }
+    async fn read_modes(&self) -> Result<Modes, Error> {
+        self.configuration_ready().await?;
+        Ok(self.state().modes)
+    }
+    async fn read_firmware_version(&self) -> Result<String, Error> {
+        self.configuration_ready().await?;
+        Ok(self.state().firmware_version)
+    }
+    async fn read_coordinates(&self) -> Result<State, Error> {
+        self.configuration_ready().await?;
+        Ok(self.state())
+    }
+    async fn write_setting(&self, key: i32, value: f64) -> Result<(), Error> {
+        self.configuration_ready().await?;
+        if !(33..=35).contains(&key) || !value.is_finite() {
+            return Err(Error::InvalidConfig(
+                "Invalid probe calibration setting".into(),
+            ));
+        }
+        let value = (value * 1e6).round() / 1e6;
+        let mut inner = self.inner.lock().unwrap();
+        if key == 35 {
+            let delta = value - inner.state.probe_z_calibration.unwrap();
+            inner.state.probe_z_calibration = Some(value);
+            inner.state.probe_offset[2] += delta;
+        } else {
+            inner.state.probe_offset[(key - 33) as usize] = value;
+        }
+        Ok(())
+    }
+    async fn write_modes(&self, modes: Modes, plane: Option<i32>) -> Result<(), Error> {
+        self.configuration_ready().await?;
+        // Include command and readback latency before starting the next move.
+        tokio::time::sleep(self.command_delay).await;
+        if !modes.valid() || plane.is_some_and(|plane| !(17..=19).contains(&plane)) {
+            return Err(Error::InvalidConfig("Invalid probing modes".into()));
+        }
+        let mut inner = self.inner.lock().unwrap();
+        if inner.state.motion_blocked {
+            return Err(Error::MotionBlocked);
+        }
+        inner.state.modes = modes;
+        if let Some(plane) = plane {
+            inner.state.plane = plane;
+        }
+        Ok(())
+    }
+    async fn write_coordinates(
+        &self,
+        wcs: i32,
+        axes: [Option<f64>; 4],
+        rotation: Option<f64>,
+    ) -> Result<(), Error> {
+        self.configuration_ready().await?;
+        let mut inner = self.inner.lock().unwrap();
+        if wcs != inner.state.wcs
+            || axes
+                .iter()
+                .flatten()
+                .chain(rotation.iter())
+                .any(|v| !v.is_finite())
+        {
+            return Err(Error::InvalidConfig("Invalid work coordinates".into()));
+        }
+        if inner.state.motion_blocked {
+            return Err(Error::MotionBlocked);
+        }
+        if let Some(angle) = rotation {
+            inner.state.wcs_rotation = Some(angle);
+        }
+        let mut origin = inner.state.wcs_origin.unwrap();
+        for (i, value) in axes.into_iter().enumerate() {
+            if let Some(value) = value {
+                origin[i] = value;
+            }
+        }
+        inner.state.wcs_origin = Some(origin);
+        let (sin, cos) = inner
+            .state
+            .wcs_rotation
+            .unwrap_or(0.)
+            .to_radians()
+            .sin_cos();
+        let x = inner.state.position[0] - origin[0];
+        let y = inner.state.position[1] - origin[1];
+        inner.state.work_position = [
+            cos * x + sin * y - inner.state.coordinate_offset[0],
+            cos * y - sin * x - inner.state.coordinate_offset[1],
+            inner.state.position[2]
+                - origin[2]
+                - inner.state.coordinate_offset[2]
+                - inner.state.tool_length_offset,
+            inner.state.position[3] - origin[3] - inner.state.coordinate_offset[3],
+        ];
+        Ok(())
     }
     async fn send(&self, command: &str) -> Result<(), Error> {
         if !self.command_delay.is_zero() {
@@ -501,75 +622,6 @@ impl Controller for MockController {
             return Err(Error::Disconnected);
         }
         inner.commands.push(command.into());
-        if let Some((key, value)) = command.strip_prefix('$').and_then(|s| s.split_once('=')) {
-            if let (Ok(key @ 33..=35), Ok(value)) = (key.parse::<usize>(), value.parse::<f64>()) {
-                if key == 35 {
-                    let delta = value - inner.state.probe_z_calibration.unwrap();
-                    inner.state.probe_z_calibration = Some(value);
-                    inner.state.probe_offset[2] += delta;
-                } else {
-                    inner.state.probe_offset[key - 33] = value;
-                }
-                let _ = self.events.send(Event {
-                    setting: Some((key as i32, value)),
-                    acknowledged: true,
-                    ..Event::default()
-                });
-                return Ok(());
-            }
-        }
-        if command == "$G" {
-            let _ = self.events.send(Event {
-                modes: Some(inner.state.modes),
-                plane: Some(inner.state.plane),
-                ..Event::default()
-            });
-            return Ok(());
-        }
-        if command == "$V" {
-            let _ = self.events.send(Event {
-                firmware_version: Some(inner.state.firmware_version.clone()),
-                ..Event::default()
-            });
-            return Ok(());
-        }
-        if command == "$#" {
-            let _ = self.events.send(Event {
-                wcs_origin: Some((inner.state.wcs, inner.state.wcs_origin.unwrap())),
-                ..Event::default()
-            });
-            let _ = self.events.send(Event {
-                wcs_rotation: Some((inner.state.wcs, inner.state.wcs_rotation.unwrap_or(0.0))),
-                coordinate_offset: Some(inner.state.coordinate_offset),
-                tool_length_offset: Some(inner.state.tool_length_offset),
-                ..Event::default()
-            });
-            let _ = self.events.send(Event {
-                probe: Some(Contact {
-                    position: inner.state.position,
-                    success: false,
-                }),
-                ..Event::default()
-            });
-            return Ok(());
-        }
-        if command == "$$" {
-            let calibration = inner.state.probe_z_calibration.unwrap();
-            let reference = calibration - inner.state.probe_offset[2];
-            for setting in [
-                (33, inner.state.probe_offset[0]),
-                (34, inner.state.probe_offset[1]),
-                (35, calibration),
-                (201, inner.state.tool_length_offset),
-                (202, reference + inner.state.tool_length_offset),
-            ] {
-                let _ = self.events.send(Event {
-                    setting: Some(setting),
-                    ..Event::default()
-                });
-            }
-            return Ok(());
-        }
         if matches!(command, "G17" | "G18" | "G19") {
             inner.state.plane = command[1..].parse().unwrap();
             let _ = self.events.send(Event {
@@ -641,7 +693,7 @@ impl Controller for MockController {
                 .ok_or_else(|| Error::Controller("invalid numeric word".into()))?;
             axes.push((axis, value));
         }
-        if words.starts_with(&["G90", "G53", "G0"]) && !axes.is_empty() {
+        if matches!(words.as_slice(), ["G90", "G53", "G0" | "G1", ..]) && !axes.is_empty() {
             inner.state.modes.distance = 90;
             inner.state.ready = false;
             self.publish(&inner.state);
@@ -651,55 +703,6 @@ impl Controller for MockController {
                 inner.state.position[i] = value;
             }
             inner.state.ready = true;
-            self.publish(&inner.state);
-            return Ok(());
-        }
-        if words.first() == Some(&"G10") {
-            if words.get(1) == Some(&"L2") {
-                if let Some(angle) = words
-                    .iter()
-                    .find_map(|w| w.strip_prefix('R').and_then(|v| v.parse::<f64>().ok()))
-                {
-                    inner.state.wcs_rotation = Some(angle);
-                }
-                let mut origin = inner.state.wcs_origin.unwrap();
-                for (axis, value) in axes {
-                    origin[axis.index()] = value;
-                }
-                if words.iter().any(|word| word.starts_with('A')) {
-                    origin[3] = a_delta;
-                }
-                inner.state.wcs_origin = Some(origin);
-                let angle = inner.state.wcs_rotation.unwrap_or(0.).to_radians();
-                let x = inner.state.position[0] - origin[0];
-                let y = inner.state.position[1] - origin[1];
-                inner.state.work_position = [
-                    angle.cos() * x + angle.sin() * y - inner.state.coordinate_offset[0],
-                    angle.cos() * y - angle.sin() * x - inner.state.coordinate_offset[1],
-                    inner.state.position[2]
-                        - origin[2]
-                        - inner.state.coordinate_offset[2]
-                        - inner.state.tool_length_offset,
-                    inner.state.position[3] - origin[3] - inner.state.coordinate_offset[3],
-                ];
-                self.publish(&inner.state);
-                let _ = self.events.send(Event {
-                    acknowledged: true,
-                    ..Event::default()
-                });
-                return Ok(());
-            }
-            if words.get(1) != Some(&"L20")
-                || words.get(2).copied() != Some(format!("P{}", inner.state.wcs - 53).as_str())
-                || inner.state.modes.units != 21
-                || axes.is_empty()
-            {
-                return Err(Error::Controller("invalid work-zero command".into()));
-            }
-            for (a, v) in axes {
-                inner.state.work_position[a.index()] = v;
-            }
-            inner.state.wcs_origin = Some(Self::origin_from_work(&inner.state));
             self.publish(&inner.state);
             return Ok(());
         }

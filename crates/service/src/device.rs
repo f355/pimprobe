@@ -236,6 +236,57 @@ impl pimprobe_app::device::ProbeDevice for Device {
 
 #[async_trait]
 impl Controller for Device {
+    async fn read_settings(&self) -> Result<std::collections::BTreeMap<i32, f64>, Error> {
+        match self {
+            Self::Machine(c) => c.read_settings().await,
+            Self::Mock(c) => c.read_settings().await,
+        }
+    }
+    async fn read_modes(&self) -> Result<pimprobe_core::Modes, Error> {
+        match self {
+            Self::Machine(c) => c.read_modes().await,
+            Self::Mock(c) => c.read_modes().await,
+        }
+    }
+    async fn read_firmware_version(&self) -> Result<String, Error> {
+        match self {
+            Self::Machine(c) => c.read_firmware_version().await,
+            Self::Mock(c) => c.read_firmware_version().await,
+        }
+    }
+    async fn read_coordinates(&self) -> Result<State, Error> {
+        match self {
+            Self::Machine(c) => c.read_coordinates().await,
+            Self::Mock(c) => c.read_coordinates().await,
+        }
+    }
+    async fn write_setting(&self, key: i32, value: f64) -> Result<(), Error> {
+        match self {
+            Self::Machine(c) => c.write_setting(key, value).await,
+            Self::Mock(c) => c.write_setting(key, value).await,
+        }
+    }
+    async fn write_modes(
+        &self,
+        modes: pimprobe_core::Modes,
+        plane: Option<i32>,
+    ) -> Result<(), Error> {
+        match self {
+            Self::Machine(c) => c.write_modes(modes, plane).await,
+            Self::Mock(c) => c.write_modes(modes, plane).await,
+        }
+    }
+    async fn write_coordinates(
+        &self,
+        wcs: i32,
+        axes: [Option<f64>; 4],
+        rotation: Option<f64>,
+    ) -> Result<(), Error> {
+        match self {
+            Self::Machine(c) => c.write_coordinates(wcs, axes, rotation).await,
+            Self::Mock(c) => c.write_coordinates(wcs, axes, rotation).await,
+        }
+    }
     async fn set_probe(&self, extended: bool) -> Result<(), Error> {
         match self {
             Self::Machine(c) => c.set_probe_extended(extended).await,

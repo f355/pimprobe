@@ -20,7 +20,12 @@ import { useTranslation } from "../i18n";
 import { errorMessage, useUtilityBusy } from "./common";
 import type { UtilityPageProps } from "./UtilityPage";
 
-export function Utilities({ client, onBack, onBusyChange }: UtilityPageProps) {
+export function Utilities({
+  client,
+  onBack,
+  onBusyChange,
+  onBedReference,
+}: UtilityPageProps) {
   const { t } = useTranslation();
   const [pending, setPending] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
@@ -82,6 +87,17 @@ export function Utilities({ client, onBack, onBusyChange }: UtilityPageProps) {
         backDisabled={pending}
       />
       <div className="pp-utility-content pp-utility-menu">
+        {onBedReference && (
+          <Button
+            disabled={pending}
+            onClick={onBedReference}
+            help={t(
+              "Measure a bed corner to restore machine zero consistently.",
+            )}
+          >
+            {t("Bed reference")}
+          </Button>
+        )}
         <div className="pp-utility-log-actions">
           <Button
             disabled={pending}

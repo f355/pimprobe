@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 mod angle;
+pub mod bed_reference;
 mod calibration;
 pub use calibration::*;
 mod frame;

@@ -45,6 +45,17 @@ Choose English, Simplified Chinese or Swedish. Until you choose, the interface u
 
 ## Utilities
 
+**Bed reference** is available only with firmware that can set the machine
+reference. Clear the bed and spindle. Remove and disconnect the fourth axis
+and electric vise; they cover the corner used by the probe.
+
+1. Tap **Record bed reference**. The machine homes to its limit switches, then
+   probes the top and two walls of a T-slot corner.
+2. Tap **Save reference** to keep those contacts without changing machine zero.
+3. On later runs, tap **Reference from bed** to repeat the measurement and
+   correct machine zero to match the saved contacts. This does not change the
+   work offsets or probe calibration.
+
 **Export logs** copies history and diagnostic logs to a mounted USB drive. **Clear logs** deletes them after confirmation.
 
 <!-- guide-only -->

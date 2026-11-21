@@ -121,6 +121,7 @@ mod tests {
             settings::open(path.join("settings.json")).unwrap(),
             None,
             LogStore::open(path.join("logs")).unwrap(),
+            path.join("bed-reference.json"),
         );
         Arc::get_mut(&mut app).unwrap().panel = Panel {
             brightness: brightness.clone(),

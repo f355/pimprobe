@@ -104,6 +104,7 @@ async fn saved_measurement_can_be_reopened_after_restart_and_zeroed_without_moti
         settings::open(temp.path().join("settings.json")).unwrap(),
         None,
         LogStore::open(temp.path().join("logs")).unwrap(),
+        temp.path().join("bed-reference.json"),
     );
     let router = pimprobe_service::http::router(app.clone());
     let position = app.device.state().position;
@@ -296,6 +297,7 @@ fn app() -> (tempfile::TempDir, std::sync::Arc<App>, Router) {
         settings::open(temp.path().join("settings.json")).unwrap(),
         Some("test-token".into()),
         LogStore::open(temp.path().join("logs")).unwrap(),
+        temp.path().join("bed-reference.json"),
     );
     (temp, app.clone(), router(app))
 }
@@ -392,6 +394,7 @@ async fn update_install_requires_an_idle_stopped_machine() {
             settings::open(temp.path().join("settings.json")).unwrap(),
             Some("test-token".into()),
             LogStore::open(temp.path().join("logs")).unwrap(),
+            temp.path().join("bed-reference.json"),
         );
         let router = router(app);
         assert_api_error(
@@ -909,6 +912,7 @@ async fn cancelled_result_move_restores_parser_modes_after_stopping() {
         settings::open(temp.path().join("settings.json")).unwrap(),
         Some("test-token".into()),
         LogStore::open(temp.path().join("logs")).unwrap(),
+        temp.path().join("bed-reference.json"),
     );
     let router = router(app.clone());
     let original_modes = app.device.state().modes;

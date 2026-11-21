@@ -44,6 +44,7 @@ use std::{
 };
 use tokio_stream::Stream;
 
+mod bed_reference;
 mod panel;
 mod rotary;
 mod work_coordinates;
@@ -54,6 +55,7 @@ pub struct App {
     ready_token: Option<String>,
     updates: UpdateManager,
     panel: panel::Panel,
+    bed: bed_reference::Bed,
 }
 impl App {
     pub fn new(
@@ -61,6 +63,7 @@ impl App {
         settings: Settings,
         ready_token: Option<String>,
         logs: LogStore,
+        bed_path: std::path::PathBuf,
     ) -> Arc<Self> {
         let device = Arc::new(device);
         let logs = Arc::new(logs);
@@ -76,9 +79,11 @@ impl App {
             ready_token,
             updates: UpdateManager::production(),
             panel: panel::Panel::default(),
+            bed: bed_reference::Bed::new(bed_path),
         })
     }
     pub async fn shutdown(&self) {
+        self.bed.stop();
         self.probe.shutdown().await;
     }
 }
@@ -94,6 +99,10 @@ pub fn router(app: Arc<App>) -> Router {
             get(work_coordinates::get)
                 .post(wcs)
                 .patch(work_coordinates::edit),
+        )
+        .route(
+            "/api/v1/bed-reference",
+            get(bed_reference::get).post(bed_reference::action),
         )
         .route("/api/v1/routine/review", post(review))
         .route("/api/v1/routine/run", post(run))
@@ -193,11 +202,13 @@ struct StateReport {
     probe: pimprobe_app::AppState,
     #[serde(skip_serializing_if = "Option::is_none")]
     panel_sleeping: Option<bool>,
+    bed_reference_supported: bool,
 }
 
 async fn state(State(app): State<Arc<App>>, headers: HeaderMap) -> Json<StateReport> {
     Json(StateReport {
         probe: app.probe.state(),
+        bed_reference_supported: bed_reference::supported(&app.device),
         panel_sleeping: panel::local(&headers)
             .then(|| app.panel.sleeping())
             .flatten(),

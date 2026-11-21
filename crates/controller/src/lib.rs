@@ -48,6 +48,7 @@ pub struct Snapshot {
     pub connected: bool,
     pub session_id: u64,
     pub connection_error: String,
+    pub tool_present: Option<bool>,
     pub status: Option<MachineStatus>,
     pub settings: BTreeMap<i32, f64>,
     pub last_probe: Option<Contact>,
@@ -478,6 +479,7 @@ fn apply(inner: &Inner, record: Record) {
             stored.snapshot.firmware_version = version.clone();
             event.firmware_version = Some(version);
         }
+        Record::ToolPresent(present) => stored.snapshot.tool_present = present,
         Record::Rotation(wcs, angle) => {
             stored.snapshot.wcs_rotations.insert(wcs, angle);
             event.wcs_rotation = Some((wcs, angle));
@@ -615,7 +617,7 @@ mod tests {
         );
         data(
             &mut socket,
-            "[G54:0,0,20,0]\n[G92:0,0,0,0]\n[TLO:-45]\n[PROBE:0,0,0,0:0,-60]\n",
+            "[G54:0,0,20,0]\n[G92:0,0,0,0]\n[TLO:-45]\n[PROBE:0,0,0,0:0,-60]\nok\n",
         )
         .await;
         let state = query.await.unwrap().unwrap();

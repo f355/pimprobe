@@ -39,6 +39,11 @@ pub struct MachineStatus {
     pub door_open: bool,
     pub motion_blocked: bool,
     pub fourth_axis: Option<bool>,
+    pub vise: Option<bool>,
+    pub magazine: Option<bool>,
+    pub magazine_right: Option<bool>,
+    pub magazine_lid: Option<u8>,
+    pub reference_known: Option<bool>,
 }
 
 impl MachineStatus {
@@ -66,6 +71,7 @@ pub enum Record {
     Probe(Contact, Option<f64>),
     Modes(Modes, i32),
     Version(String),
+    ToolPresent(Option<bool>),
     Rotation(i32, f64),
     Origin(i32, Position),
     CoordinateOffset(Position),
@@ -142,6 +148,13 @@ pub fn parse_line(line: &str) -> Result<Option<Record>, String> {
             .ok_or("missing rotation angle")?;
         return Ok(Some(Record::Rotation(number(wcs)?, finite(angle)?)));
     }
+    if let Some((origin, _)) = line.strip_prefix("[TOOL:").and_then(|s| s.split_once(',')) {
+        return Ok(Some(Record::ToolPresent(match origin {
+            "empty" => Some(false),
+            "atc" | "manual" => Some(true),
+            _ => None,
+        })));
+    }
     if let Some(s) = line.strip_prefix("[G92:") {
         return Ok(Some(Record::CoordinateOffset(position(
             s.strip_suffix(']').ok_or("missing closing bracket")?,
@@ -204,11 +217,18 @@ pub fn parse_line(line: &str) -> Result<Option<Record>, String> {
             };
             match key {
                 "MS" => {
-                    status.fourth_axis = match value.as_bytes().get(14) {
-                        Some(b'0') => Some(false),
-                        Some(b'1') => Some(true),
-                        _ => None,
+                    let field = |index: usize| {
+                        value
+                            .as_bytes()
+                            .get(index)
+                            .and_then(|byte| byte.checked_sub(b'0').filter(|value| *value <= 9))
                     };
+                    let flag = |index| field(index).filter(|value| *value <= 1).map(|v| v == 1);
+                    status.magazine_right = flag(10);
+                    status.fourth_axis = flag(14);
+                    status.vise = flag(15);
+                    status.magazine = flag(19);
+                    status.magazine_lid = field(27);
                     // H is the eighth field in the firmware's compact machine-status string.
                     status.homed = value.as_bytes().get(7) == Some(&b'1');
                     // The thirtieth compact field is the probe actuator state.
@@ -216,6 +236,13 @@ pub fn parse_line(line: &str) -> Result<Option<Record>, String> {
                         byte.checked_sub(b'0')
                             .and_then(|value| probe_actuator(i32::from(value)))
                     });
+                }
+                "Ref" => {
+                    status.reference_known = match value {
+                        "0" => Some(false),
+                        "1" => Some(true),
+                        _ => None,
+                    }
                 }
                 "MPos" => {
                     status.m_pos = position(value)?;

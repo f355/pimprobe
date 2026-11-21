@@ -31,6 +31,7 @@ export interface MachineState {
   contactActive?: boolean;
   recoveryFailed?: boolean;
   actuatorPending?: boolean;
+  bedReferenceSupported?: boolean;
   coordinates?: { probe?: Coordinates; spindle?: Coordinates };
   wcsRotations?: Record<string, number>;
   status?: {

@@ -40,9 +40,20 @@
 .pp-utility-content > * {
   min-width: 0;
 }
+.pp-bed-reference .pp-utility-content,
 .pp-work-coordinates .pp-utility-content {
   overflow: auto;
   touch-action: pan-y;
+}
+.pp-bed-readings {
+  display: grid;
+  grid-template-columns: minmax(8em, 1.4fr) repeat(3, minmax(0, 1fr));
+  align-items: baseline;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.pp-bed-readings output {
+  margin-inline-start: 4px;
 }
 .pp-utility-muted {
   color: var(--pp-muted);

@@ -39,6 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         "/userdata/cnc/logs/pimprobe".into()
     };
+    let bed_path = options.settings.with_file_name("bed-reference.json");
     let settings = settings::open(options.settings)?;
     let logs = LogStore::open(log_dir)?;
     let device = if options.mock {
@@ -51,6 +52,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         settings,
         options.mock.then_some(options.ready_token),
         logs,
+        bed_path,
     );
     let listener = tokio::net::TcpListener::bind(options.config.listen_address).await?;
     eprintln!(

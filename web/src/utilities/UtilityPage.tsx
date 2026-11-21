@@ -19,16 +19,18 @@ import type { HistoryResult, Settings } from "../types";
 import { Utilities } from "./Utilities";
 import { History } from "./History";
 import { Updates } from "./Updates";
+import { BedReference } from "./BedReference";
 import "./utilities.css";
 
 export interface UtilityPageProps {
-  page: "utilities" | "history" | "updates";
+  page: "utilities" | "history" | "updates" | "bed-reference";
   client: ProbeClient;
   settings: Settings;
   onSettings: (patch: Partial<Settings>) => Promise<void>;
   onBack: () => void;
   onOpenResult: (result: HistoryResult) => void;
   onBusyChange?: (busy: boolean) => void;
+  onBedReference?: () => void;
 }
 
 export function UtilityPage(props: UtilityPageProps) {
@@ -37,6 +39,8 @@ export function UtilityPage(props: UtilityPageProps) {
       return <History {...props} />;
     case "updates":
       return <Updates {...props} />;
+    case "bed-reference":
+      return <BedReference {...props} />;
     default:
       return <Utilities {...props} />;
   }

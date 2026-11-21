@@ -37,6 +37,8 @@ const routes: Record<string, [string, string]> = {
   "wcs.select": ["POST", "/wcs"],
   "wcs.get": ["GET", "/wcs"],
   "wcs.edit": ["PATCH", "/wcs"],
+  "bed.get": ["GET", "/bed-reference"],
+  "bed.action": ["POST", "/bed-reference"],
   "history.get": ["GET", "/logs/history"],
   "history.open": ["POST", "/logs/history/open"],
   "history.wcs": ["POST", "/logs/history/wcs"],

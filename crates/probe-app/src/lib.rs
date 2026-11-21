@@ -133,14 +133,21 @@ impl ProbeApp {
         if self.device.state().motion_blocked {
             return;
         }
+        let _ = self.confirm_stopped().await;
+    }
+
+    pub async fn confirm_stopped(&self) -> Result<(), Error> {
         loop {
-            if self.device.stop().await.is_ok() {
-                self.recovery_failed.store(false, Ordering::SeqCst);
-                return;
-            }
+            let error = match self.device.stop().await {
+                Ok(()) => {
+                    self.recovery_failed.store(false, Ordering::SeqCst);
+                    return Ok(());
+                }
+                Err(error) => error,
+            };
             self.recovery_failed.store(true, Ordering::SeqCst);
             tokio::select! {
-                _ = self.shutdown.cancelled() => return,
+                _ = self.shutdown.cancelled() => return Err(error),
                 _ = tokio::time::sleep(std::time::Duration::from_millis(200)) => {},
             }
         }

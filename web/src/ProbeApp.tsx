@@ -370,11 +370,16 @@ function ProbePage({
       />
     ) : page !== "home" ? (
       <UtilityPage
-        page={page as "utilities" | "history" | "updates"}
+        page={page as "utilities" | "history" | "updates" | "bed-reference"}
         client={client}
         settings={settings}
         onSettings={saveSettings}
-        onBack={() => navigate("home")}
+        onBack={() => navigate(page === "bed-reference" ? "utilities" : "home")}
+        onBedReference={
+          state.bedReferenceSupported
+            ? () => navigate("bed-reference")
+            : undefined
+        }
         onBusyChange={setBusy}
         onOpenResult={(opened) => {
           setHistory(opened);

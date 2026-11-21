@@ -44,7 +44,7 @@ test("help distinguishes both work coordinate modes without switching them", asy
 });
 
 for (const enhanced of [false, true]) {
-  test(`work coordinates respect ${enhanced ? "custom" : "stock"} firmware`, async ({
+  test(`work coordinates and utilities reflect ${enhanced ? "custom" : "stock"} firmware`, async ({
     page,
   }, info) => {
     const fixture = await app(page, "en_US", undefined, enhanced);
@@ -83,6 +83,25 @@ for (const enhanced of [false, true]) {
     if (enhanced) await expect(rotation).toBeVisible();
     else await expect(rotation).toHaveCount(0);
     await capture(page, info.outputPath("work-coordinates.png"));
+    await page.getByRole("button", { name: "Back", exact: true }).click();
+    await page.getByRole("tab", { name: "Settings", exact: true }).click();
+    await page.getByRole("button", { name: "Utilities", exact: true }).click();
+    const bed = page.getByRole("button", {
+      name: "Bed reference",
+      exact: true,
+    });
+    if (enhanced) {
+      await bed.click();
+      await expect(
+        page.getByRole("button", { name: "Record bed reference" }),
+      ).toBeEnabled();
+      await expect(
+        page.getByRole("button", { name: "Reference from bed" }),
+      ).toBeDisabled();
+      await capture(page, info.outputPath("bed-reference.png"));
+    } else {
+      await expect(bed).toHaveCount(0);
+    }
   });
 }
 
@@ -147,6 +166,7 @@ async function app(
     if (path === "state")
       response = {
         connected,
+        bedReferenceSupported: enhanced,
         panelSleeping: sleeping,
         contactActive: false,
         recoveryFailed: false,
@@ -176,6 +196,15 @@ async function app(
         origins: { 54: [-20, -30, -40, 0], 55: [-10, -999.999, -30, 0] },
         positions: { 54: [5, 6, 7, 0], 55: [8, 9, 10, 0] },
         rotations: enhanced ? { 54: 0, 55: 2 } : {},
+      };
+    } else if (path === "bed-reference") {
+      response = {
+        saved: null,
+        measurement: null,
+        busy: false,
+        message: "",
+        coordinates: [null, null, null],
+        reason: null,
       };
     } else if (path === "panel/activity") {
       if (body.wake) sleeping = false;

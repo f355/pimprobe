@@ -362,6 +362,25 @@ async fn application_errors_include_status_and_message() {
 }
 
 #[tokio::test]
+async fn work_coordinate_edits_keep_the_machine_still() {
+    let (_temp, app, router) = app();
+    let start = app.device.state();
+    let edit =
+        |value, at_position| json!({"wcs":54,"axis":0,"value":value,"atPosition":at_position});
+    let (status, body) = request(&router, "PATCH", "/api/v1/wcs", edit(10., true)).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let state = app.device.state();
+    assert_eq!(state.position, start.position);
+    assert_eq!(state.work_position[0], 10.);
+    assert_eq!(state.work_position[1..], start.work_position[1..]);
+
+    let (status, body) = request(&router, "PATCH", "/api/v1/wcs", edit(-130., false)).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(app.device.state().wcs_origin.unwrap()[0], -130.);
+    assert_eq!(app.device.state().position, start.position);
+}
+
+#[tokio::test]
 async fn update_install_requires_an_idle_stopped_machine() {
     for (ready, spindle_stopped) in [(false, true), (true, false)] {
         let temp = tempfile::tempdir().unwrap();

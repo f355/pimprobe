@@ -19,7 +19,79 @@ import type { RoutineConfig, RoutineResult, Settings } from "../src/types";
 import swedish from "../src/locales/sv.json" with { type: "json" };
 import chinese from "../src/locales/zh_CN.json" with { type: "json" };
 
-async function app(page: Page, language = "en_US", sleeping?: boolean) {
+test("help distinguishes both work coordinate modes without switching them", async ({
+  page,
+}, info) => {
+  await app(page);
+  await page.getByRole("button", { name: "G54", exact: true }).click();
+  await page.getByRole("button", { name: "Help", exact: true }).click();
+  const position = page.getByRole("button", {
+    name: "Set position",
+    exact: true,
+  });
+  await position.click();
+  await expect(
+    page.getByRole("dialog", { name: "Set position" }),
+  ).toContainText("make this position X0");
+  await page.getByRole("button", { name: "Close explanation" }).click();
+  await page.getByRole("button", { name: "Origin", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Origin" })).toContainText(
+    "machine coordinates (G53) of work zero",
+  );
+  await capture(page, info.outputPath("work-coordinate-help.png"));
+  await page.getByRole("button", { name: "Close explanation" }).click();
+  await expect(position).toHaveAttribute("aria-pressed", "true");
+});
+
+for (const enhanced of [false, true]) {
+  test(`work coordinates respect ${enhanced ? "custom" : "stock"} firmware`, async ({
+    page,
+  }, info) => {
+    const fixture = await app(page, "en_US", undefined, enhanced);
+    await page.getByRole("button", { name: "G54", exact: true }).click();
+    await page.getByRole("button", { name: "G55", exact: true }).click();
+    const x = page.getByRole("textbox", { name: "X", exact: true });
+    await expect(x).toHaveValue("8.000");
+    await x.click();
+    const keypad = page.getByRole("group", { name: "Numeric keypad" });
+    await expect(keypad).toBeVisible();
+    const keys = (await keypad.boundingBox())!;
+    const field = (await x.boundingBox())!;
+    expect(keys.x + keys.width).toBeLessThan(field.x);
+    await capture(page, info.outputPath("work-coordinate-keypad.png"));
+    for (const key of ["3", ".", "5", "Change sign", "Enter"]) {
+      await keypad.getByRole("button", { name: key, exact: true }).click();
+    }
+    expect(fixture.calls).toContainEqual({
+      path: "wcs",
+      body: { wcs: 55, axis: 0, value: -3.5, atPosition: true },
+    });
+    await page.getByRole("button", { name: "Half X", exact: true }).click();
+    expect(fixture.calls).toContainEqual({
+      path: "wcs",
+      body: { wcs: 55, axis: 0, value: 4, atPosition: true },
+    });
+    await page.getByRole("button", { name: "Origin", exact: true }).click();
+    await expect(x).toHaveValue("-10.000");
+    await page.getByRole("button", { name: "Zero X", exact: true }).click();
+    expect(fixture.calls).toContainEqual({
+      path: "wcs",
+      body: { wcs: 55, axis: 0, value: 0, atPosition: false },
+    });
+    await page.getByRole("button", { name: "Activate G55" }).click();
+    const rotation = page.getByRole("textbox", { name: "XY rotation" });
+    if (enhanced) await expect(rotation).toBeVisible();
+    else await expect(rotation).toHaveCount(0);
+    await capture(page, info.outputPath("work-coordinates.png"));
+  });
+}
+
+async function app(
+  page: Page,
+  language = "en_US",
+  sleeping?: boolean,
+  enhanced = false,
+) {
   const calls: { path: string; body: Record<string, unknown> }[] = [];
   let settings: Settings = {
     probeDiameter: 2,
@@ -52,6 +124,7 @@ async function app(page: Page, language = "en_US", sleeping?: boolean) {
     connected = true,
     warning = false,
     miss = false;
+  let activeWcs = 54;
   let config: RoutineConfig;
   let result: RoutineResult = {
     point: [5, 6, null],
@@ -89,12 +162,22 @@ async function app(page: Page, language = "en_US", sleeping?: boolean) {
         },
         status: {
           mode: "Ready",
-          wcs: 54,
+          wcs: activeWcs,
           probeActuatorKnown: true,
           probeActuator: extended ? 1 : 0,
         },
       };
-    else if (path === "panel/activity") {
+    else if (path === "wcs") {
+      if (request.method() === "POST") activeWcs = Number(body.wcs);
+      response = {
+        active: activeWcs,
+        available: true,
+        fourthAxis: enhanced,
+        origins: { 54: [-20, -30, -40, 0], 55: [-10, -999.999, -30, 0] },
+        positions: { 54: [5, 6, 7, 0], 55: [8, 9, 10, 0] },
+        rotations: enhanced ? { 54: 0, 55: 2 } : {},
+      };
+    } else if (path === "panel/activity") {
       if (body.wake) sleeping = false;
     } else if (path === "settings/schema")
       response = Object.fromEntries(

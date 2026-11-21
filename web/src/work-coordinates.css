@@ -1,0 +1,107 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright (c) 2026 Konstantin Tcepliaev <f355@f355.org>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
+.pp-work-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  flex: 1;
+  min-height: 264px;
+}
+.pp-work-layout > .pp-keypad-slot {
+  container-type: inline-size;
+}
+.pp-work-controls,
+.pp-work-fields {
+  display: grid;
+  gap: 10px;
+}
+.pp-work-controls {
+  flex: 1;
+  max-inline-size: 376px;
+  grid-template-rows: auto auto minmax(56px, 1fr);
+}
+.pp-work-fields {
+  grid-template-rows: repeat(5, minmax(48px, 1fr));
+}
+.pp-work-presets,
+.pp-work-row {
+  display: grid;
+  gap: 8px;
+  align-items: center;
+}
+.pp-work-presets {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.pp-work-row {
+  grid-template-columns: 82px repeat(2, 65px) minmax(0, 108px) 24px;
+}
+.pp-work-row > :first-child {
+  padding-inline-start: 16px;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+.pp-work-label-wide {
+  grid-column: span 2;
+}
+.pp-work-row .pp-number {
+  align-self: stretch;
+  width: 100%;
+  height: auto;
+  padding-inline: 6px;
+  font-size: 22px !important;
+}
+.pp-work-row .pp-button {
+  align-self: stretch;
+  min-height: 48px;
+  padding-inline: 4px;
+}
+.pp-work-presets .pp-button {
+  position: relative;
+  width: 100%;
+  min-height: 0;
+  aspect-ratio: 1;
+  padding-inline: 4px;
+}
+.pp-work-activate {
+  max-height: min(120px, calc((100cqi - 16px) / 3));
+}
+.pp-work-presets [aria-current="true"]::after {
+  content: "";
+  position: absolute;
+  inset-inline-end: 9px;
+  inset-block-start: 9px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pp-bright);
+}
+@media (max-width: 740px) {
+  .pp-work-layout {
+    grid-template-columns: minmax(0, 1fr);
+    flex: none;
+  }
+  .pp-work-layout .pp-keypad {
+    flex: none;
+  }
+  .pp-work-fields {
+    grid-template-rows: none;
+    grid-auto-rows: minmax(48px, auto);
+  }
+  .pp-work-row {
+    grid-template-columns: repeat(3, 60px) minmax(0, 108px) 24px;
+  }
+}

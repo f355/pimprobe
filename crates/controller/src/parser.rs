@@ -38,6 +38,7 @@ pub struct MachineStatus {
     pub probe_triggered: bool,
     pub door_open: bool,
     pub motion_blocked: bool,
+    pub fourth_axis: Option<bool>,
 }
 
 impl MachineStatus {
@@ -203,6 +204,11 @@ pub fn parse_line(line: &str) -> Result<Option<Record>, String> {
             };
             match key {
                 "MS" => {
+                    status.fourth_axis = match value.as_bytes().get(14) {
+                        Some(b'0') => Some(false),
+                        Some(b'1') => Some(true),
+                        _ => None,
+                    };
                     // H is the eighth field in the firmware's compact machine-status string.
                     status.homed = value.as_bytes().get(7) == Some(&b'1');
                     // The thirtieth compact field is the probe actuator state.

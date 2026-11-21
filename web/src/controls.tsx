@@ -270,8 +270,11 @@ type Edit = {
   integer: boolean;
   onChange: (value: number) => void | Promise<void>;
 };
-function numericText(value: number | null): string {
-  return value === null ? "" : String(Number(value.toFixed(4)));
+function numericText(value: number | null, decimals?: number): string {
+  if (value === null) return "";
+  return decimals === undefined
+    ? String(Number(value.toFixed(4)))
+    : value.toFixed(decimals);
 }
 const NumericContext = createContext<{
   edit: Edit | null;
@@ -362,6 +365,7 @@ export function NumberField({
   disabled = false,
   help,
   placeholder,
+  decimals,
 }: {
   label: string;
   value: number | null;
@@ -372,14 +376,15 @@ export function NumberField({
   disabled?: boolean;
   help?: string;
   placeholder?: string;
+  decimals?: number;
   unit?: string;
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const numeric = useNumeric();
   useEffect(() => {
     if (ref.current && numeric.edit?.input !== ref.current)
-      ref.current.value = numericText(value);
-  }, [value, numeric.edit]);
+      ref.current.value = numericText(value, decimals);
+  }, [value, numeric.edit, decimals]);
   return (
     <input
       ref={ref}
@@ -387,7 +392,7 @@ export function NumberField({
       type="text"
       inputMode="none"
       aria-label={label}
-      defaultValue={numericText(value)}
+      defaultValue={numericText(value, decimals)}
       placeholder={placeholder}
       autoComplete="off"
       spellCheck={false}

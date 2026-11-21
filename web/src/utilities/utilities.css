@@ -40,6 +40,10 @@
 .pp-utility-content > * {
   min-width: 0;
 }
+.pp-work-coordinates .pp-utility-content {
+  overflow: auto;
+  touch-action: pan-y;
+}
 .pp-utility-muted {
   color: var(--pp-muted);
 }

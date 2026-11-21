@@ -40,7 +40,12 @@ If the NestPad display goes to sleep, tap it once to wake it. That tap does not 
 - Large readouts use the selected work coordinate system; small readouts use machine coordinates, G53.
 - Select **Probe** for the probe ball or **Tool** for the tool tip. Probe uses
   its own calibration; Tool uses the machine's active tool-length compensation.
-- **G54–G59** selects a work coordinate system. Each stores its own zero.
+- Tap **G54–G59** in the header to open the work-coordinate editor. Select a
+  preset and tap **Activate** to use it. **Set position** changes what the
+  coordinate reads at the current position without moving the machine.
+  **Origin** edits the work zero in G53 directly. **Zero** and **½** set a
+  field to zero or half its value. XY rotation is shown only when supported
+  by the firmware.
 
 Edges, corners and centers follow the selected work-coordinate axes, including its X/Y rotation. Face-angle and rotary measurements follow the machine axes.
 

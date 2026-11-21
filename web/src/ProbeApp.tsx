@@ -64,7 +64,8 @@ import {
   tabs,
 } from "./model";
 import { ProbeFlow } from "./ProbeFlow";
-import { WcsPicker, type RenderWcsChoices } from "./WcsPicker";
+import { type RenderWcsChoices } from "./WcsPicker";
+import { WorkCoordinates } from "./WorkCoordinates";
 import { UtilityPage } from "./utilities/UtilityPage";
 import "./style.css";
 
@@ -823,25 +824,14 @@ function ProbePage({
           </div>
           {chooseWcs && (
             <div className="pp-view">
-              <WcsPicker
-                current={status.wcs || 54}
-                pending={pending}
-                error={actionError}
-                onBack={() => setChooseWcs(false)}
-                onSelect={async (wcs) => {
-                  setPending(true);
-                  setActionError("");
-                  try {
-                    await client.request("wcs.select", { wcs });
-                    onRefresh();
-                    setChooseWcs(false);
-                  } catch (failure) {
-                    setActionError((failure as Error).message);
-                  } finally {
-                    setPending(false);
-                  }
-                }}
-              />
+              <NumericProvider>
+                <WorkCoordinates
+                  client={client}
+                  connected={state.connected}
+                  onBack={() => setChooseWcs(false)}
+                  onRefresh={onRefresh}
+                />
+              </NumericProvider>
             </div>
           )}
           {guide && (

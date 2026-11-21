@@ -35,6 +35,8 @@ const routes: Record<string, [string, string]> = {
   "settings.update": ["PATCH", "/settings"],
   "probe.set": ["POST", "/probe-actuator"],
   "wcs.select": ["POST", "/wcs"],
+  "wcs.get": ["GET", "/wcs"],
+  "wcs.edit": ["PATCH", "/wcs"],
   "history.get": ["GET", "/logs/history"],
   "history.open": ["POST", "/logs/history/open"],
   "history.wcs": ["POST", "/logs/history/wcs"],

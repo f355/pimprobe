@@ -46,6 +46,7 @@ use tokio_stream::Stream;
 
 mod panel;
 mod rotary;
+mod work_coordinates;
 
 pub struct App {
     pub device: Arc<Device>,
@@ -88,7 +89,12 @@ pub fn router(app: Arc<App>) -> Router {
         .route("/api/v1/settings", get(settings).patch(update_settings))
         .route("/api/v1/settings/schema", get(settings_schema))
         .route("/api/v1/probe-actuator", post(actuator))
-        .route("/api/v1/wcs", post(wcs))
+        .route(
+            "/api/v1/wcs",
+            get(work_coordinates::get)
+                .post(wcs)
+                .patch(work_coordinates::edit),
+        )
         .route("/api/v1/routine/review", post(review))
         .route("/api/v1/routine/run", post(run))
         .route("/api/v1/routine/zero", post(zero))

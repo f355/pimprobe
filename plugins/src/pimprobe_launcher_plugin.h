@@ -30,6 +30,7 @@
 #pragma once
 
 #include "nestpad_plugin_abi.h"
+#include <QLocalServer>
 #include <QPointer>
 
 class QPushButton;
@@ -49,7 +50,9 @@ public:
     bool restoreState(QByteArray &state) override;
     void cleanup() override;
 private:
+    void listenForPanelActivity();
     void tryInstallLauncher();
+    QLocalServer panel_;
     int installAttempts_ = 0;
     bool stopped_ = false;
     QPointer<QPushButton> button_;

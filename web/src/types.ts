@@ -27,6 +27,7 @@ export interface Coordinates {
 }
 export interface MachineState {
   connected: boolean;
+  panelSleeping?: boolean;
   contactActive?: boolean;
   recoveryFailed?: boolean;
   actuatorPending?: boolean;

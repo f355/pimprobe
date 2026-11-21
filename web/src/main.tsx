@@ -26,6 +26,7 @@ if (parameters.has("preview")) {
 }
 createRoot(document.getElementById("root")!).render(
   <ProbeApp
+    localPanel={kiosk}
     defaultLanguage={parameters.get("language") || ""}
     onLeave={() => window.close()}
   />,

@@ -35,6 +35,8 @@ The probe touches each surface twice: a coarse search, backoff, then a slower fi
 
 ## Coordinates and controls
 
+If the NestPad display goes to sleep, tap it once to wake it. That tap does not operate a control.
+
 - Large readouts use the selected work coordinate system; small readouts use machine coordinates, G53.
 - Select **Probe** for the probe ball or **Tool** for the tool tip. Probe uses
   its own calibration; Tool uses the machine's active tool-length compensation.

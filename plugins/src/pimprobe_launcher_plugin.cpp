@@ -32,14 +32,17 @@
 #include "launcher_button.h"
 #include <QApplication>
 #include <QDebug>
+#include <QLocalSocket>
 #include <QMainWindow>
 #include <QProcess>
 #include <QPushButton>
 #include <QSettings>
 #include <QTimer>
+#include <dlfcn.h>
 
 namespace pimprobe {
 PimProbeLauncherPlugin::PimProbeLauncherPlugin() {
+    listenForPanelActivity();
     QTimer::singleShot(0, this, &PimProbeLauncherPlugin::tryInstallLauncher);
 }
 PimProbeLauncherPlugin::~PimProbeLauncherPlugin() { delete button_.data(); }
@@ -54,8 +57,53 @@ QByteArray PimProbeLauncherPlugin::saveState() const { return {}; }
 bool PimProbeLauncherPlugin::restoreState(QByteArray &) { return true; }
 void PimProbeLauncherPlugin::cleanup() {
     stopped_ = true;
+    panel_.close();
     delete button_.data();
     AbstractPlugin::cleanup();
+}
+void PimProbeLauncherPlugin::listenForPanelActivity() {
+    // Newer CNC_Lab builds expose their screen saver through libabstractplugin.
+    // Resolve it at runtime so the launcher still loads on older builds.
+    static const auto find = reinterpret_cast<void *(*)()>(
+        dlsym(RTLD_DEFAULT, "_ZN18ScreenSaverUseCase12FindInstanceEv"));
+    static const auto sleeping = reinterpret_cast<bool (*)(const void *)>(
+        dlsym(RTLD_DEFAULT, "_ZNK18ScreenSaverUseCase8sleepingEv"));
+    static const auto wake = reinterpret_cast<void (*)(void *)>(
+        dlsym(RTLD_DEFAULT, "_ZN18ScreenSaverUseCase4WakeEv"));
+    static const auto activity = reinterpret_cast<void (*)(void *, bool)>(
+        dlsym(RTLD_DEFAULT, "_ZN18ScreenSaverUseCase14RecordActivityEb"));
+    if (!find || !sleeping || !wake || !activity) {
+        return;
+    }
+    panel_.setSocketOptions(QLocalServer::UserAccessOption);
+    connect(&panel_, &QLocalServer::newConnection, this, [this] {
+        while (auto *socket = panel_.nextPendingConnection()) {
+            connect(socket, &QLocalSocket::disconnected, socket, &QObject::deleteLater);
+            const auto receive = [socket] {
+                const QByteArray request = socket->read(1);
+                if (request.isEmpty()) {
+                    return;
+                }
+                if (auto *saver = find(); saver && (request == "A" || request == "W")) {
+                    // Check on CNC_Lab's GUI thread so an ordinary activity notice
+                    // cannot wake the panel just before a late, blind button press.
+                    if (!sleeping(saver)) {
+                        activity(saver, false);
+                    } else if (request == "W") {
+                        wake(saver);
+                        activity(saver, false);
+                    }
+                    socket->write("1", 1);
+                }
+                socket->disconnectFromServer();
+            };
+            connect(socket, &QLocalSocket::readyRead, socket, receive);
+            receive();
+        }
+    });
+    if (!panel_.listen(QStringLiteral("/run/pimprobe-panel.sock"))) {
+        qWarning() << "PimProbe could not listen for panel activity:" << panel_.errorString();
+    }
 }
 void PimProbeLauncherPlugin::tryInstallLauncher() {
     if (stopped_ || button_) {

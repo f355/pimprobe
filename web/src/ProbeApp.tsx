@@ -76,6 +76,7 @@ export interface ProbeNavigation {
   leave: (after?: () => void) => void;
 }
 export interface ProbeWorkspaceProps {
+  localPanel?: boolean;
   navigationRef?: Ref<ProbeNavigation>;
   defaultLanguage?: string;
   updates?: boolean;
@@ -99,21 +100,23 @@ export interface ProbeFooterProps {
 export function ProbeApp({
   client: suppliedClient,
   connected,
+  localPanel = false,
   ...props
 }: ProbeAppProps) {
   const client = useMemo(
-    () => suppliedClient || new HttpClient(),
-    [suppliedClient],
+    () => suppliedClient || new HttpClient("/api/v1", localPanel),
+    [suppliedClient, localPanel],
   );
   return (
     <ProbeProvider client={client} connected={connected}>
-      <ProbeWorkspace {...props} />
+      <ProbeWorkspace {...props} localPanel={localPanel} />
     </ProbeProvider>
   );
 }
 
 export function ProbeWorkspace({
   defaultLanguage = "",
+  localPanel = false,
   updates = true,
   ...props
 }: ProbeWorkspaceProps) {
@@ -129,28 +132,56 @@ export function ProbeWorkspace({
     saveSettings,
     refresh,
   } = useProbe();
+  const sleeping = localPanel ? state.panelSleeping : undefined;
+  useEffect(() => {
+    if (sleeping !== false) return;
+    function reportActivity(event: PointerEvent) {
+      if (event.isTrusted)
+        void client.request("panel.activity", { wake: false }).catch(() => {});
+    }
+    document.addEventListener("pointerdown", reportActivity, true);
+    return () =>
+      document.removeEventListener("pointerdown", reportActivity, true);
+  }, [client, sleeping]);
   return (
-    <div className={`pp-app${props.renderHeader ? " pp-embedded" : ""}`}>
-      <I18nProvider language={String(settings.language || defaultLanguage)}>
-        <NumericProvider>
-          <ProbePage
-            {...props}
-            client={client}
-            state={state}
-            settings={settings}
-            schema={schema}
-            loaded={loaded}
-            updates={updates}
-            error={error}
-            settingsError={settingsError}
-            onReload={reloadSettings}
-            saveSettings={saveSettings}
-            onRefresh={refresh}
-            onAlarm={props.onAlarm || props.onLeave}
-          />
-        </NumericProvider>
-      </I18nProvider>
-    </div>
+    <>
+      <div
+        className={`pp-app${props.renderHeader ? " pp-embedded" : ""}`}
+        inert={sleeping === true}
+      >
+        <I18nProvider language={String(settings.language || defaultLanguage)}>
+          <NumericProvider>
+            <ProbePage
+              {...props}
+              client={client}
+              state={state}
+              settings={settings}
+              schema={schema}
+              loaded={loaded}
+              updates={updates}
+              error={error}
+              settingsError={settingsError}
+              onReload={reloadSettings}
+              saveSettings={saveSettings}
+              onRefresh={refresh}
+              onAlarm={props.onAlarm || props.onLeave}
+            />
+          </NumericProvider>
+        </I18nProvider>
+      </div>
+      {sleeping && (
+        <button
+          type="button"
+          className="pp-wake-screen"
+          aria-label="Wake screen"
+          onClick={() =>
+            void client
+              .request("panel.activity", { wake: true })
+              .catch(() => {})
+          }
+        />
+      )}
+    </>
   );
 }
 

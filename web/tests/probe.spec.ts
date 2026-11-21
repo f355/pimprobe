@@ -19,7 +19,7 @@ import type { RoutineConfig, RoutineResult, Settings } from "../src/types";
 import swedish from "../src/locales/sv.json" with { type: "json" };
 import chinese from "../src/locales/zh_CN.json" with { type: "json" };
 
-async function app(page: Page, language = "en_US") {
+async function app(page: Page, language = "en_US", sleeping?: boolean) {
   const calls: { path: string; body: Record<string, unknown> }[] = [];
   let settings: Settings = {
     probeDiameter: 2,
@@ -74,6 +74,7 @@ async function app(page: Page, language = "en_US") {
     if (path === "state")
       response = {
         connected,
+        panelSleeping: sleeping,
         contactActive: false,
         recoveryFailed: false,
         coordinates: {
@@ -93,7 +94,9 @@ async function app(page: Page, language = "en_US") {
           probeActuator: extended ? 1 : 0,
         },
       };
-    else if (path === "settings/schema")
+    else if (path === "panel/activity") {
+      if (body.wake) sleeping = false;
+    } else if (path === "settings/schema")
       response = Object.fromEntries(
         Object.keys(settings).map((key) => [
           key,
@@ -200,7 +203,7 @@ async function app(page: Page, language = "en_US") {
       body: ndjson ? (response as string) : JSON.stringify(response),
     });
   });
-  await page.goto("/");
+  await page.goto(sleeping === undefined ? "/" : "/?kiosk");
   await expect(page.locator(".pp-routine-button").first()).toBeEnabled();
   await page.evaluate(() => document.fonts.ready);
   return {
@@ -208,6 +211,7 @@ async function app(page: Page, language = "en_US") {
     setResult: (value: RoutineResult) => (result = value),
     setExtended: (value: boolean) => (extended = value),
     setConnected: (value: boolean) => (connected = value),
+    sleep: () => (sleeping = true),
     warn: () => (warning = true),
     miss: () => (miss = true),
   };
@@ -219,6 +223,39 @@ test("only the local panel hides the mouse cursor", async ({ page }) => {
   await expect(button).toHaveCSS("cursor", "pointer");
   await page.goto("/?kiosk");
   await expect(button).toHaveCSS("cursor", "none");
+});
+
+test.describe("panel sleep", () => {
+  test.use({ hasTouch: true });
+
+  test("the wake tap never starts the operation underneath it", async ({
+    page,
+  }) => {
+    const { calls, sleep } = await app(page, "en_US", true);
+    const wake = page.getByRole("button", { name: "Wake screen" });
+    const target = page.locator(".pp-routine-button").first();
+    for (let cycle = 0; cycle < 2; cycle++) {
+      await expect(wake).toBeVisible();
+      const box = (await target.boundingBox())!;
+      await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+      await expect(wake).toHaveCount(0);
+      expect(
+        calls.filter(
+          ({ path, body }) => path === "panel/activity" && body.wake,
+        ),
+      ).toHaveLength(cycle + 1);
+      expect(calls.some(({ path }) => path === "routine/review")).toBe(false);
+      await expect(
+        page.getByRole("button", { name: "Proceed", exact: true }),
+      ).toHaveCount(0);
+      if (cycle === 0) sleep();
+    }
+    await target.click();
+    await page.getByRole("button", { name: "Proceed", exact: true }).click();
+    await expect
+      .poll(() => calls.some(({ path }) => path === "routine/review"))
+      .toBe(true);
+  });
 });
 
 test("calibration separates diameter from offsets and shows the mean of both dimensions", async ({

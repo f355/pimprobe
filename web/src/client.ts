@@ -29,6 +29,7 @@ export interface ProbeClient {
 }
 const routes: Record<string, [string, string]> = {
   state: ["GET", "/state"],
+  "panel.activity": ["POST", "/panel/activity"],
   "settings.get": ["GET", "/settings"],
   "settings.schema": ["GET", "/settings/schema"],
   "settings.update": ["PATCH", "/settings"],
@@ -68,7 +69,10 @@ export class ServiceError extends Error {
   }
 }
 export class HttpClient implements ProbeClient {
-  constructor(readonly base = "/api/v1") {}
+  constructor(
+    readonly base = "/api/v1",
+    readonly localPanel = false,
+  ) {}
   private async fetch(operation: string, args?: object, signal?: AbortSignal) {
     const route = routes[operation];
     if (!route) throw new Error(`Unknown operation: ${operation}`);
@@ -80,11 +84,13 @@ export class HttpClient implements ProbeClient {
             Object.entries(args).map(([key, value]) => [key, String(value)]),
           )
         : "";
+    const headers = new Headers();
+    if (method !== "GET") headers.set("Content-Type", "application/json");
+    if (this.localPanel) headers.set("X-PIMProbe-Panel", "1");
     const response = await fetch(this.base + path + query, {
       method,
       signal,
-      headers:
-        method === "GET" ? undefined : { "Content-Type": "application/json" },
+      headers,
       body: method === "GET" ? undefined : JSON.stringify(args || {}),
       cache: "no-store",
     });

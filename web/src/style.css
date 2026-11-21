@@ -26,6 +26,13 @@
 html[data-kiosk] * {
   cursor: none !important;
 }
+.pp-wake-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  opacity: 0;
+  touch-action: none;
+}
 .pp-app {
   --pp-page: #202425;
   --pp-header: #282e30;

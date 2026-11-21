@@ -24,7 +24,8 @@ use axum::{
     Json, Router,
     body::{Body, Bytes},
     extract::{DefaultBodyLimit, FromRequest, Query, Request, State, rejection::JsonRejection},
-    http::{StatusCode, header},
+    http::{HeaderMap, StatusCode, header},
+    middleware,
     response::{IntoResponse, Response},
     routing::{get, post},
 };
@@ -33,7 +34,7 @@ use pimprobe_app::{
     ZeroRequest, history::Records, settings::Settings,
 };
 use pimprobe_core::{Controller, RoutineConfig};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use std::{
     convert::Infallible,
@@ -43,6 +44,7 @@ use std::{
 };
 use tokio_stream::Stream;
 
+mod panel;
 mod rotary;
 
 pub struct App {
@@ -50,6 +52,7 @@ pub struct App {
     pub probe: Arc<ProbeApp>,
     ready_token: Option<String>,
     updates: UpdateManager,
+    panel: panel::Panel,
 }
 impl App {
     pub fn new(
@@ -71,6 +74,7 @@ impl App {
             probe,
             ready_token,
             updates: UpdateManager::production(),
+            panel: panel::Panel::default(),
         })
     }
     pub async fn shutdown(&self) {
@@ -113,6 +117,8 @@ pub fn router(app: Arc<App>) -> Router {
         .route("/api/v1/updates/install", post(install_update))
         .route("/api/v1/updates/status", get(update_status))
         .route("/api/v1/mock/ready", get(ready))
+        .route_layer(middleware::from_fn_with_state(app.clone(), panel::guard))
+        .route("/api/v1/panel/activity", post(panel::activity))
         .layer(DefaultBodyLimit::max(8192))
         .with_state(app)
 }
@@ -174,8 +180,22 @@ where
     }
 }
 
-async fn state(State(app): State<Arc<App>>) -> Json<pimprobe_app::AppState> {
-    Json(app.probe.state())
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct StateReport {
+    #[serde(flatten)]
+    probe: pimprobe_app::AppState,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    panel_sleeping: Option<bool>,
+}
+
+async fn state(State(app): State<Arc<App>>, headers: HeaderMap) -> Json<StateReport> {
+    Json(StateReport {
+        probe: app.probe.state(),
+        panel_sleeping: panel::local(&headers)
+            .then(|| app.panel.sleeping())
+            .flatten(),
+    })
 }
 async fn settings(State(app): State<Arc<App>>) -> Result<Json<Map<String, Value>>, ApiError> {
     Ok(Json(app.probe.settings().await?))

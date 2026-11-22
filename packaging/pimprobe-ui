@@ -45,6 +45,9 @@ fi
 }
 [ "$check" = false ] || exit 0
 
+# A previously cached page may predate the server's revalidation policy.
+build=$(cat "$(dirname -- "$0")/../COMMIT")
+
 lock_file=/run/pimprobe-ui.lock
 pid_file=/run/pimprobe-ui.pid
 
@@ -95,7 +98,7 @@ until wget -q -T 1 -O /dev/null http://127.0.0.1:8137/; do
 done
 
 "$browser" --ozone-platform=wayland --touch-slop-distance=24 --disable-gpu --disable-dev-shm-usage \
-    --kiosk --app="http://127.0.0.1:8137/?kiosk&language=$language" \
+    --kiosk --app="http://127.0.0.1:8137/?kiosk&language=$language&build=$build" \
     --lang="$language" --no-sandbox --no-first-run --no-default-browser-check \
     --disable-session-crashed-bubble --disable-background-mode --password-store=basic \
     --user-data-dir=/run/pimprobe-browser 9>&- &

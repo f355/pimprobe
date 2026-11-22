@@ -14,6 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use axum::{
+    Router,
+    http::{HeaderValue, header::CACHE_CONTROL},
+    routing::get_service,
+};
 use pimprobe_controller::SocketController;
 use pimprobe_core::MockController;
 use pimprobe_service::{
@@ -22,6 +27,11 @@ use pimprobe_service::{
     http::{App, router},
     logs::LogStore,
     settings,
+};
+use std::path::PathBuf;
+use tower_http::{
+    services::{ServeDir, ServeFile},
+    set_header::SetResponseHeaderLayer,
 };
 
 #[tokio::main]
@@ -65,8 +75,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     );
     let shutdown_app = app.clone();
-    let web = tower_http::services::ServeDir::new(options.web_root);
-    axum::serve(listener, router(app).fallback_service(web))
+    axum::serve(listener, with_web(router(app), options.web_root))
         .with_graceful_shutdown(async move {
             #[cfg(unix)]
             {
@@ -81,4 +90,52 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .await?;
     Ok(())
+}
+
+fn with_web(app: Router, root: PathBuf) -> Router {
+    let index = get_service(ServeFile::new(root.join("index.html"))).layer(
+        SetResponseHeaderLayer::overriding(CACHE_CONTROL, HeaderValue::from_static("no-cache")),
+    );
+    app.route("/", index.clone())
+        .route("/index.html", index)
+        .fallback_service(ServeDir::new(root))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode, header},
+    };
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn entry_page_revalidates_without_changing_asset_caching() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("index.html"), "<html></html>").unwrap();
+        std::fs::create_dir(dir.path().join("assets")).unwrap();
+        std::fs::write(dir.path().join("assets/main-hash.js"), "").unwrap();
+        let app = with_web(Router::new(), dir.path().into());
+        for (uri, control) in [
+            ("/?kiosk&build=new", Some("no-cache")),
+            ("/index.html", Some("no-cache")),
+            ("/assets/main-hash.js", None),
+        ] {
+            let response = app
+                .clone()
+                .oneshot(Request::get(uri).body(Body::empty()).unwrap())
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK, "{uri}");
+            assert_eq!(
+                response
+                    .headers()
+                    .get(header::CACHE_CONTROL)
+                    .map(|value| value.to_str().unwrap()),
+                control,
+                "{uri}"
+            );
+        }
+    }
 }

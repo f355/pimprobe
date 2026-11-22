@@ -47,14 +47,20 @@ Choose English, Simplified Chinese or Swedish. Until you choose, the interface u
 
 **Bed reference** is available only with firmware that can set the machine
 reference. Clear the bed and spindle. Remove and disconnect the fourth axis
-and electric vise; they cover the corner used by the probe.
+and electric vise; they cover the area used by the probe.
 
-1. Tap **Record bed reference**. The machine homes to its limit switches, then
-   probes the top and two walls of a T-slot corner.
-2. Tap **Save reference** to keep those contacts without changing machine zero.
-3. On later runs, tap **Reference from bed** to repeat the measurement and
+1. Tap **Record bed reference**, then **Start**.
+2. When the machine stops, jog the probe over the hole shown on the screen.
+   Lower the ball into the counterbore without touching the sides or the screw.
+3. Tap **Measure**. The probe finds the hole, measures the bed surface beside it,
+   then measures the hole center again at a fixed depth below that surface.
+   PIMProbe saves the reference automatically.
+4. On later runs, tap **Reference from bed** to repeat the measurement and
    correct machine zero to match the saved contacts. This does not change the
    work offsets or probe calibration.
+
+Recording again homes the machine from the limit switches. This can shift
+machine zero and affect tool magazine calibration and saved work offsets.
 
 **Export logs** copies history and diagnostic logs to a mounted USB drive. **Clear logs** deletes them after confirmation.
 

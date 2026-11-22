@@ -55,6 +55,22 @@
 .pp-bed-readings output {
   margin-inline-start: 4px;
 }
+.pp-bed-position > p {
+  margin: 0;
+  font-size: 19px;
+}
+.pp-bed-picture {
+  flex: 1;
+  min-height: 140px;
+}
+.pp-bed-diagram {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.pp-bed-position .pp-utility-log-actions {
+  flex: none;
+}
 .pp-utility-muted {
   color: var(--pp-muted);
 }

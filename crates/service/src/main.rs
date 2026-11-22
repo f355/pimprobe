@@ -39,7 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         "/userdata/cnc/logs/pimprobe".into()
     };
-    let bed_path = options.settings.with_file_name("bed-reference.json");
+    let bed_path = options.settings.with_file_name("bed-counterbore.json");
     let settings = settings::open(options.settings)?;
     let logs = LogStore::open(log_dir)?;
     let device = if options.mock {

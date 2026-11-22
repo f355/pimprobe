@@ -20,7 +20,7 @@ use axum::{Json, extract::State};
 use pimprobe_controller::SocketController;
 use pimprobe_core::{
     Axis, ContactConfig, Controller, Error, EventReceiver, Modes, Position, async_trait,
-    bed_reference::{self, NOMINAL_CONTACT, POSITIONING_FEED, Progress, Reference},
+    bed_reference::{self, POSITIONING_FEED, Progress, Reference},
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -31,7 +31,10 @@ use std::{
     sync::{Arc, Mutex},
     time::Duration,
 };
-use tokio::time::{sleep, timeout};
+use tokio::{
+    sync::oneshot,
+    time::{sleep, timeout},
+};
 use tokio_util::sync::CancellationToken;
 
 const COMMAND: Duration = Duration::from_secs(5);
@@ -46,15 +49,9 @@ pub(super) struct Bed {
 #[derive(Default)]
 struct RunState {
     cancel: Option<CancellationToken>,
+    positioning: Option<oneshot::Sender<Position>>,
     message: &'static str,
     readings: [Option<f64>; 3],
-    pending: Option<Pending>,
-}
-
-struct Pending {
-    reference: Reference,
-    session: u64,
-    position: Position,
 }
 
 impl Bed {
@@ -111,7 +108,7 @@ impl Bed {
             .err()
             .map(|error| error.to_string());
         Ok(
-            json!({"saved":saved, "measurement":state.pending.as_ref().map(|p| p.reference), "busy":state.cancel.is_some(),
+            json!({"saved":saved, "busy":state.cancel.is_some(), "positioning":state.positioning.is_some(),
             "message":state.message, "coordinates":state.readings, "reason":reason}),
         )
     }
@@ -146,13 +143,44 @@ fn ready(controller: &SocketController) -> Result<(), Error> {
     match (status.fourth_axis, status.vise) {
         (Some(false), Some(false)) => Ok(()),
         (Some(true), _) | (_, Some(true)) => Err(Error::Preflight(
-            "Remove and disconnect the fourth axis and electric vise. They cover the bed corner."
+            "Remove and disconnect the fourth axis and electric vise. They cover the bed reference hole."
                 .into(),
         )),
         _ => Err(Error::Preflight(
             "Waiting for the fourth axis and vise connection status.".into(),
         )),
     }
+}
+
+fn position_ready(controller: &SocketController) -> Result<(), Error> {
+    ready(controller)?;
+    let state = controller.state();
+    if !state.homed
+        || !controller
+            .snapshot()
+            .status
+            .is_some_and(|s| s.reference_known == Some(true))
+    {
+        return Err(Error::Preflight(
+            "The machine reference was lost. Start again.".into(),
+        ));
+    }
+    if !state.probe_extended || state.probe_triggered {
+        return Err(Error::Preflight(
+            "The probe must be extended and not touching anything before measuring.".into(),
+        ));
+    }
+    Ok(())
+}
+
+async fn check_empty(controller: &SocketController) -> Result<(), Error> {
+    controller.command("$TOOLS", COMMAND).await?;
+    if controller.snapshot().tool_present == Some(true) {
+        return Err(Error::Preflight(
+            "Remove the tool from the spindle before bed referencing.".into(),
+        ));
+    }
+    Ok(())
 }
 
 pub(super) async fn get(State(app): State<Arc<App>>) -> Result<Json<Value>, ApiError> {
@@ -163,8 +191,8 @@ pub(super) async fn get(State(app): State<Arc<App>>) -> Result<Json<Value>, ApiE
 #[serde(rename_all = "snake_case")]
 pub(super) enum Action {
     Record,
+    Measure,
     Reference,
-    Save,
     Stop,
 }
 
@@ -179,9 +207,22 @@ pub(super) async fn action(
     State(app): State<Arc<App>>,
     ApiJson(request): ApiJson<Request>,
 ) -> Result<Json<Value>, ApiError> {
-    machine(&app.device).map_err(failure)?;
     if matches!(request.action, Action::Stop) {
         app.bed.stop();
+        return Ok(Json(app.bed.view(&app.device)?));
+    }
+    let controller = machine(&app.device).map_err(failure)?;
+    if matches!(request.action, Action::Measure) {
+        position_ready(controller).map_err(failure)?;
+        app.bed
+            .state
+            .lock()
+            .unwrap()
+            .positioning
+            .take()
+            .ok_or_else(|| ApiError::conflict("bed", "Start recording the bed reference first."))?
+            .send(controller.state().position)
+            .map_err(|_| failure(Error::Cancelled))?;
         return Ok(Json(app.bed.view(&app.device)?));
     }
     let guard = app.probe.acquire()?;
@@ -189,47 +230,40 @@ pub(super) async fn action(
         let _guard = guard;
         let controller = machine(&app.device).map_err(failure)?;
         ready(controller).map_err(failure)?;
-        if matches!(request.action, Action::Save) {
-            let mut state = app.bed.state.lock().unwrap();
-            let pending = state.pending.as_ref().ok_or_else(|| {
-                ApiError::conflict("bed", "Measure the bed corner before saving.")
-            })?;
-            if controller.snapshot().session_id != pending.session
-                || controller
-                    .state()
-                    .position
-                    .iter()
-                    .zip(pending.position)
-                    .any(|(a, b)| (a - b).abs() > 0.002)
-            {
-                return Err(ApiError::conflict(
-                    "bed",
-                    "The machine moved. Measure the bed corner again before saving.",
-                ));
-            }
-            app.bed.save(pending.reference).map_err(storage_error)?;
-            state.pending = None;
-        } else {
-            if !request.confirmed_clear {
-                return Err(ApiError::conflict(
-                    "bed",
-                    "Confirm that the bed is clear and the spindle is empty.",
-                ));
-            }
-            let saved = app.bed.saved().map_err(storage_error)?;
-            let restore = matches!(request.action, Action::Reference);
-            if restore && saved.is_none() {
-                return Err(ApiError::conflict("bed", "Record the bed reference first."));
-            }
-            let cancel = CancellationToken::new();
-            *app.bed.state.lock().unwrap() = RunState {
-                cancel: Some(cancel.clone()),
-                ..RunState::default()
-            };
-            let result = run(&app, controller, saved, restore, cancel).await;
-            app.bed.state.lock().unwrap().cancel = None;
-            result.map_err(failure)?;
+        if !request.confirmed_clear {
+            return Err(ApiError::conflict(
+                "bed",
+                "Confirm that the bed is clear and the spindle is empty.",
+            ));
         }
+        let saved = if matches!(request.action, Action::Reference) {
+            Some(
+                app.bed
+                    .saved()
+                    .map_err(storage_error)?
+                    .ok_or_else(|| ApiError::conflict("bed", "Record the bed reference first."))?,
+            )
+        } else {
+            None
+        };
+        let cancel = CancellationToken::new();
+        *app.bed.state.lock().unwrap() = RunState {
+            cancel: Some(cancel.clone()),
+            ..RunState::default()
+        };
+        let result = match run(&app, controller, saved, cancel.clone()).await {
+            Ok(Some(measured)) if !cancel.is_cancelled() => {
+                app.bed.save(measured).map_err(storage_error)
+            }
+            Ok(_) | Err(Error::Cancelled) => Ok(()),
+            Err(error) => Err(failure(error)),
+        };
+        {
+            let mut state = app.bed.state.lock().unwrap();
+            state.cancel = None;
+            state.positioning = None;
+        }
+        result?;
         Ok(Json(app.bed.view(&app.device)?))
     })
     .await
@@ -240,9 +274,8 @@ async fn run(
     app: &App,
     controller: &SocketController,
     saved: Option<Reference>,
-    restore: bool,
     cancel: CancellationToken,
-) -> Result<(), Error> {
+) -> Result<Option<Reference>, Error> {
     let values = app
         .probe
         .settings()
@@ -259,19 +292,14 @@ async fn run(
         retract_feed: POSITIONING_FEED,
     };
     pimprobe_core::plan_contact(contact)?;
-    controller.command("$TOOLS", COMMAND).await?;
-    if controller.snapshot().tool_present == Some(true) {
-        return Err(Error::Preflight(
-            "Remove the tool from the spindle before bed referencing.".into(),
-        ));
-    }
+    check_empty(controller).await?;
     let modes = controller.read_modes().await?;
     let plane = controller.state().plane;
     // Refresh rotations before interpreting any incremental displacement.
     controller.read_coordinates().await?;
     let session = controller.snapshot().session_id;
     let adapter = BedMotion(controller);
-    let expected = saved.map_or(NOMINAL_CONTACT, |r| r.raw_point);
+    let mut waiting_for_operator = false;
     let motion = async {
         adapter.set_probe(false).await?;
         app.bed
@@ -300,8 +328,48 @@ async fn run(
             controller.command("M117", MOVE).await?;
             adapter.wait(|s| s.magazine_lid == Some(1)).await?;
         }
-        let measured =
-            bed_reference::measure(&adapter, expected, contact, |p| app.bed.notify(p)).await?;
+        let measured = if let Some(reference) = saved {
+            bed_reference::measure_counterbore(&adapter, Some(reference), contact, |p| {
+                app.bed.notify(p)
+            })
+            .await?
+        } else {
+            app.bed
+                .notify(Progress::Message("Moving above the bed reference hole."));
+            bed_reference::position_for_recording(&adapter).await?;
+            let (tx, rx) = oneshot::channel();
+            waiting_for_operator = true;
+            app.bed.state.lock().unwrap().positioning = Some(tx);
+            let start = tokio::select! {
+                result = rx => result.map_err(|_| Error::Cancelled)?,
+                _ = async {
+                    loop {
+                        let snapshot = controller.snapshot();
+                        if !snapshot.connected || snapshot.session_id != session { break; }
+                        sleep(Duration::from_millis(250)).await;
+                    }
+                } => return Err(Error::Disconnected),
+            };
+            check_empty(controller).await?;
+            if controller.snapshot().session_id != session {
+                return Err(Error::Disconnected);
+            }
+            position_ready(controller)?;
+            if !controller
+                .state()
+                .position
+                .iter()
+                .zip(start)
+                .all(|(a, b)| (a - b).abs() <= 0.01)
+            {
+                return Err(Error::Position(
+                    "The machine moved after confirming. Start the measurement again.".into(),
+                ));
+            }
+            waiting_for_operator = false;
+            bed_reference::measure_counterbore(&adapter, None, contact, |p| app.bed.notify(p))
+                .await?
+        };
         if open_lid {
             app.bed
                 .notify(Progress::Message("Closing the magazine lid."));
@@ -315,7 +383,7 @@ async fn run(
         _ = cancel.cancelled() => Err(Error::Cancelled),
         result = motion => result,
     };
-    if outcome.is_err() && !controller.state().motion_blocked {
+    if outcome.is_err() && !waiting_for_operator && !controller.state().motion_blocked {
         app.probe.confirm_stopped().await?;
     }
     if controller.snapshot().session_id != session {
@@ -330,9 +398,8 @@ async fn run(
     if cancel.is_cancelled() {
         return Err(Error::Cancelled);
     }
-    if restore {
+    if let Some(saved) = saved {
         ready(controller)?;
-        let saved = saved.unwrap();
         let current = controller.state().position;
         let goal: [f64; 3] =
             std::array::from_fn(|i| current[i] + saved.raw_point[i] - measured.raw_point[i]);
@@ -353,14 +420,10 @@ async fn run(
                         .all(|(actual, target)| (actual - target).abs() < 0.004)
             })
             .await?;
+        Ok(None)
     } else {
-        app.bed.state.lock().unwrap().pending = Some(Pending {
-            reference: measured,
-            session,
-            position: controller.state().position,
-        });
+        Ok(Some(measured))
     }
-    Ok(())
 }
 
 struct BedMotion<'a>(&'a SocketController);
@@ -391,37 +454,28 @@ impl BedMotion<'_> {
         .await
         .map_err(|_| Error::Timeout)?
     }
-}
-
-#[async_trait]
-impl bed_reference::Positioning for BedMotion<'_> {
-    const BLENDS_POSITIONING: bool = false;
-
-    async fn position(&self, source: &str) -> Result<(), Error> {
-        // Each serial move settles before the next starts; omit the blend controls.
-        for line in source.lines().filter(|line| line.contains(" G53 ")) {
-            let mut target = [None; 3];
-            for word in line.split_whitespace() {
-                if let Some(axis) = ["X", "Y", "Z"]
-                    .iter()
-                    .position(|axis| word.starts_with(axis))
-                {
-                    target[axis] = Some(
-                        word[1..]
-                            .parse::<f64>()
-                            .map_err(|error| Error::InvalidConfig(error.to_string()))?,
-                    );
-                }
+    async fn move_absolute(&self, command: &str) -> Result<(), Error> {
+        let mut target = [None; 3];
+        for word in command.split_whitespace() {
+            if let Some(axis) = ["X", "Y", "Z"]
+                .iter()
+                .position(|axis| word.starts_with(axis))
+            {
+                target[axis] = Some(
+                    word[1..]
+                        .parse::<f64>()
+                        .map_err(|error| Error::InvalidConfig(error.to_string()))?,
+                );
             }
-            self.0.command(line, MOVE).await?;
-            self.wait(|s| {
-                target.iter().zip(s.m_pos).all(|(target, actual)| {
-                    target.is_none_or(|target| (actual - target).abs() < 0.005)
-                })
-            })
-            .await?;
         }
-        Ok(())
+        self.0.command(command, MOVE).await?;
+        self.wait(|s| {
+            target
+                .iter()
+                .zip(s.m_pos)
+                .all(|(target, actual)| target.is_none_or(|target| (actual - target).abs() < 0.005))
+        })
+        .await
     }
 }
 
@@ -436,7 +490,7 @@ impl Controller for BedMotion<'_> {
 
     async fn send(&self, command: &str) -> Result<(), Error> {
         if command.contains(" G53 ") {
-            return bed_reference::Positioning::position(self, command).await;
+            return self.move_absolute(command).await;
         }
         let angle = self.0.state().wcs_rotation.unwrap_or(0.);
         if angle == 0. || !(command.starts_with("G38.") || command.starts_with("G1 ")) {

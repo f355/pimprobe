@@ -46,10 +46,13 @@ test("translations retain coordinates, error codes and reordered values", () => 
   expect(translate("en_US", "%1 offset %2 mm", ["X", -120.5])).toBe(
     "X offset -120.5 mm",
   );
-  expect(translate("en_US", "Status: %1", [translate("en_US", "cancelled")])).toBe(
-    "Status: canceled",
-  );
+  expect(
+    translate("en_US", "Status: %1", [translate("en_US", "cancelled")]),
+  ).toBe("Status: canceled");
   expect(translate("sv", "Unknown %1", [25])).toBe("Unknown 25");
+  expect(
+    translate("sv", "Could not read or save the bed reference: os error 13"),
+  ).toBe("Kunde inte läsa eller spara bordsreferensen: os error 13");
 });
 
 test("catalog entries preserve parameter numbers", () => {

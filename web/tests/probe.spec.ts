@@ -105,6 +105,160 @@ for (const enhanced of [false, true]) {
   });
 }
 
+test("bed reference recording waits for positioning and saves the result", async ({
+  page,
+}, info) => {
+  const fixture = await app(page, "en_US", undefined, true);
+  await page.getByRole("tab", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "Utilities", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Bed reference", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Record bed reference", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toHaveAccessibleName(
+    "Record bed reference?",
+  );
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Start", exact: true })
+    .click();
+  await expect(
+    page.getByText("Referencing from limit switches."),
+  ).toBeVisible();
+  fixture.beginBedPositioning();
+  const diagram = page.getByRole("img", {
+    name: /top and side views.*counterbore/i,
+  });
+  const measure = page.getByRole("button", { name: "Measure", exact: true });
+  await expect(diagram).toBeVisible();
+  await expect(
+    page.getByText(
+      /lower the probe ball into the counterbore without touching the sides or the screw/i,
+    ),
+  ).toBeVisible();
+  await expect(measure).toBeEnabled();
+  expect(
+    fixture.calls
+      .filter((c) => c.path === "bed-reference" && c.body.action)
+      .map((c) => c.body.action),
+  ).toEqual(["record"]);
+  const picture = (await diagram.boundingBox())!;
+  const button = (await measure.boundingBox())!;
+  expect(picture.y + picture.height).toBeLessThan(button.y);
+  expect(button.y + button.height).toBeLessThanOrEqual(480);
+  fixture.setBedJogging(true);
+  await expect(measure).toBeDisabled();
+  expect(await diagram.boundingBox()).toEqual(picture);
+  expect(await measure.boundingBox()).toEqual(button);
+  fixture.setBedJogging(false);
+  await expect(measure).toBeEnabled();
+  await capture(page, info.outputPath("position-bed-probe.png"));
+  await measure.click();
+  const restore = page.getByRole("button", {
+    name: "Reference from bed",
+    exact: true,
+  });
+  await expect(restore).toBeEnabled();
+  await expect(
+    page.getByText("-225.000", { exact: true }).first(),
+  ).toBeVisible();
+  await restore.click();
+  await expect(page.getByRole("dialog")).toContainText(
+    "Clear the bed and remove any tool from the spindle.",
+  );
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Cancel" })
+    .click();
+  await page
+    .getByRole("button", { name: "Record bed reference", exact: true })
+    .click();
+  const replace = page.getByRole("dialog", { name: "Replace bed reference?" });
+  await expect(replace).toContainText(
+    /shift machine zero.*tool magazine calibration.*work offsets/i,
+  );
+  await capture(page, info.outputPath("replace-bed-reference.png"));
+  await replace.getByRole("button", { name: "Cancel" }).click();
+  expect(
+    fixture.calls
+      .filter((c) => c.path === "bed-reference" && c.body.action)
+      .map((c) => c.body.action),
+  ).toEqual(["record", "measure"]);
+});
+
+for (const scenario of [
+  {
+    language: "sv",
+    settings: "Inställningar",
+    utilities: "Hjälpfunktioner",
+    bed: "Bordsreferens",
+    record: "Mät in bordsreferens",
+    start: "Starta",
+    waiting: "Vänta tills maskinen står stilla och spindeln har stannat.",
+    homing: "Referenskör mot gränslägesbrytarna.",
+    lower:
+      "Sänk ned probkulan i skruvhålets försänkning utan att vidröra sidorna eller skruven.",
+    measure: "Mät",
+  },
+  {
+    language: "zh_CN",
+    settings: "设置",
+    utilities: "辅助功能",
+    bed: "工作台基准",
+    record: "记录工作台基准",
+    start: "开始",
+    waiting: "请等待机床空闲且主轴停止。",
+    homing: "正在通过限位开关回零。",
+    lower: "将测球降入沉孔，不要碰到孔壁或螺钉。",
+    measure: "测量",
+  },
+]) {
+  test(`bed reference localizes controls and machine messages in ${scenario.language}`, async ({
+    page,
+  }, info) => {
+    const fixture = await app(page, scenario.language, undefined, true);
+    await page
+      .getByRole("tab", { name: scenario.settings, exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: scenario.utilities, exact: true })
+      .click();
+    await page.getByRole("button", { name: scenario.bed, exact: true }).click();
+    const record = page.getByRole("button", {
+      name: scenario.record,
+      exact: true,
+    });
+    fixture.setBedJogging(true);
+    await expect(
+      page.getByText(scenario.waiting, { exact: true }),
+    ).toBeVisible();
+    await expect(record).toBeDisabled();
+    fixture.setBedJogging(false);
+    await record.click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: scenario.start, exact: true })
+      .click();
+    await expect(
+      page.getByText(scenario.homing, { exact: true }),
+    ).toBeVisible();
+    fixture.beginBedPositioning();
+    await expect(page.getByText(scenario.lower, { exact: true })).toBeVisible();
+    const measure = page.getByRole("button", {
+      name: scenario.measure,
+      exact: true,
+    });
+    await expect(measure).toBeEnabled();
+    const button = (await measure.boundingBox())!;
+    expect(button.y + button.height).toBeLessThanOrEqual(480);
+    await capture(page, info.outputPath("position-bed-probe.png"));
+    await measure.click();
+    await expect(record).toBeEnabled();
+  });
+}
+
 async function app(
   page: Page,
   language = "en_US",
@@ -112,6 +266,15 @@ async function app(
   enhanced = false,
 ) {
   const calls: { path: string; body: Record<string, unknown> }[] = [];
+  const bed = {
+    saved: null as { rawPoint: number[] } | null,
+    busy: false,
+    positioning: false,
+    message: "",
+    coordinates: [null, null, null],
+    reason: null as string | null,
+  };
+  let finishBedRecord: (() => void) | undefined;
   let settings: Settings = {
     probeDiameter: 2,
     retractDistance: 0.5,
@@ -198,14 +361,19 @@ async function app(
         rotations: enhanced ? { 54: 0, 55: 2 } : {},
       };
     } else if (path === "bed-reference") {
-      response = {
-        saved: null,
-        measurement: null,
-        busy: false,
-        message: "",
-        coordinates: [null, null, null],
-        reason: null,
-      };
+      if (body.action === "record") {
+        bed.busy = true;
+        bed.message = "Referencing from limit switches.";
+        await new Promise<void>((resolve) => {
+          finishBedRecord = resolve;
+        });
+      } else if (body.action === "measure" || body.action === "stop") {
+        bed.busy = bed.positioning = false;
+        if (body.action === "measure")
+          bed.saved = { rawPoint: [-225, -69, -114] };
+        finishBedRecord?.();
+      }
+      response = { ...bed };
     } else if (path === "panel/activity") {
       if (body.wake) sleeping = false;
     } else if (path === "settings/schema")
@@ -320,6 +488,14 @@ async function app(
   await page.evaluate(() => document.fonts.ready);
   return {
     calls,
+    beginBedPositioning: () => {
+      bed.positioning = true;
+    },
+    setBedJogging: (jogging: boolean) => {
+      bed.reason = jogging
+        ? "Wait until the machine is idle with the spindle stopped."
+        : null;
+    },
     setResult: (value: RoutineResult) => (result = value),
     setExtended: (value: boolean) => (extended = value),
     setConnected: (value: boolean) => (connected = value),

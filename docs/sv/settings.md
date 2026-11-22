@@ -45,6 +45,23 @@ Välj engelska, förenklad kinesiska eller svenska. Tills du väljer används CN
 
 ## Hjälpfunktioner
 
+**Bordsreferens** kräver firmware som kan ställa in maskinens referens. Töm bordet
+och ta bort verktyget ur spindeln. Ta bort och koppla ur rundaxeln och det
+elektriska skruvstycket; de täcker referenshålet.
+
+1. Tryck på **Mät in bordsreferens**, sedan **Starta**.
+2. När maskinen stannar, jogga proben över hålet som visas på skärmen. Sänk ned
+   probkulan i försänkningen utan att vidröra sidorna eller skruven.
+3. Tryck på **Mät**. Proben hittar hålet, mäter bordsytan intill och mäter sedan
+   hålets centrum på ett fast djup under ytan. PIMProbe sparar referensen automatiskt.
+4. Tryck på **Referenskör mot bordet** nästa gång för att mäta igen och justera
+   maskinnollpunkten efter den sparade referensen. Arbetsförskjutningarna och
+   probkalibreringen ändras inte.
+
+Vid en ny inmätning referenskör maskinen mot gränslägesbrytarna. Det kan flytta
+maskinnollpunkten och påverka verktygsmagasinets kalibrering och sparade
+arbetsnollpunkter.
+
 **Exportera loggar** kopierar historik och diagnostikloggar till ett monterat USB-minne. **Rensa loggar** tar bort dem efter bekräftelse.
 
 <!-- guide-only -->

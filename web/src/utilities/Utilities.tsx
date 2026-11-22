@@ -92,7 +92,7 @@ export function Utilities({
             disabled={pending}
             onClick={onBedReference}
             help={t(
-              "Measure a bed corner to restore machine zero consistently.",
+              "Use the reference hole and bed surface to restore machine zero.",
             )}
           >
             {t("Bed reference")}

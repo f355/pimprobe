@@ -50,6 +50,14 @@ pub enum MockGeometry {
         axis: Axis,
         coordinate: f64,
     },
+    #[cfg(test)]
+    Counterbore {
+        center: [f64; 2],
+        rim_shift: [f64; 2],
+        radius: f64,
+        top: f64,
+        floor: f64,
+    },
     Corner {
         origin: Position,
         directions: [i32; 2],
@@ -194,6 +202,32 @@ impl MockGeometry {
                 } else {
                     None
                 }
+            }
+            #[cfg(test)]
+            Self::Counterbore {
+                center,
+                rim_shift,
+                radius,
+                top,
+                floor,
+            } => {
+                if axis == Axis::Z {
+                    let inside = (position[0] - center[0]).hypot(position[1] - center[1]) < *radius;
+                    if inside {
+                        return Some(*floor);
+                    }
+                    // The land ends 12 mm from the center, at the edge of the slot.
+                    return ((position[1] - center[1]).abs() < 12.).then_some(*top);
+                }
+                let center = if position[2] > top - 2.5 {
+                    [center[0] + rim_shift[0], center[1] + rim_shift[1]]
+                } else {
+                    *center
+                };
+                let other = 1 - i;
+                let half_span = radius.powi(2) - (position[other] - center[other]).powi(2);
+                (position[2] < *top && half_span > 0.)
+                    .then(|| center[i] + delta.signum() * half_span.sqrt())
             }
             Self::Corner {
                 origin,
